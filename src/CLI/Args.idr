@@ -15,6 +15,7 @@ data CLIArgs : Type where
   -- Help and meta
   ArgHelp   : CLIArgs
   ArgVersion : CLIArgs
+  ArgStdin   : CLIArgs
 
   -- Global options (always available)
   ArgBase     : String -> CLIArgs

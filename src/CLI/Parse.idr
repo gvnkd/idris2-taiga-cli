@@ -146,6 +146,10 @@ stripDashes s = case drop 2 (unpack s) of
 parseHelp : Parser CLIArgs
 parseHelp = pure ArgHelp
 
+||| Parse `--stdin`: read JSON from stdin instead of running a CLI command.
+parseStdin : Parser CLIArgs
+parseStdin = pure ArgStdin
+
 ||| Parse `--login USER PASS`.
 parseLogin : Parser CLIArgs
 parseLogin = ArgLogin <$> pop <*> pop
@@ -188,6 +192,7 @@ parseBase recurse = do
 parseLongFlag : String -> Parser CLIArgs -> Parser CLIArgs
 parseLongFlag "--base"            recurse = parseBase recurse
 parseLongFlag "--help"            _        = parseHelp
+parseLongFlag "--stdin"           _        = parseStdin
 parseLongFlag "--login"           _        = parseLogin
 parseLongFlag "--me"              _        = parseMe
 parseLongFlag "--list-projects"   _        = parseListProjects

@@ -62,15 +62,6 @@ resolveBaseUrl baseUrl =
     Just url  => Just url
     Nothing   => Nothing
 
-||| Run the CLI path: parse args, dispatch command, print result.
-runCLI : List String -> IO ()
-runCLI rawArgs =
-  case parseArgs rawArgs of
-    Left err => cliError err
-    Right res => do
-      let base := resolveBaseUrl res.base_url
-      putStrLn "CLI args parsed successfully"
-
 ||| Run the agent path: read JSON from stdin, dispatch, write response.
 runAgent : IO ()
 runAgent = do
@@ -91,6 +82,18 @@ runAgent = do
               resp <- dispatchCommand command token req.base
               writeStdout (serializeResponse resp)
 
+||| Run the CLI path: parse args, dispatch command, print result.
+runCLI : List String -> IO ()
+runCLI rawArgs =
+  case parseArgs rawArgs of
+    Left err => cliError err
+    Right res => case res.cli_args of
+       ArgStdin => runAgent
+       ArgHelp  => putStrLn usage
+       _        => do
+         let base := resolveBaseUrl res.base_url
+         putStrLn "CLI args parsed successfully"
+
 ||| Top-level entry point.
 |||
 ||| If `getArgs` returns non-empty, enter CLI mode.
@@ -100,5 +103,5 @@ main = do
   args <- getArgs
   let args' := drop 1 args
   case args' of
-    []    => runAgent
+    []    => putStrLn usage
     _     => runCLI args'
