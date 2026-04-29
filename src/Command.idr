@@ -32,6 +32,7 @@ import Taiga.Milestone
 import Taiga.Search
 import Taiga.User
 import Taiga.History
+import Taiga.Env
 
 
 %language ElabReflection
@@ -157,7 +158,10 @@ dispatchWatchTask :
 dispatchWatchTask _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchWatchTask _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchWatchTask taskId (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (getTask baseUrl token.auth_token taskId)
+  = Prelude.map (wrapResult encode) (getTask @{env} taskId)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdChangeTaskStatus: change the status of a task.
 dispatchChangeTaskStatus :
@@ -171,7 +175,10 @@ dispatchChangeTaskStatus :
 dispatchChangeTaskStatus _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchChangeTaskStatus _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchChangeTaskStatus taskId newSt ver (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (changeTaskStatus baseUrl token.auth_token taskId newSt ver)
+  = Prelude.map (wrapResult encode) (changeTaskStatus @{env} taskId newSt ver)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdTaskComment: add a comment to a task.
 dispatchTaskComment :
@@ -185,7 +192,10 @@ dispatchTaskComment :
 dispatchTaskComment _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchTaskComment _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchTaskComment taskId txt ver (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult (JSON.ToJSON.encode)) (taskComment baseUrl token.auth_token taskId txt ver)
+  = Prelude.map (wrapResult (JSON.ToJSON.encode)) (taskComment @{env} taskId txt ver)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdListProjects: list projects the user can access.
 dispatchListProjects :
@@ -197,7 +207,10 @@ dispatchListProjects :
 dispatchListProjects _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchListProjects _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchListProjects member (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (listProjects baseUrl token.auth_token member Nothing Nothing)
+  = Prelude.map (wrapResult encode) (listProjects @{env} member Nothing Nothing)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdGetProject: get project by ID or slug.
 dispatchGetProject :
@@ -210,9 +223,15 @@ dispatchGetProject :
 dispatchGetProject _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchGetProject _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchGetProject (Just id) _ (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (getProjectById baseUrl token.auth_token id)
+  = Prelude.map (wrapResult encode) (getProjectById @{env} id)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 dispatchGetProject _ (Just slug) (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (getProjectBySlug baseUrl token.auth_token slug)
+  = Prelude.map (wrapResult encode) (getProjectBySlug @{env} slug)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 dispatchGetProject _ _ _ _ = pure $ Err $ MkErrorResponse False "bad_request" "Must provide id or slug"
 
 ||| Dispatch CmdListEpics: list epics in a project.
@@ -225,7 +244,10 @@ dispatchListEpics :
 dispatchListEpics _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchListEpics _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchListEpics project (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (listEpics baseUrl token.auth_token project Nothing Nothing)
+  = Prelude.map (wrapResult encode) (listEpics @{env} project Nothing Nothing)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdGetEpic: get epic by ID.
 dispatchGetEpic :
@@ -238,7 +260,10 @@ dispatchGetEpic Nothing _ _ = pure $ Err $ MkErrorResponse False "bad_request" "
 dispatchGetEpic _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchGetEpic _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchGetEpic (Just id) (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (getEpic baseUrl token.auth_token id)
+  = Prelude.map (wrapResult encode) (getEpic @{env} id)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdListStories: list user stories in a project.
 dispatchListStories :
@@ -250,7 +275,10 @@ dispatchListStories :
 dispatchListStories _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchListStories _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchListStories project (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (listStories baseUrl token.auth_token project Nothing Nothing)
+  = Prelude.map (wrapResult encode) (listStories @{env} project Nothing Nothing)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdGetStory: get user story by ID.
 dispatchGetStory :
@@ -263,7 +291,10 @@ dispatchGetStory Nothing _ _ = pure $ Err $ MkErrorResponse False "bad_request" 
 dispatchGetStory _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchGetStory _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchGetStory (Just id) (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (getStory baseUrl token.auth_token id)
+  = Prelude.map (wrapResult encode) (getStory @{env} id)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdListTasks: list tasks.
 dispatchListTasks :
@@ -275,7 +306,10 @@ dispatchListTasks :
 dispatchListTasks _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchListTasks _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchListTasks project (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (listTasks baseUrl token.auth_token project Nothing Nothing Nothing)
+  = Prelude.map (wrapResult encode) (listTasks @{env} project Nothing Nothing Nothing)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdGetTask: get task by ID.
 dispatchGetTask :
@@ -288,7 +322,10 @@ dispatchGetTask Nothing _ _ = pure $ Err $ MkErrorResponse False "bad_request" "
 dispatchGetTask _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchGetTask _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchGetTask (Just id) (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (getTask baseUrl token.auth_token id)
+  = Prelude.map (wrapResult encode) (getTask @{env} id)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdListIssues: list issues in a project.
 dispatchListIssues :
@@ -300,7 +337,10 @@ dispatchListIssues :
 dispatchListIssues _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchListIssues _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchListIssues project (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (listIssues baseUrl token.auth_token project Nothing Nothing)
+  = Prelude.map (wrapResult encode) (listIssues @{env} project Nothing Nothing)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdGetIssue: get issue by ID.
 dispatchGetIssue :
@@ -313,7 +353,10 @@ dispatchGetIssue Nothing _ _ = pure $ Err $ MkErrorResponse False "bad_request" 
 dispatchGetIssue _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchGetIssue _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchGetIssue (Just id) (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (getIssue baseUrl token.auth_token id)
+  = Prelude.map (wrapResult encode) (getIssue @{env} id)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdListWiki: list wiki pages in a project.
 dispatchListWiki :
@@ -325,7 +368,10 @@ dispatchListWiki :
 dispatchListWiki _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchListWiki _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchListWiki project (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (listWiki baseUrl token.auth_token project Nothing Nothing)
+  = Prelude.map (wrapResult encode) (listWiki @{env} project Nothing Nothing)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdGetWiki: get wiki page by ID.
 dispatchGetWiki :
@@ -338,7 +384,10 @@ dispatchGetWiki Nothing _ _ = pure $ Err $ MkErrorResponse False "bad_request" "
 dispatchGetWiki _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchGetWiki _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchGetWiki (Just id) (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (getWiki baseUrl token.auth_token id)
+  = Prelude.map (wrapResult encode) (getWiki @{env} id)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdListMilestones: list milestones in a project.
 dispatchListMilestones :
@@ -350,7 +399,10 @@ dispatchListMilestones :
 dispatchListMilestones _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchListMilestones _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchListMilestones project (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (listMilestones baseUrl token.auth_token project Nothing Nothing)
+  = Prelude.map (wrapResult encode) (listMilestones @{env} project Nothing Nothing)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdListUsers: list project members.
 dispatchListUsers :
@@ -362,7 +414,10 @@ dispatchListUsers :
 dispatchListUsers _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchListUsers _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchListUsers project (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (listUsers baseUrl token.auth_token project)
+  = Prelude.map (wrapResult encode) (listUsers @{env} project)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdListMemberships: list project memberships.
 dispatchListMemberships :
@@ -374,7 +429,10 @@ dispatchListMemberships :
 dispatchListMemberships _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchListMemberships _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchListMemberships project (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (listMemberships baseUrl token.auth_token project)
+  = Prelude.map (wrapResult encode) (listMemberships @{env} project)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdListRoles: list project roles.
 dispatchListRoles :
@@ -386,7 +444,10 @@ dispatchListRoles :
 dispatchListRoles _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchListRoles _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchListRoles project (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (listRoles baseUrl token.auth_token project)
+  = Prelude.map (wrapResult encode) (listRoles @{env} project)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdSearch: search within a project.
 dispatchSearch :
@@ -399,7 +460,10 @@ dispatchSearch :
 dispatchSearch _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchSearch _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchSearch project text (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult id) (search baseUrl token.auth_token project text)
+  = Prelude.map (wrapResult id) (search @{env} project text)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdResolve: resolve an entity ref.
 dispatchResolve :
@@ -412,7 +476,10 @@ dispatchResolve :
 dispatchResolve _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchResolve _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchResolve project ref (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult id) (resolve baseUrl token.auth_token project ref)
+  = Prelude.map (wrapResult id) (resolve @{env} project ref)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdListComments: list history entries for an entity.
 dispatchListComments :
@@ -425,7 +492,10 @@ dispatchListComments :
 dispatchListComments _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchListComments _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchListComments entity eid (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (listHistory baseUrl token.auth_token entity eid)
+  = Prelude.map (wrapResult encode) (listHistory @{env} entity eid)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdCreateEpic: create a new epic.
 dispatchCreateEpic :
@@ -440,7 +510,10 @@ dispatchCreateEpic :
 dispatchCreateEpic _ _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchCreateEpic _ _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchCreateEpic project subject desc stat (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (createEpic baseUrl token.auth_token project subject desc stat)
+  = Prelude.map (wrapResult encode) (createEpic @{env} project subject desc stat)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdUpdateEpic: update an existing epic.
 dispatchUpdateEpic :
@@ -456,7 +529,10 @@ dispatchUpdateEpic :
 dispatchUpdateEpic _ _ _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchUpdateEpic _ _ _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchUpdateEpic id subj desc stat ver (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (updateEpic baseUrl token.auth_token id subj desc stat ver)
+  = Prelude.map (wrapResult encode) (updateEpic @{env} id subj desc stat ver)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdDeleteEpic: delete an epic.
 dispatchDeleteEpic :
@@ -468,7 +544,10 @@ dispatchDeleteEpic :
 dispatchDeleteEpic _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchDeleteEpic _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchDeleteEpic id (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult (const "deleted")) (deleteEpic baseUrl token.auth_token id)
+  = Prelude.map (wrapResult (const "deleted")) (deleteEpic @{env} id)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdCreateStory: create a new user story.
 dispatchCreateStory :
@@ -483,7 +562,10 @@ dispatchCreateStory :
 dispatchCreateStory _ _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchCreateStory _ _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchCreateStory project subject desc mstone (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (createStory baseUrl token.auth_token project subject desc mstone)
+  = Prelude.map (wrapResult encode) (createStory @{env} project subject desc mstone)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdUpdateStory: update an existing user story.
 dispatchUpdateStory :
@@ -499,7 +581,10 @@ dispatchUpdateStory :
 dispatchUpdateStory _ _ _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchUpdateStory _ _ _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchUpdateStory id subj desc mstone ver (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (updateStory baseUrl token.auth_token id subj desc mstone ver)
+  = Prelude.map (wrapResult encode) (updateStory @{env} id subj desc mstone ver)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdDeleteStory: delete a user story.
 dispatchDeleteStory :
@@ -511,7 +596,10 @@ dispatchDeleteStory :
 dispatchDeleteStory _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchDeleteStory _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchDeleteStory id (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult (const "deleted")) (deleteStory baseUrl token.auth_token id)
+  = Prelude.map (wrapResult (const "deleted")) (deleteStory @{env} id)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdCreateTask: create a new task.
 dispatchCreateTask :
@@ -527,7 +615,10 @@ dispatchCreateTask :
 dispatchCreateTask _ _ _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchCreateTask _ _ _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchCreateTask project subject story desc stat (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (createTask baseUrl token.auth_token project subject story desc stat)
+  = Prelude.map (wrapResult encode) (createTask @{env} project subject story desc stat)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdUpdateTask: update an existing task.
 dispatchUpdateTask :
@@ -543,7 +634,10 @@ dispatchUpdateTask :
 dispatchUpdateTask _ _ _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchUpdateTask _ _ _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchUpdateTask id subj desc stat ver (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (updateTask baseUrl token.auth_token id subj desc stat ver)
+  = Prelude.map (wrapResult encode) (updateTask @{env} id subj desc stat ver)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdDeleteTask: delete a task.
 dispatchDeleteTask :
@@ -555,7 +649,10 @@ dispatchDeleteTask :
 dispatchDeleteTask _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchDeleteTask _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchDeleteTask id (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult (const "deleted")) (deleteTask baseUrl token.auth_token id)
+  = Prelude.map (wrapResult (const "deleted")) (deleteTask @{env} id)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdCreateIssue: create a new issue.
 dispatchCreateIssue :
@@ -572,7 +669,10 @@ dispatchCreateIssue :
 dispatchCreateIssue _ _ _ _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchCreateIssue _ _ _ _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchCreateIssue project subject desc prio sev itype (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (createIssue baseUrl token.auth_token project subject desc prio sev itype)
+  = Prelude.map (wrapResult encode) (createIssue @{env} project subject desc prio sev itype)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdUpdateIssue: update an existing issue.
 dispatchUpdateIssue :
@@ -588,7 +688,10 @@ dispatchUpdateIssue :
 dispatchUpdateIssue _ _ _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchUpdateIssue _ _ _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchUpdateIssue id subj desc itype ver (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (updateIssue baseUrl token.auth_token id subj desc itype ver)
+  = Prelude.map (wrapResult encode) (updateIssue @{env} id subj desc itype ver)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdDeleteIssue: delete an issue.
 dispatchDeleteIssue :
@@ -600,7 +703,10 @@ dispatchDeleteIssue :
 dispatchDeleteIssue _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchDeleteIssue _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchDeleteIssue id (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult (const "deleted")) (deleteIssue baseUrl token.auth_token id)
+  = Prelude.map (wrapResult (const "deleted")) (deleteIssue @{env} id)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdCreateWiki: create a new wiki page.
 dispatchCreateWiki :
@@ -614,7 +720,10 @@ dispatchCreateWiki :
 dispatchCreateWiki _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchCreateWiki _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchCreateWiki project slug content (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (createWiki baseUrl token.auth_token project slug content)
+  = Prelude.map (wrapResult encode) (createWiki @{env} project slug content)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdUpdateWiki: update an existing wiki page.
 dispatchUpdateWiki :
@@ -629,7 +738,10 @@ dispatchUpdateWiki :
 dispatchUpdateWiki _ _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchUpdateWiki _ _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchUpdateWiki id content slug ver (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (updateWiki baseUrl token.auth_token id content slug ver)
+  = Prelude.map (wrapResult encode) (updateWiki @{env} id content slug ver)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdDeleteWiki: delete a wiki page.
 dispatchDeleteWiki :
@@ -641,7 +753,10 @@ dispatchDeleteWiki :
 dispatchDeleteWiki _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchDeleteWiki _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchDeleteWiki id (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult (const "deleted")) (deleteWiki baseUrl token.auth_token id)
+  = Prelude.map (wrapResult (const "deleted")) (deleteWiki @{env} id)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdCreateMilestone: create a new milestone.
 dispatchCreateMilestone :
@@ -656,7 +771,10 @@ dispatchCreateMilestone :
 dispatchCreateMilestone _ _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchCreateMilestone _ _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchCreateMilestone project name estStart estFinish (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (createMilestone baseUrl token.auth_token project name estStart estFinish)
+  = Prelude.map (wrapResult encode) (createMilestone @{env} project name estStart estFinish)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdUpdateMilestone: update an existing milestone.
 dispatchUpdateMilestone :
@@ -672,7 +790,10 @@ dispatchUpdateMilestone :
 dispatchUpdateMilestone _ _ _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchUpdateMilestone _ _ _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchUpdateMilestone id name estStart estFinish ver (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (updateMilestone baseUrl token.auth_token id name estStart estFinish ver)
+  = Prelude.map (wrapResult encode) (updateMilestone @{env} id name estStart estFinish ver)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdComment: add a comment to an entity.
 dispatchComment :
@@ -686,7 +807,10 @@ dispatchComment :
 dispatchComment _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchComment _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchComment entity eid txt (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult id) (addComment baseUrl token.auth_token entity eid txt 0)
+  = Prelude.map (wrapResult id) (addComment @{env} entity eid txt 0)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdEditComment: edit an existing comment.
 dispatchEditComment :
@@ -701,7 +825,10 @@ dispatchEditComment :
 dispatchEditComment _ _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchEditComment _ _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchEditComment entity eid cid txt (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult id) (editComment baseUrl token.auth_token entity eid (show cid.id) txt)
+  = Prelude.map (wrapResult id) (editComment @{env} entity eid (show cid.id) txt)
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Dispatch CmdDeleteComment: delete a comment.
 dispatchDeleteComment :
@@ -715,7 +842,10 @@ dispatchDeleteComment :
 dispatchDeleteComment _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchDeleteComment _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchDeleteComment entity eid cid (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult (const "deleted")) (deleteComment baseUrl token.auth_token entity eid (show cid.id))
+  = Prelude.map (wrapResult (const "deleted")) (deleteComment @{env} entity eid (show cid.id))
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
 
 ||| Parse a command name and JSON arguments into a Command.
 public export

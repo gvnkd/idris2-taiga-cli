@@ -6,6 +6,7 @@ import JSON.ToJSON
 import Model.Common
 import Model.Task
 import Taiga.Api
+import Taiga.Env
 import Data.List
 
 %language ElabReflection
@@ -16,50 +17,6 @@ buildQueryString [] = ""
 buildQueryString kvs =
   let pairs := map (\(k, v) => k ++ "=" ++ v) kvs
    in "?" ++ concat (intersperse "&" pairs)
-
-||| List tasks in a project or belonging to a story.
-public export
-listTasks :
-     HasIO io
-  => (base : String)
-  -> (token : String)
-  -> (project : Maybe String)
-  -> (story : Maybe Nat64Id)
-  -> (page : Maybe Bits32)
-  -> (pageSize : Maybe Bits32)
-  -> io (Either String (List TaskSummary))
-listTasks base token project story page pageSize = do
-  let qs  := buildQueryString $
-                catMaybes
-                  [ case project of { Nothing => Nothing; Just p => Just ("project", p) }
-                  , case story of { Nothing => Nothing; Just s => Just ("userstory", show s.id) }
-                  , case page of { Nothing => Nothing; Just p => Just ("page", show p) }
-                  , case pageSize of { Nothing => Nothing; Just s => Just ("page_size", show s) }
-                  ]
-      url := base ++ "/tasks" ++ qs
-  resp <- httpGet url (Just token)
-  case resp.status.code of
-     200 => case decodeEither resp.body of
-              Left  err  => pure $ Left err
-              Right ts  => pure $ Right ts
-     _     => pure $ Left ("list tasks failed with status " ++ show resp.status.code)
-
-||| Get a task by its ID.
-public export
-getTask :
-     HasIO io
-  => (base : String)
-  -> (token : String)
-  -> (id : Nat64Id)
-  -> io (Either String Task)
-getTask base token id = do
-  let url := base ++ "/tasks/" ++ show id.id
-  resp <- httpGet url (Just token)
-  case resp.status.code of
-     200 => case decodeEither resp.body of
-              Left  err  => pure $ Left err
-              Right t   => pure $ Right t
-     _     => pure $ Left ("get task failed with status " ++ show resp.status.code)
 
 ||| Parse a string as a Bits64 value.
 parseBits64 : String -> Bits64
@@ -89,20 +46,6 @@ buildCreateBody project subject story desc stat =
     Just s   => ",\"status\":" ++ show (parseBits64 s)
   ++ "}"
 
-||| Create a new task.
-public export
-createTask :
-     HasIO io
-  => (base : String)
-  -> (token : String)
-  -> (project : String)
-  -> (subject : String)
-  -> (story : Maybe Nat64Id)
-  -> (description : Maybe String)
-  -> (status : Maybe String)
-  -> io (Either String Task)
-createTask _ _ _ _ _ _ _ = pure $ Left "not implemented"
-
 ||| Build JSON body for updating a task.
 buildUpdateBody : Maybe String -> Maybe String -> Maybe String -> Version -> String
 buildUpdateBody subj desc stat ver =
@@ -116,35 +59,6 @@ buildUpdateBody subj desc stat ver =
       , case stat of { Nothing => Nothing; Just s => Just (",\"status\":" ++ show (parseBits64 s)) }
       ]
 
-||| Update an existing task (OCC-aware).
-public export
-updateTask :
-     HasIO io
-  => (base : String)
-  -> (token : String)
-  -> (id : Nat64Id)
-  -> (subject : Maybe String)
-  -> (description : Maybe String)
-  -> (status : Maybe String)
-  -> (version : Version)
-  -> io (Either String Task)
-updateTask base token id _ _ _ _ = getTask base token id
-
-||| Delete a task.
-public export
-deleteTask :
-     HasIO io
-  => (base : String)
-  -> (token : String)
-  -> (id : Nat64Id)
-  -> io (Either String ())
-deleteTask base token id = do
-  let url := base ++ "/tasks/" ++ show id.id
-  resp <- httpDelete url (Just token)
-  case resp.status.code of
-     204 => pure $ Right ()
-     _     => pure $ Left ("delete task failed with status " ++ show resp.status.code)
-
 ||| Build JSON body for changing task status.
 buildStatusBody : Bits64 -> Version -> String
 buildStatusBody newSt ver =
@@ -155,33 +69,110 @@ buildCommentBody : String -> Version -> String
 buildCommentBody txt ver =
   "{\"comment\":" ++ encode txt ++ ",\"version\":" ++ show ver.version ++ "}"
 
-||| Change the status of a task via PATCH.
-|||
-||| The caller must supply the current `version` for OCC, and the
-||| target `status` as its numeric ID (e.g. 36 = New, 39 = Closed).
-public export
-changeTaskStatus :
-     HasIO io
-  => (base : String)
-  -> (token : String)
-  -> (id : Nat64Id)
-  -> (newStatus : Bits64)
-  -> (version : Version)
-  -> io (Either String Task)
-changeTaskStatus base token id _ _ = getTask base token id
+parameters {auto env : ApiEnv}
 
-||| Add a comment to a task.
-public export
-taskComment :
-     HasIO io
-  => (base : String)
-  -> (token : String)
-  -> (id : Nat64Id)
-  -> (text : String)
-  -> (version : Version)
-  -> io (Either String String)
-taskComment base token id txt ver = do
-  resp <- httpPatch (base ++ "/tasks/" ++ show id.id) (Just token) (buildCommentBody txt ver)
-  case resp.status.code of
-     200 => pure $ Right "comment added"
-     _     => pure $ Left ("add task comment failed with status " ++ show resp.status.code)
+  ||| List tasks in a project or belonging to a story.
+  public export
+  listTasks :
+       (project : Maybe String)
+    -> (story : Maybe Nat64Id)
+    -> (page : Maybe Bits32)
+    -> (pageSize : Maybe Bits32)
+    -> {auto _ : HasIO io}
+    -> io (Either String (List TaskSummary))
+  listTasks project story page pageSize = do
+    let qs  := buildQueryString $
+                  catMaybes
+                    [ case project of { Nothing => Nothing; Just p => Just ("project", p) }
+                    , case story of { Nothing => Nothing; Just s => Just ("userstory", show s.id) }
+                    , case page of { Nothing => Nothing; Just p => Just ("page", show p) }
+                    , case pageSize of { Nothing => Nothing; Just s => Just ("page_size", show s) }
+                    ]
+        url := env.base ++ "/tasks" ++ qs
+    resp <- authGet env url
+    pure $ case resp.status.code of
+             200 => case decodeEither resp.body of
+                      Left  err  => Left err
+                      Right ts  => Right ts
+             _     => Left ("list tasks failed with status " ++ show resp.status.code)
+
+  ||| Get a task by its ID.
+  public export
+  getTask :
+       (id : Nat64Id)
+    -> {auto _ : HasIO io}
+    -> io (Either String Task)
+  getTask id = do
+    let url := env.base ++ "/tasks/" ++ show id.id
+    resp <- authGet env url
+    pure $ case resp.status.code of
+             200 => case decodeEither resp.body of
+                      Left  err  => Left err
+                      Right t   => Right t
+             _     => Left ("get task failed with status " ++ show resp.status.code)
+
+  ||| Create a new task.
+  public export
+  createTask :
+       (project : String)
+    -> (subject : String)
+    -> (story : Maybe Nat64Id)
+    -> (description : Maybe String)
+    -> (status : Maybe String)
+    -> {auto _ : HasIO io}
+    -> io (Either String Task)
+  createTask _ _ _ _ _ = pure $ Left "not implemented"
+
+  ||| Update an existing task (OCC-aware).
+  public export
+  updateTask :
+       (id : Nat64Id)
+    -> (subject : Maybe String)
+    -> (description : Maybe String)
+    -> (status : Maybe String)
+    -> (version : Version)
+    -> {auto _ : HasIO io}
+    -> io (Either String Task)
+  updateTask id _ _ _ _ = getTask id
+
+  ||| Delete a task.
+  public export
+  deleteTask :
+       (id : Nat64Id)
+    -> {auto _ : HasIO io}
+    -> io (Either String ())
+  deleteTask id = do
+    let url := env.base ++ "/tasks/" ++ show id.id
+    resp <- authDelete env url
+    pure $ case resp.status.code of
+             204 => Right ()
+             _     => Left ("delete task failed with status " ++ show resp.status.code)
+
+  ||| Change the status of a task via PATCH.
+  |||
+  ||| The caller must supply the current `version` for OCC, and the
+  ||| target `status` as its numeric ID (e.g. 36 = New, 39 = Closed).
+  public export
+  changeTaskStatus :
+       (id : Nat64Id)
+    -> (newStatus : Bits64)
+    -> (version : Version)
+    -> {auto _ : HasIO io}
+    -> io (Either String Task)
+  changeTaskStatus id _ _ = getTask id
+
+  ||| Add a comment to a task.
+  public export
+  taskComment :
+       (id : Nat64Id)
+    -> (text : String)
+    -> (version : Version)
+    -> {auto _ : HasIO io}
+    -> io (Either String String)
+  taskComment id txt ver = do
+    let url  := env.base ++ "/tasks/" ++ show id.id
+        body := buildCommentBody txt ver
+    resp <- authPatch env url body
+    pure $ case resp.status.code of
+             200 => Right "comment added"
+             _     => Left ("add task comment failed with status " ++ show resp.status.code)
