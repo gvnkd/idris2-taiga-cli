@@ -111,6 +111,17 @@ parameters {auto env : ApiEnv}
                       Right t   => Right t
              _     => Left ("get task failed with status " ++ show resp.status.code)
 
+  ||| Build JSON body for creating a task.
+  buildCreateTaskBody :
+       String -> String -> Maybe Nat64Id -> Maybe String -> Maybe String -> String
+  buildCreateTaskBody project subject story desc stat =
+    "{\"project\":" ++ show (parseBits64 project) ++
+    ",\"subject\":" ++ encode subject ++
+    case story of { Nothing => ""; Just s => ",\"userstory\":" ++ show s.id } ++
+    case desc of  { Nothing => ""; Just d => ",\"description\":" ++ encode d } ++
+    case stat of  { Nothing => ""; Just s => ",\"status\":" ++ show (parseBits64 s) } ++
+    "}"
+
   ||| Create a new task.
   public export
   createTask :
@@ -121,7 +132,14 @@ parameters {auto env : ApiEnv}
     -> (status : Maybe String)
     -> {auto _ : HasIO io}
     -> io (Either String Task)
-  createTask _ _ _ _ _ = pure $ Left "not implemented"
+  createTask project subject story desc stat = do
+    let body := buildCreateTaskBody project subject story desc stat
+    resp <- authPost env (env.base ++ "/tasks") body
+    pure $ case resp.status.code of
+             201 => case decodeEither resp.body of
+                      Left  err  => Left err
+                      Right t   => Right t
+             _     => Left ("create task failed with status " ++ show resp.status.code)
 
   ||| Update an existing task (OCC-aware).
   public export
@@ -133,7 +151,14 @@ parameters {auto env : ApiEnv}
     -> (version : Version)
     -> {auto _ : HasIO io}
     -> io (Either String Task)
-  updateTask id _ _ _ _ = getTask id
+  updateTask id subj desc stat ver = do
+    let body := buildUpdateBody subj desc stat ver
+    resp <- authPut env (env.base ++ "/tasks/" ++ show id.id) body
+    pure $ case resp.status.code of
+             200 => case decodeEither resp.body of
+                      Left  err  => Left err
+                      Right t   => Right t
+             _     => Left ("update task failed with status " ++ show resp.status.code)
 
   ||| Delete a task.
   public export
@@ -159,7 +184,14 @@ parameters {auto env : ApiEnv}
     -> (version : Version)
     -> {auto _ : HasIO io}
     -> io (Either String Task)
-  changeTaskStatus id _ _ = getTask id
+  changeTaskStatus id newSt ver = do
+    let body := buildStatusBody newSt ver
+    resp <- authPatch env (env.base ++ "/tasks/" ++ show id.id) body
+    pure $ case resp.status.code of
+             200 => case decodeEither resp.body of
+                      Left  err  => Left err
+                      Right t   => Right t
+             _     => Left ("change task status failed with status " ++ show resp.status.code)
 
   ||| Add a comment to a task.
   public export

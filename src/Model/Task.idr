@@ -2,6 +2,8 @@
 module Model.Task
 
 import JSON.Derive
+import JSON.ToJSON
+import JSON.FromJSON
 import Model.Common
 
 %language ElabReflection
@@ -14,8 +16,8 @@ record Task where
   ref : Bits32
   subject : String
   description : String
-  status : String
-  story : Maybe Nat64Id
+  status : Maybe Bits64
+  user_story : Maybe Nat64Id
   version : Version
 
 %runElab derive "Task" [Show,Eq,ToJSON,FromJSON]
@@ -27,7 +29,7 @@ record TaskSummary where
   id : Nat64Id
   ref : Bits32
   subject : String
-  status : String
-  story : Maybe Nat64Id
+  status : Maybe Bits64
+  user_story : Maybe Nat64Id
 
 %runElab derive "TaskSummary" [Show,Eq,ToJSON,FromJSON]

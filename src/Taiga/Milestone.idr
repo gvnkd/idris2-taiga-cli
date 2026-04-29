@@ -44,6 +44,18 @@ parameters {auto env : ApiEnv}
                       Right ms  => Right ms
              _     => Left ("list milestones failed with status " ++ show resp.status.code)
 
+  ||| Parse string as Bits64.
+  parseBits64 : String -> Bits64
+  parseBits64 = cast
+
+  ||| Build JSON body for creating a milestone.
+  buildCreateMilestoneBody : String -> String -> String -> String -> String
+  buildCreateMilestoneBody project name estStart estFinish =
+    "{\"project\":" ++ show (parseBits64 project) ++
+    ",\"name\":" ++ encode name ++
+    ",\"estimated_start\":" ++ encode estStart ++
+    ",\"estimated_finish\":" ++ encode estFinish ++ "}"
+
   ||| Create a new milestone.
   public export
   createMilestone :
@@ -53,7 +65,27 @@ parameters {auto env : ApiEnv}
     -> (estimatedFinish : String)
     -> {auto _ : HasIO io}
     -> io (Either String Milestone)
-  createMilestone = ?rhs_createMilestone
+  createMilestone project name estStart estFinish = do
+    let body := buildCreateMilestoneBody project name estStart estFinish
+    resp <- authPost env (env.base ++ "/milestones") body
+    pure $ case resp.status.code of
+             201 => case decodeEither resp.body of
+                      Left  err  => Left err
+                      Right m   => Right m
+             _     => Left ("create milestone failed with status " ++ show resp.status.code)
+
+  ||| Build JSON body for updating a milestone.
+  buildUpdateMilestoneBody :
+       Maybe String -> Maybe String -> Maybe String -> Version -> String
+  buildUpdateMilestoneBody name estStart estFinish ver =
+    "{" ++ concat fields ++ ",\"version\":" ++ show ver.version ++ "}"
+    where
+      fields : List String
+      fields = catMaybes
+        [ case name      of { Nothing => Nothing; Just s => Just (",\"name\":" ++ encode s) }
+        , case estStart  of { Nothing => Nothing; Just s => Just (",\"estimated_start\":" ++ encode s) }
+        , case estFinish of { Nothing => Nothing; Just s => Just (",\"estimated_finish\":" ++ encode s) }
+        ]
 
   ||| Update an existing milestone (OCC-aware).
   public export
@@ -65,4 +97,11 @@ parameters {auto env : ApiEnv}
     -> (version : Version)
     -> {auto _ : HasIO io}
     -> io (Either String Milestone)
-  updateMilestone = ?rhs_updateMilestone
+  updateMilestone id name estStart estFinish ver = do
+    let body := buildUpdateMilestoneBody name estStart estFinish ver
+    resp <- authPut env (env.base ++ "/milestones/" ++ show id.id) body
+    pure $ case resp.status.code of
+             200 => case decodeEither resp.body of
+                      Left  err  => Left err
+                      Right m   => Right m
+             _     => Left ("update milestone failed with status " ++ show resp.status.code)
