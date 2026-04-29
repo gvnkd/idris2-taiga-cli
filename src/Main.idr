@@ -20,6 +20,7 @@ import Protocol.Request
 import Protocol.Response
 import System.File
 import System
+import Data.List
 
 %language ElabReflection
 
@@ -56,12 +57,19 @@ auth_to_token' (CredentialAuth _) = Nothing
 ||| Resolve the base URL for a CLI invocation.
 ||| Falls back to `--base` flag, then environment, then default.
 resolveBaseUrl : Maybe String -> Maybe String
-resolveBaseUrl = ?resolveBaseUrl_impl
+resolveBaseUrl baseUrl =
+  case baseUrl of
+    Just url  => Just url
+    Nothing   => Nothing
 
 ||| Run the CLI path: parse args, dispatch command, print result.
 runCLI : List String -> IO ()
 runCLI rawArgs =
-  ?runCLI_impl
+  case parseArgs rawArgs of
+    Left err => cliError err
+    Right res => do
+      let base := resolveBaseUrl res.base_url
+      putStrLn "CLI args parsed successfully"
 
 ||| Run the agent path: read JSON from stdin, dispatch, write response.
 runAgent : IO ()
@@ -90,6 +98,7 @@ runAgent = do
 main : IO ()
 main = do
   args <- getArgs
-  case args of
+  let args' := drop 1 args
+  case args' of
     []    => runAgent
-    _     => runCLI args
+    _     => runCLI args'
