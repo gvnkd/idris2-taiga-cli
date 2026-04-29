@@ -6,3 +6,4 @@ libs_sources/
 *.so
 logs/
 result
+.opencode/

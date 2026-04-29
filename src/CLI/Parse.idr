@@ -188,15 +188,61 @@ parseBase recurse = do
   setBase url
   recurse
 
+||| Parse `--watch-task ID`.
+parseWatchTask : Parser CLIArgs
+parseWatchTask = do
+  idStr <- pop
+  case readNat64 idStr of
+    Left  _     => failParse $ "invalid task id: " ++ idStr
+    Right nid   => pure $ ArgWatchTask (MkNat64Id nid)
+
+||| Parse `--change-task-status ID STATUS VERSION`.
+parseChangeTaskStatus : Parser CLIArgs
+parseChangeTaskStatus = do
+  idStr   <- pop
+  stStr   <- pop
+  verStr  <- pop
+  case (readNat64 idStr, readNat64 stStr, readNat32 verStr) of
+    (Left _, _, _)   => failParse $ "invalid task id: " ++ idStr
+    (_, Left _, _)   => failParse $ "invalid status id: " ++ stStr
+    (_, _, Left _)   => failParse $ "invalid version: " ++ verStr
+    (Right nid, Right st, Right v)
+                    => pure $ ArgChangeTaskStatus (MkNat64Id nid) st (MkVersion v)
+
+||| Parse `--task-comment ID TEXT VERSION`.
+parseTaskComment : Parser CLIArgs
+parseTaskComment = do
+  idStr  <- pop
+  txt    <- pop
+  verStr <- pop
+  case (readNat64 idStr, readNat32 verStr) of
+    (Left _, _)   => failParse $ "invalid task id: " ++ idStr
+    (_, Left _)   => failParse $ "invalid version: " ++ verStr
+    (Right nid, Right v)
+                    => pure $ ArgTaskComment (MkNat64Id nid) txt (MkVersion v)
+
+||| Parse `--list-comments ENTITY ID`.
+parseListComments : Parser CLIArgs
+parseListComments = do
+  entity <- pop
+  idStr  <- pop
+  case readNat64 idStr of
+    Left  _     => failParse $ "invalid entity id: " ++ idStr
+    Right nid   => pure $ ArgListComments entity (MkNat64Id nid)
+
 ||| Parse a long flag and dispatch to the correct sub-parser.
 parseLongFlag : String -> Parser CLIArgs -> Parser CLIArgs
-parseLongFlag "--base"            recurse = parseBase recurse
-parseLongFlag "--help"            _        = parseHelp
-parseLongFlag "--stdin"           _        = parseStdin
-parseLongFlag "--login"           _        = parseLogin
-parseLongFlag "--me"              _        = parseMe
-parseLongFlag "--list-projects"   _        = parseListProjects
-parseLongFlag flag               _        = failParse $ "unimplemented flag: " ++ flag
+parseLongFlag "--base"                recurse = parseBase recurse
+parseLongFlag "--help"                _        = parseHelp
+parseLongFlag "--stdin"               _        = parseStdin
+parseLongFlag "--login"               _        = parseLogin
+parseLongFlag "--me"                  _        = parseMe
+parseLongFlag "--list-projects"       _        = parseListProjects
+parseLongFlag "--watch-task"          _        = parseWatchTask
+parseLongFlag "--change-task-status"  _        = parseChangeTaskStatus
+parseLongFlag "--task-comment"        _        = parseTaskComment
+parseLongFlag "--list-comments"       _        = parseListComments
+parseLongFlag flag                    _        = failParse $ "unimplemented flag: " ++ flag
 
 ||| Top-level parser: dispatch on the first argument and invoke
 ||| the appropriate sub-parser.

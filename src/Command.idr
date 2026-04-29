@@ -14,6 +14,7 @@ import Model.Task
 import Model.User
 import Model.UserStory
 import Model.WikiPage
+import Model.Comment
 import JSON.Derive
 import JSON.ToJSON
 import JSON.FromJSON
@@ -21,6 +22,8 @@ import Protocol.Request
 import Protocol.Response
 import Taiga.Auth
 import Taiga.Api
+import Taiga.Task
+import Taiga.History
 
 %language ElabReflection
 
@@ -70,9 +73,12 @@ data Command : Type where
   CmdDeleteStory : Nat64Id -> Command
 
   -- Write / mutation commands — tasks
-  CmdCreateTask : String -> String -> Maybe Nat64Id -> Maybe String -> Maybe String -> Command
-  CmdUpdateTask : Nat64Id -> Maybe String -> Maybe String -> Maybe String -> Version -> Command
-  CmdDeleteTask : Nat64Id -> Command
+  CmdCreateTask     : String -> String -> Maybe Nat64Id -> Maybe String -> Maybe String -> Command
+  CmdUpdateTask     : Nat64Id -> Maybe String -> Maybe String -> Maybe String -> Version -> Command
+  CmdDeleteTask     : Nat64Id -> Command
+  CmdWatchTask      : Nat64Id -> Command
+  CmdChangeTaskStatus : Nat64Id -> Bits64 -> Version -> Command
+  CmdTaskComment    : Nat64Id -> String -> Version -> Command
 
   -- Write / mutation commands — issues
   CmdCreateIssue : String -> String -> Maybe String -> Maybe String -> Maybe String -> Maybe String -> Command
@@ -85,9 +91,10 @@ data Command : Type where
   CmdDeleteWiki : Nat64Id -> Command
 
   -- Comments (via history API)
-  CmdComment      : String -> Nat64Id -> String -> Command
-  CmdEditComment  : String -> Nat64Id -> Nat64Id -> String -> Command
+  CmdComment       : String -> Nat64Id -> String -> Command
+  CmdEditComment   : String -> Nat64Id -> Nat64Id -> String -> Command
   CmdDeleteComment : String -> Nat64Id -> Nat64Id -> Command
+  CmdListComments  : String -> Nat64Id -> Command
 
   -- Milestones
   CmdCreateMilestone : String -> String -> String -> String -> Command
@@ -135,6 +142,71 @@ dispatchMe (Just token) (Just baseUrl)
                 Left err  => Err $ MkErrorResponse False "api_error" err
                 Right u  => Ok $ MkSuccess True (encode u))
 
+||| Dispatch CmdWatchTask: fetch task details and its history.
+dispatchWatchTask :
+      HasIO io
+   => (taskId : Nat64Id)
+   -> (auth : Maybe Token)
+   -> (base : Maybe String)
+   -> io Response
+dispatchWatchTask _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
+dispatchWatchTask _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
+dispatchWatchTask taskId (Just token) (Just baseUrl)
+  = do taskResult <- getTask baseUrl token.auth_token taskId
+       pure (case taskResult of
+                Left  err  => Err $ MkErrorResponse False "api_error" err
+                Right t   => Ok $ MkSuccess True (encode t))
+
+||| Dispatch CmdChangeTaskStatus: change the status of a task.
+dispatchChangeTaskStatus :
+      HasIO io
+   => (taskId : Nat64Id)
+   -> (newStatus : Bits64)
+   -> (ver : Version)
+   -> (auth : Maybe Token)
+   -> (base : Maybe String)
+   -> io Response
+dispatchChangeTaskStatus _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
+dispatchChangeTaskStatus _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
+dispatchChangeTaskStatus taskId newSt ver (Just token) (Just baseUrl)
+  = do result <- changeTaskStatus baseUrl token.auth_token taskId newSt ver
+       pure (case result of
+                Left  err  => Err $ MkErrorResponse False "api_error" err
+                Right t   => Ok $ MkSuccess True (encode t))
+
+||| Dispatch CmdTaskComment: add a comment to a task.
+dispatchTaskComment :
+      HasIO io
+   => (taskId : Nat64Id)
+   -> (text : String)
+   -> (ver : Version)
+   -> (auth : Maybe Token)
+   -> (base : Maybe String)
+   -> io Response
+dispatchTaskComment _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
+dispatchTaskComment _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
+dispatchTaskComment taskId txt ver (Just token) (Just baseUrl)
+  = do result <- taskComment baseUrl token.auth_token taskId txt ver
+       pure (case result of
+                Left  err  => Err $ MkErrorResponse False "api_error" err
+                Right m   => Ok $ MkSuccess True (JSON.ToJSON.encode m))
+
+||| Dispatch CmdListComments: list history entries for an entity.
+dispatchListComments :
+      HasIO io
+   => (entity : String)
+   -> (entityId : Nat64Id)
+   -> (auth : Maybe Token)
+   -> (base : Maybe String)
+   -> io Response
+dispatchListComments _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
+dispatchListComments _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
+dispatchListComments entity eid (Just token) (Just baseUrl)
+  = do result <- listHistory baseUrl token.auth_token entity eid
+       pure (case result of
+                Left  err  => Err $ MkErrorResponse False "api_error" err
+                Right hs  => Ok $ MkSuccess True (encode hs))
+
 ||| Parse a command name and JSON arguments into a Command.
 public export
 parseCommand : (cmd : String) -> (args : String) -> Either String Command
@@ -157,8 +229,12 @@ dispatchCommand :
    -> (base  : Maybe String)
    -> io Response
 dispatchCommand command auth base
-  = case command of
-       CmdLogin creds     => dispatchLogin creds base
-       CmdRefresh rtok    => dispatchRefresh rtok base
-       CmdMe              => dispatchMe auth base
-       _                  => pure $ Err $ MkErrorResponse False "unimplemented" "Command not yet implemented"
+   = case command of
+        CmdLogin creds         => dispatchLogin creds base
+        CmdRefresh rtok        => dispatchRefresh rtok base
+        CmdMe                  => dispatchMe auth base
+        CmdWatchTask tid       => dispatchWatchTask tid auth base
+        CmdChangeTaskStatus tid st ver => dispatchChangeTaskStatus tid st ver auth base
+        CmdTaskComment tid txt ver => dispatchTaskComment tid txt ver auth base
+        CmdListComments ent eid => dispatchListComments ent eid auth base
+        _                      => pure $ Err $ MkErrorResponse False "unimplemented" "Command not yet implemented"

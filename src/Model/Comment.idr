@@ -6,22 +6,36 @@ import Model.Common
 
 %language ElabReflection
 
-||| A comment on any entity (task, story, epic, issue).
+||| Author info embedded in history entries.
 public export
-record Comment where
-  constructor MkComment
-  id : Nat64Id
-  text : String
-  author : Maybe Nat64Id
+record HistoryAuthor where
+  constructor MkHistoryAuthor
+  id : Bits64
+  username : String
+  name : String
 
-%runElab derive "Comment" [Show,Eq,ToJSON,FromJSON]
+%runElab derive "HistoryAuthor" [Show,Eq,ToJSON,FromJSON]
+
+||| A history entry (comment or status change) on any entity.
+public export
+record HistoryEntry where
+  constructor MkHistoryEntry
+  id : String
+  user : HistoryAuthor
+  created_at : String
+  comment : String
+  status_from : Maybe String
+  status_to : Maybe String
+
+%runElab derive "HistoryEntry" [Show,Eq,ToJSON,FromJSON]
 
 ||| Compact serialisation for list responses.
 public export
 record CommentSummary where
   constructor MkCommentSummary
-  id : Nat64Id
+  id : String
   text : String
-  author : Maybe Nat64Id
+  author : String
+  created_at : String
 
 %runElab derive "CommentSummary" [Show,Eq,ToJSON,FromJSON]

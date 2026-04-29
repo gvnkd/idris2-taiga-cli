@@ -69,10 +69,16 @@ data CLIArgs : Type where
   ArgUpdateWiki   : Nat64Id -> Maybe String -> Maybe String -> Version -> CLIArgs
   ArgDeleteWiki   : Nat64Id -> CLIArgs
 
-  -- Comments
+  -- Comments / history
   ArgComment       : String -> Nat64Id -> String -> CLIArgs
   ArgEditComment   : String -> Nat64Id -> Nat64Id -> String -> CLIArgs
   ArgDeleteComment : String -> Nat64Id -> Nat64Id -> CLIArgs
+  ArgListComments  : String -> Nat64Id -> CLIArgs
+
+  -- Task management
+  ArgWatchTask     : Nat64Id -> CLIArgs
+  ArgChangeTaskStatus : Nat64Id -> Bits64 -> Version -> CLIArgs
+  ArgTaskComment   : Nat64Id -> String -> Version -> CLIArgs
 
   -- Milestones
   ArgCreateMilestone   : String -> String -> String -> String -> CLIArgs

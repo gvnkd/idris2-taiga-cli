@@ -119,7 +119,7 @@
       {
         devShells.default = pkgs.mkShell {
           buildInputs =
-            [ idris2Pkgs.idris2 pkgs.rlwrap ]
+            [ idris2Pkgs.idris2 pkgs.rlwrap pkgs.python3 ]
             ++ (with pkgs; [
               (writeShellScriptBin "build" ''
                 idris2 --build taiga-cli.ipkg "$@"
