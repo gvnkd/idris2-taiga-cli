@@ -36,5 +36,6 @@ data Response : Type where
 %runElab derive "Response" [Show,ToJSON,FromJSON]
 
 ||| Serialize a Response to a JSON string.
+public export
 serializeResponse : Response -> String
-serializeResponse = ?rhs_serializeResponse
+serializeResponse = encode

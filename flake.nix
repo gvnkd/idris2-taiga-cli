@@ -89,6 +89,18 @@
       flake = false;
       url = "github:emdash/idris2-tui/aac912e4581dc3fb8b02e12bb984006500d6c2bb";
     };
+#    idris2-http-src = {
+#      flake = false;
+#      url = "github:idris-community/idris2-http/0ff06cf2c831cc9283d2e539978fedf599df2b17";
+#    };
+#    idris2-sop-src = {
+#      flake = false;
+#      url = "github:stefan-hoeck/idris2-sop/1e01b67a11857e9c9a0ea5fb2870bd915b5a223d";
+#    };
+#    idris2-tls-src = {
+#      flake = false;
+#      url = "github:stefan-hoeck/idris2-tls/4a53d18ce15f228b7c74f7a9722359fd53cab87a";
+#    };
   };
 
   outputs =

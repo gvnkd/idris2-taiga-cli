@@ -59,6 +59,9 @@ let
       [ "async"            inputs.idris2-async-src    [ "array" "containers" "elin" "quantifiers-extra" ] null ]
       [ "streams"          inputs.idris2-streams-src  [ "async" "bytestring" "elin" ] null ]
       [ "tui"              inputs.idris2-tui-src      [ "ansi" "json" "elab-util" "quantifiers-extra" ] null ]
+#      [ "sop"              inputs.idris2-sop-src      [ "elab-util" ] null ]
+#      [ "tls"              inputs.idris2-tls-src      [ "sop" ] null ]
+#      [ "http"             inputs.idris2-http-src     [ "sop" "tls" ] null ]
     ];
 
   resolve =

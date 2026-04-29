@@ -29,5 +29,6 @@ record Request where
 %runElab derive "Request" [Show,ToJSON,FromJSON]
 
 ||| Parse a raw JSON string into a Request.
+public export
 parseRequest : String -> Either String Request
-parseRequest = ?rhs_parseRequest
+parseRequest = decodeEither

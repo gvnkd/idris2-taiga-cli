@@ -15,10 +15,21 @@ import Model.User
 import Model.UserStory
 import Model.WikiPage
 import JSON.Derive
+import JSON.ToJSON
+import JSON.FromJSON
 import Protocol.Request
 import Protocol.Response
+import Taiga.Auth
+import Taiga.Api
 
 %language ElabReflection
+
+||| Refresh token argument wrapper.
+record RefreshArgs where
+  constructor MkRefreshArgs
+  refresh : String
+
+%runElab derive "RefreshArgs" [Show,FromJSON]
 
 ||| Sum type of all supported commands.
 public export
@@ -84,12 +95,70 @@ data Command : Type where
 
 %runElab derive "Command" [Show,ToJSON,FromJSON]
 
+||| Dispatch CmdLogin: authenticate and return token.
+dispatchLogin :
+      HasIO io
+   => (creds : Credentials)
+   -> (base : Maybe String)
+   -> io Response
+dispatchLogin _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
+dispatchLogin creds (Just baseUrl)
+  = do result <- login baseUrl creds
+       pure (case result of
+                Left  err  => Err $ MkErrorResponse False "auth_error" err
+                Right tok => Ok $ MkSuccess True (encode tok))
+
+||| Dispatch CmdRefresh: refresh expiring token.
+dispatchRefresh :
+      HasIO io
+   => (refreshTok : String)
+   -> (base : Maybe String)
+   -> io Response
+dispatchRefresh _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
+dispatchRefresh refreshTok (Just baseUrl)
+  = do result <- refreshToken baseUrl refreshTok
+       pure (case result of
+                Left  err  => Err $ MkErrorResponse False "auth_error" err
+                Right tok => Ok $ MkSuccess True (encode tok))
+
+||| Dispatch CmdMe: fetch current user profile.
+dispatchMe :
+      HasIO io
+   => (auth : Maybe Token)
+   -> (base : Maybe String)
+   -> io Response
+dispatchMe Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
+dispatchMe _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
+dispatchMe (Just token) (Just baseUrl)
+  = do result <- me baseUrl token.token
+       pure (case result of
+                Left err  => Err $ MkErrorResponse False "api_error" err
+                Right u  => Ok $ MkSuccess True (encode u))
+
+||| Parse a command name and JSON arguments into a Command.
+public export
+parseCommand : (cmd : String) -> (args : String) -> Either String Command
+parseCommand "me"      _ = pure CmdMe
+parseCommand "login"   args = case decodeEither args of
+                                Left  err  => Left err
+                                Right c   => pure $ CmdLogin c
+parseCommand "refresh" args = case decodeEither args of
+                                Left  err  => Left err
+                                Right r    => pure $ CmdRefresh r.refresh
+parseCommand cmd _    = Left $ "Unknown command: " ++ cmd
+
 ||| Dispatch a parsed Command together with auth and base URL,
 ||| returning a Response.
+public export
 dispatchCommand :
-     HasIO io =>
-     (command : Command)
-  -> (auth  : Maybe Model.Auth.Token)
-  -> (base  : Maybe String)
-  -> io Response
-dispatchCommand = ?rhs_dispatchCommand
+      HasIO io =>
+      (command : Command)
+   -> (auth  : Maybe Model.Auth.Token)
+   -> (base  : Maybe String)
+   -> io Response
+dispatchCommand command auth base
+  = case command of
+       CmdLogin creds     => dispatchLogin creds base
+       CmdRefresh rtok    => dispatchRefresh rtok base
+       CmdMe              => dispatchMe auth base
+       _                  => pure $ Err $ MkErrorResponse False "unimplemented" "Command not yet implemented"
