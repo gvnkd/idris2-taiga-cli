@@ -16,6 +16,7 @@ usage =
   ++ "  -h, --help          Show this help message\n"
   ++ "  --base URL         Taiga API base URL (e.g. http://127.0.0.1:8000/api/v1)\n"
   ++ "  --token TOKEN      Bearer token for authenticated commands\n"
+  ++ "  --stdin            Read JSON command from stdin (agent mode)\n"
   ++ "\n"
   ++ "Authentication:\n"
   ++ "  --login USER PASS  Authenticate with username and password\n"
