@@ -6,10 +6,12 @@ import JSON.ToJSON
 import Model.Common
 import Model.Project
 import Taiga.Api
+import Data.List
 
 %language ElabReflection
 
 ||| Build a query string from key-value pairs.
+public export
 buildQueryString : List (String, String) -> String
 buildQueryString [] = ""
 buildQueryString kvs =
@@ -17,6 +19,7 @@ buildQueryString kvs =
    in "?" ++ concat (intersperse "&" pairs)
 
 ||| List visible projects.
+public export
 listProjects :
      HasIO io
   => (base : String)
@@ -41,6 +44,7 @@ listProjects base token member page pageSize = do
      _     => pure $ Left ("list projects failed with status " ++ show resp.status.code)
 
 ||| Get a project by its ID.
+public export
 getProjectById :
      HasIO io
   => (base : String)
@@ -57,6 +61,7 @@ getProjectById base token id = do
      _     => pure $ Left ("get project failed with status " ++ show resp.status.code)
 
 ||| Get a project by its slug.
+public export
 getProjectBySlug :
      HasIO io
   => (base : String)

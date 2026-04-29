@@ -10,6 +10,7 @@ import Taiga.Api
 %language ElabReflection
 
 ||| List issues in a project.
+public export
 listIssues :
      HasIO io
   => (base : String)
@@ -21,6 +22,7 @@ listIssues :
 listIssues = ?rhs_listIssues
 
 ||| Get an issue by its ID.
+public export
 getIssue :
      HasIO io
   => (base : String)
@@ -30,6 +32,7 @@ getIssue :
 getIssue = ?rhs_getIssue
 
 ||| Create a new issue.
+public export
 createIssue :
      HasIO io
   => (base : String)
@@ -44,6 +47,7 @@ createIssue :
 createIssue = ?rhs_createIssue
 
 ||| Update an existing issue (OCC-aware).
+public export
 updateIssue :
      HasIO io
   => (base : String)
@@ -57,6 +61,7 @@ updateIssue :
 updateIssue = ?rhs_updateIssue
 
 ||| Delete an issue.
+public export
 deleteIssue :
      HasIO io
   => (base : String)

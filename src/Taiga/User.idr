@@ -10,6 +10,7 @@ import Taiga.Api
 %language ElabReflection
 
 ||| List project members.
+public export
 listUsers :
      HasIO io
   => (base : String)
@@ -19,6 +20,7 @@ listUsers :
 listUsers = ?rhs_listUsers
 
 ||| List memberships for a project.
+public export
 listMemberships :
      HasIO io
   => (base : String)
@@ -28,6 +30,7 @@ listMemberships :
 listMemberships = ?rhs_listMemberships
 
 ||| List roles for a project.
+public export
 listRoles :
      HasIO io
   => (base : String)

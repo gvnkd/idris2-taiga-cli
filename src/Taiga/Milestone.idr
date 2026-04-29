@@ -10,6 +10,7 @@ import Taiga.Api
 %language ElabReflection
 
 ||| List milestones in a project.
+public export
 listMilestones :
      HasIO io
   => (base : String)
@@ -21,6 +22,7 @@ listMilestones :
 listMilestones = ?rhs_listMilestones
 
 ||| Create a new milestone.
+public export
 createMilestone :
      HasIO io
   => (base : String)
@@ -33,6 +35,7 @@ createMilestone :
 createMilestone = ?rhs_createMilestone
 
 ||| Update an existing milestone (OCC-aware).
+public export
 updateMilestone :
      HasIO io
   => (base : String)

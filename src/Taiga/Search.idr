@@ -9,6 +9,7 @@ import Taiga.Api
 %language ElabReflection
 
 ||| Global search within a project.
+public export
 search :
      HasIO io
   => (base : String)
@@ -19,6 +20,7 @@ search :
 search = ?rhs_search
 
 ||| Resolve an entity by its slug or ref.
+public export
 resolve :
      HasIO io
   => (base : String)

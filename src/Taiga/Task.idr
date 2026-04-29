@@ -18,6 +18,7 @@ buildQueryString kvs =
    in "?" ++ concat (intersperse "&" pairs)
 
 ||| List tasks in a project or belonging to a story.
+public export
 listTasks :
      HasIO io
   => (base : String)
@@ -89,6 +90,7 @@ buildCreateBody project subject story desc stat =
   ++ "}"
 
 ||| Create a new task.
+public export
 createTask :
      HasIO io
   => (base : String)
@@ -115,6 +117,7 @@ buildUpdateBody subj desc stat ver =
       ]
 
 ||| Update an existing task (OCC-aware).
+public export
 updateTask :
      HasIO io
   => (base : String)
@@ -128,6 +131,7 @@ updateTask :
 updateTask base token id _ _ _ _ = getTask base token id
 
 ||| Delete a task.
+public export
 deleteTask :
      HasIO io
   => (base : String)

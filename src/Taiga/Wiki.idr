@@ -10,6 +10,7 @@ import Taiga.Api
 %language ElabReflection
 
 ||| List wiki pages in a project.
+public export
 listWiki :
      HasIO io
   => (base : String)
@@ -21,6 +22,7 @@ listWiki :
 listWiki = ?rhs_listWiki
 
 ||| Get a wiki page by its ID.
+public export
 getWiki :
      HasIO io
   => (base : String)
@@ -30,6 +32,7 @@ getWiki :
 getWiki = ?rhs_getWiki
 
 ||| Create a new wiki page.
+public export
 createWiki :
      HasIO io
   => (base : String)
@@ -41,6 +44,7 @@ createWiki :
 createWiki = ?rhs_createWiki
 
 ||| Update an existing wiki page (OCC-aware).
+public export
 updateWiki :
      HasIO io
   => (base : String)
@@ -53,6 +57,7 @@ updateWiki :
 updateWiki = ?rhs_updateWiki
 
 ||| Delete a wiki page.
+public export
 deleteWiki :
      HasIO io
   => (base : String)

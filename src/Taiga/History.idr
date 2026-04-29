@@ -57,6 +57,7 @@ patchUrl url token body = do
 ||| Add a comment to an entity by PATCHing the entity with a comment field.
 |||
 ||| For tasks, this PATCHes `/tasks/{id}` with `{"comment": ..., "version": v}`.
+public export
 addComment :
      HasIO io
   => (base : String)
@@ -72,6 +73,7 @@ addComment base token entity eid txt ver =
 
 ||| Edit an existing comment is not supported by Taiga's API.
 ||| Returns a descriptive error.
+public export
 editComment :
      HasIO io
   => (base : String)
@@ -85,6 +87,7 @@ editComment _ _ _ _ _ _ = pure $ Left "Taiga does not support editing comments"
 
 ||| Delete a comment is not supported by Taiga's API.
 ||| Returns a descriptive error.
+public export
 deleteComment :
      HasIO io
   => (base : String)
