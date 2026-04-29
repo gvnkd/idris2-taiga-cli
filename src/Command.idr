@@ -130,7 +130,7 @@ dispatchMe :
 dispatchMe Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchMe _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchMe (Just token) (Just baseUrl)
-  = do result <- me baseUrl token.token
+  = do result <- me baseUrl token.auth_token
        pure (case result of
                 Left err  => Err $ MkErrorResponse False "api_error" err
                 Right u  => Ok $ MkSuccess True (encode u))

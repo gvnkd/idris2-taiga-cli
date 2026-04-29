@@ -81,9 +81,9 @@ httpGet url auth = runCurlCmd (buildCurlGet url auth)
 buildCurlPost : (url : String) -> (auth : Maybe String) -> (body : String) -> String
 buildCurlPost url auth body =
   let authFlag := case auth of
-                     Nothing    => ""
-                     Just token => "--header \"Authorization: Bearer " ++ token ++ "\""
-      jsonFlag := "--header \"Content-Type: application/json\" --data \"" ++ body ++ "\""
+                      Nothing    => ""
+                      Just token => "--header \"Authorization: Bearer " ++ token ++ "\""
+      jsonFlag := "--header \"Content-Type: application/json\" --data '" ++ body ++ "'"
    in "curl -s -w \"\\n%{http_code}\" -X POST " ++ authFlag ++ " " ++ jsonFlag ++ " \"" ++ url ++ "\""
 
 ||| Perform a POST request with a JSON body.
@@ -105,11 +105,11 @@ buildCurlMethod :
   -> String
 buildCurlMethod method url auth body =
   let authFlag := case auth of
-                     Nothing    => ""
-                     Just token => "--header \"Authorization: Bearer " ++ token ++ "\""
+                      Nothing    => ""
+                      Just token => "--header \"Authorization: Bearer " ++ token ++ "\""
       bodyFlag := case body of
-                     Nothing  => ""
-                     Just b   => "--header \"Content-Type: application/json\" --data \"" ++ b ++ "\""
+                      Nothing  => ""
+                      Just b   => "--header \"Content-Type: application/json\" --data '" ++ b ++ "'"
    in "curl -s -w \"\\n%{http_code}\" -X " ++ method ++ " " ++ authFlag ++ " " ++ bodyFlag ++ " \"" ++ url ++ "\""
 
 ||| Perform a PUT request with a JSON body.

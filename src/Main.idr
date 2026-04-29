@@ -28,7 +28,7 @@ writeStdout = putStr
 
 ||| Extract a Token from AuthInfo.
 auth_to_token' : AuthInfo -> Maybe Token
-auth_to_token' (TokenAuth t)     = Just $ MkToken t Nothing
+auth_to_token' (TokenAuth t)     = Just $ MkToken { auth_token = t, refresh = Nothing }
 auth_to_token' (CredentialAuth _) = Nothing
 
 ||| Top-level entry point.
