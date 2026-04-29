@@ -5,3 +5,4 @@ libs_sources/
 *.swp
 *.so
 logs/
+result
