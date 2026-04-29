@@ -1,14 +1,27 @@
 ||| CLI entry point.
 |||
-||| Reads one JSON request from stdin, dispatches to the appropriate
-||| command handler, and writes one JSON response to stdout.
+||| Two modes of operation:
+|||
+||| 1. **Agent mode** (default): reads a JSON request from stdin,
+|||    dispatches to the appropriate command handler, and writes a
+|||    JSON response to stdout.  Used by AI agents.
+|||
+||| 2. **CLI mode**: activated when `getArgs` returns non-empty.
+|||    Parses human-friendly flags (`--list-epics`, `--login`, etc.)
+|||    and dispatches directly.  Output is plain JSON to stdout.
 module Main
 
+import CLI.Args
+import CLI.Help
+import CLI.Parse
 import Command
 import Model.Auth
 import Protocol.Request
 import Protocol.Response
 import System.File
+import System
+
+%language ElabReflection
 
 ||| Read raw JSON from stdin.
 readStdin :
@@ -26,14 +39,33 @@ writeStdout :
   => String -> io ()
 writeStdout = putStr
 
+||| Print a human-readable error and exit.
+cliError : String -> IO ()
+cliError msg = do
+  putStrLn $ "error: " ++ msg
+
+||| Format a Response as JSON and print to stdout.
+cliPrintResponse : Response -> IO ()
+cliPrintResponse = writeStdout . serializeResponse
+
 ||| Extract a Token from AuthInfo.
 auth_to_token' : AuthInfo -> Maybe Token
 auth_to_token' (TokenAuth t)     = Just $ MkToken { auth_token = t, refresh = Nothing }
 auth_to_token' (CredentialAuth _) = Nothing
 
-||| Top-level entry point.
-main : IO ()
-main = do
+||| Resolve the base URL for a CLI invocation.
+||| Falls back to `--base` flag, then environment, then default.
+resolveBaseUrl : Maybe String -> Maybe String
+resolveBaseUrl = ?resolveBaseUrl_impl
+
+||| Run the CLI path: parse args, dispatch command, print result.
+runCLI : List String -> IO ()
+runCLI rawArgs =
+  ?runCLI_impl
+
+||| Run the agent path: read JSON from stdin, dispatch, write response.
+runAgent : IO ()
+runAgent = do
   raw <- readStdin
   case parseRequest raw of
     Left err =>
@@ -50,3 +82,14 @@ main = do
             Right command => do
               resp <- dispatchCommand command token req.base
               writeStdout (serializeResponse resp)
+
+||| Top-level entry point.
+|||
+||| If `getArgs` returns non-empty, enter CLI mode.
+||| Otherwise, enter agent mode (read JSON from stdin).
+main : IO ()
+main = do
+  args <- getArgs
+  case args of
+    []    => runAgent
+    _     => runCLI args
