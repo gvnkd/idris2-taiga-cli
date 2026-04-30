@@ -20,6 +20,7 @@ record UserStory where
 
 %runElab derive "UserStory" [Show,Eq,ToJSON,FromJSON]
 
+||| Short representation of a user story returned by list endpoints.
 public export
 record UserStorySummary where
   constructor MkUserStorySummary

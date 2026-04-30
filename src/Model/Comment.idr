@@ -16,6 +16,7 @@ record HistoryAuthor where
 
 %runElab derive "HistoryAuthor" [Show,Eq,ToJSON,FromJSON]
 
+||| A single history entry from the Taiga history API.
 public export
 record HistoryEntry where
   constructor MkHistoryEntry

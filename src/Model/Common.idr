@@ -38,6 +38,7 @@ record DateTime where
 %runElab derive "Version" [Eq, Ord]
 %runElab derive "DateTime" [Eq, Ord]
 
+||| Human-readable display for common wrapper types.
 public export
 Show Nat64Id where
   show (MkNat64Id n) = "Nat64Id " ++ show n
@@ -54,8 +55,7 @@ public export
 Show DateTime where
   show (MkDateTime s) = "DateTime " ++ show s
 
-||| --- FromJSON: bare integer / string round-trip ---
-
+||| Deserialize common types as bare JSON values.
 public export
 FromJSON Nat64Id where
   fromJSON = withInteger "Nat64Id" $ \n => pure $ MkNat64Id $ cast n
@@ -72,8 +72,7 @@ public export
 FromJSON DateTime where
   fromJSON = withString "DateTime" $ \s => pure $ MkDateTime s
 
-||| --- ToJSON: bare integer / string round-trip ---
-
+||| Serialize common types as bare JSON values.
 public export
 ToJSON Nat64Id where
   toJSON {v} (MkNat64Id n) = integer $ cast n

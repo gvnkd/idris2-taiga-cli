@@ -19,6 +19,7 @@ record Epic where
 
 %runElab derive "Epic" [Show,Eq,ToJSON,FromJSON]
 
+||| Short representation of an epic returned by list endpoints.
 public export
 record EpicSummary where
   constructor MkEpicSummary

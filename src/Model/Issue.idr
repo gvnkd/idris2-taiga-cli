@@ -20,6 +20,7 @@ record Issue where
 
 %runElab derive "Issue" [Show,Eq,ToJSON,FromJSON]
 
+||| Short representation of an issue returned by list endpoints.
 public export
 record IssueSummary where
   constructor MkIssueSummary

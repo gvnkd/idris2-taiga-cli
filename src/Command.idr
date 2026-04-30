@@ -47,6 +47,7 @@ record RefreshArgs where
 
 ||| --- Argument records for agent-mode command parsing ---
 
+||| Arguments for listing projects.
 record ListProjectsArgs where
   constructor MkListProjectsArgs
   member : Maybe String
@@ -54,12 +55,14 @@ record ListProjectsArgs where
 
 %runElab derive "ListProjectsArgs" [Show,FromJSON]
 
+||| Arguments for fetching a project by ID or slug.
 record GetProjectArgs where
   constructor MkGetProjectArgs
   id : Maybe Bits64
   slug : Maybe String
 %runElab derive "GetProjectArgs" [Show,FromJSON]
 
+||| Simple wrapper holding a single required project string.
 record StringArgs where
   constructor MkStringArgs
   project : String
@@ -67,6 +70,7 @@ record StringArgs where
 
 %runElab derive "StringArgs" [Show,FromJSON]
 
+||| Simple wrapper holding an optional project string.
 record MaybeStringArgs where
   constructor MkMaybeStringArgs
   project : Maybe String
@@ -74,6 +78,7 @@ record MaybeStringArgs where
 
 %runElab derive "MaybeStringArgs" [Show,FromJSON]
 
+||| Simple wrapper holding an optional entity ID.
 record MaybeNat64Args where
   constructor MkMaybeNat64Args
   id : Maybe Bits64
@@ -81,6 +86,7 @@ record MaybeNat64Args where
 
 %runElab derive "MaybeNat64Args" [Show,FromJSON]
 
+||| Simple wrapper holding a required entity ID.
 record Nat64Args where
   constructor MkNat64Args
   id : Bits64
@@ -88,18 +94,21 @@ record Nat64Args where
 
 %runElab derive "Nat64Args" [Show,FromJSON]
 
+||| Arguments for project-wide text search.
 record SearchArgs where
   constructor MkSearchArgs
   project : String
   text : String
 %runElab derive "SearchArgs" [Show,FromJSON]
 
+||| Arguments for resolving an entity ref to its ID.
 record ResolveArgs where
   constructor MkResolveArgs
   project : String
   ref : String
 %runElab derive "ResolveArgs" [Show,FromJSON]
 
+||| Arguments for creating a new epic.
 record CreateEpicArgs where
   constructor MkCreateEpicArgs
   project : String
@@ -108,6 +117,7 @@ record CreateEpicArgs where
   status : Maybe String
 %runElab derive "CreateEpicArgs" [Show,FromJSON]
 
+||| Arguments for updating an existing epic.
 record UpdateEpicArgs where
   constructor MkUpdateEpicArgs
   id : Bits64
@@ -117,6 +127,7 @@ record UpdateEpicArgs where
   version : Bits32
 %runElab derive "UpdateEpicArgs" [Show,FromJSON]
 
+||| Arguments for creating a new user story.
 record CreateStoryArgs where
   constructor MkCreateStoryArgs
   project : String
@@ -125,6 +136,7 @@ record CreateStoryArgs where
   milestone : Maybe Bits64
 %runElab derive "CreateStoryArgs" [Show,FromJSON]
 
+||| Arguments for updating an existing user story.
 record UpdateStoryArgs where
   constructor MkUpdateStoryArgs
   id : Bits64
@@ -134,6 +146,7 @@ record UpdateStoryArgs where
   version : Bits32
 %runElab derive "UpdateStoryArgs" [Show,FromJSON]
 
+||| Arguments for creating a new task.
 record CreateTaskArgs where
   constructor MkCreateTaskArgs
   project : String
@@ -145,6 +158,7 @@ record CreateTaskArgs where
 
 %runElab derive "CreateTaskArgs" [Show,FromJSON]
 
+||| Arguments for updating an existing task.
 record UpdateTaskArgs where
   constructor MkUpdateTaskArgs
   id : Bits64
@@ -154,6 +168,7 @@ record UpdateTaskArgs where
   version : Bits32
 %runElab derive "UpdateTaskArgs" [Show,FromJSON]
 
+||| Arguments for changing a task's status.
 record ChangeTaskStatusArgs where
   constructor MkChangeTaskStatusArgs
   id : Bits64
@@ -161,6 +176,7 @@ record ChangeTaskStatusArgs where
   version : Bits32
 %runElab derive "ChangeTaskStatusArgs" [Show,FromJSON]
 
+||| Arguments for adding a comment to a task.
 record TaskCommentArgs where
   constructor MkTaskCommentArgs
   id : Bits64
@@ -168,6 +184,7 @@ record TaskCommentArgs where
   version : Bits32
 %runElab derive "TaskCommentArgs" [Show,FromJSON]
 
+||| Arguments for creating a new issue.
 record CreateIssueArgs where
   constructor MkCreateIssueArgs
   project : String
@@ -178,6 +195,7 @@ record CreateIssueArgs where
   type : Maybe String
 %runElab derive "CreateIssueArgs" [Show,FromJSON]
 
+||| Arguments for updating an existing issue.
 record UpdateIssueArgs where
   constructor MkUpdateIssueArgs
   id : Bits64
@@ -187,6 +205,7 @@ record UpdateIssueArgs where
   version : Bits32
 %runElab derive "UpdateIssueArgs" [Show,FromJSON]
 
+||| Arguments for creating a new wiki page.
 record CreateWikiArgs where
   constructor MkCreateWikiArgs
   project : String
@@ -194,6 +213,7 @@ record CreateWikiArgs where
   content : String
 %runElab derive "CreateWikiArgs" [Show,FromJSON]
 
+||| Arguments for updating an existing wiki page.
 record UpdateWikiArgs where
   constructor MkUpdateWikiArgs
   id : Bits64
@@ -202,12 +222,14 @@ record UpdateWikiArgs where
   version : Bits32
 %runElab derive "UpdateWikiArgs" [Show,FromJSON]
 
+||| Arguments identifying a generic entity by type and ID.
 record EntityIdArgs where
   constructor MkEntityIdArgs
   entity : String
   id : Bits64
 %runElab derive "EntityIdArgs" [Show,FromJSON]
 
+||| Arguments for adding a comment to any entity.
 record CommentArgs where
   constructor MkCommentArgs
   entity : String
@@ -215,6 +237,7 @@ record CommentArgs where
   text : String
 %runElab derive "CommentArgs" [Show,FromJSON]
 
+||| Arguments for editing an existing comment.
 record EditCommentArgs where
   constructor MkEditCommentArgs
   entity : String
@@ -223,6 +246,7 @@ record EditCommentArgs where
   text : String
 %runElab derive "EditCommentArgs" [Show,FromJSON]
 
+||| Arguments for deleting a comment.
 record DeleteCommentArgs where
   constructor MkDeleteCommentArgs
   entity : String
@@ -230,6 +254,7 @@ record DeleteCommentArgs where
   commentId : Bits64
 %runElab derive "DeleteCommentArgs" [Show,FromJSON]
 
+||| Arguments for creating a new milestone.
 record CreateMilestoneArgs where
   constructor MkCreateMilestoneArgs
   project : String
@@ -238,6 +263,7 @@ record CreateMilestoneArgs where
   estimated_finish : String
 %runElab derive "CreateMilestoneArgs" [Show,FromJSON]
 
+||| Arguments for updating an existing milestone.
 record UpdateMilestoneArgs where
   constructor MkUpdateMilestoneArgs
   id : Bits64

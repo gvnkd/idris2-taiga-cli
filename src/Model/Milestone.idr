@@ -18,6 +18,7 @@ record Milestone where
 
 %runElab derive "Milestone" [Show,Eq,ToJSON,FromJSON]
 
+||| Short representation of a milestone returned by list endpoints.
 public export
 record MilestoneSummary where
   constructor MkMilestoneSummary
