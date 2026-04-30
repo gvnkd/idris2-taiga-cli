@@ -78,13 +78,15 @@ parameters {auto env : ApiEnv}
   ||| Build JSON body for updating a wiki page.
   buildUpdateWikiBody : Maybe String -> Maybe String -> Version -> String
   buildUpdateWikiBody content slug ver =
-    "{" ++ concat fields ++ ",\"version\":" ++ show ver.version ++ "}"
+    "{" ++ joined ++ ",\"version\":" ++ show ver.version ++ "}"
     where
       fields : List String
       fields = catMaybes
-        [ case content of { Nothing => Nothing; Just c => Just (",\"content\":" ++ encode c) }
-        , case slug    of { Nothing => Nothing; Just s => Just (",\"slug\":" ++ encode s) }
+        [ case content of { Nothing => Nothing; Just c => Just ("\"content\":" ++ encode c) }
+        , case slug    of { Nothing => Nothing; Just s => Just ("\"slug\":" ++ encode s) }
         ]
+      joined : String
+      joined = concat $ intersperse "," fields
 
   ||| Update an existing wiki page (OCC-aware).
   public export
@@ -97,7 +99,7 @@ parameters {auto env : ApiEnv}
     -> io (Either String WikiPage)
   updateWiki id content slug ver = do
     let body := buildUpdateWikiBody content slug ver
-    resp <- authPut env (env.base ++ "/wiki/" ++ show id.id) body
+    resp <- authPatch env (env.base ++ "/wiki/" ++ show id.id) body
     pure $ case resp.status.code of
              200 => case decodeEither resp.body of
                       Left  err  => Left err

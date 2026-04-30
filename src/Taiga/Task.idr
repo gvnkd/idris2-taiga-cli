@@ -38,15 +38,17 @@ buildCreateBody project subject story desc stat =
 ||| Build JSON body for updating a task.
 buildUpdateBody : Maybe String -> Maybe String -> Maybe String -> Version -> String
 buildUpdateBody subj desc stat ver =
-  "{" ++ concat fields ++ ",\"version\":" ++ show ver.version ++ "}"
+  "{" ++ joined ++ ",\"version\":" ++ show ver.version ++ "}"
 
   where
     fields : List String
     fields = catMaybes
-      [ case subj of { Nothing => Nothing; Just s => Just (",\"subject\":" ++ encode s) }
-      , case desc of { Nothing => Nothing; Just d => Just (",\"description\":" ++ encode d) }
-      , case stat of { Nothing => Nothing; Just s => Just (",\"status\":" ++ show (parseBits64 s)) }
+      [ case subj of { Nothing => Nothing; Just s => Just ("\"subject\":" ++ encode s) }
+      , case desc of { Nothing => Nothing; Just d => Just ("\"description\":" ++ encode d) }
+      , case stat of { Nothing => Nothing; Just s => Just ("\"status\":" ++ show (parseBits64 s)) }
       ]
+    joined : String
+    joined = concat $ intersperse "," fields
 
 ||| Build JSON body for changing task status.
 buildStatusBody : Bits64 -> Version -> String
@@ -144,7 +146,7 @@ parameters {auto env : ApiEnv}
     -> io (Either String Task)
   updateTask id subj desc stat ver = do
     let body := buildUpdateBody subj desc stat ver
-    resp <- authPut env (env.base ++ "/tasks/" ++ show id.id) body
+    resp <- authPatch env (env.base ++ "/tasks/" ++ show id.id) body
     pure $ case resp.status.code of
              200 => case decodeEither resp.body of
                       Left  err  => Left err

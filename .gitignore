@@ -7,3 +7,4 @@ libs_sources/
 logs/
 result
 .opencode/
+tests/__pycache__/

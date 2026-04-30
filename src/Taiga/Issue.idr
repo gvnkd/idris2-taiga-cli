@@ -97,14 +97,16 @@ parameters {auto env : ApiEnv}
     -> (version : Version)
     -> String
   buildUpdateIssueBody subj desc itype ver =
-    "{" ++ concat fields ++ ",\"version\":" ++ show ver.version ++ "}"
+    "{" ++ joined ++ ",\"version\":" ++ show ver.version ++ "}"
     where
       fields : List String
       fields = catMaybes
-        [ case subj  of { Nothing => Nothing; Just s => Just (",\"subject\":" ++ encode s) }
-        , case desc  of { Nothing => Nothing; Just d => Just (",\"description\":" ++ encode d) }
-        , case itype of { Nothing => Nothing; Just t => Just (",\"issue_type\":" ++ encode t) }
+        [ case subj  of { Nothing => Nothing; Just s => Just ("\"subject\":" ++ encode s) }
+        , case desc  of { Nothing => Nothing; Just d => Just ("\"description\":" ++ encode d) }
+        , case itype of { Nothing => Nothing; Just t => Just ("\"issue_type\":" ++ encode t) }
         ]
+      joined : String
+      joined = concat $ intersperse "," fields
 
   ||| Update an existing issue (OCC-aware).
   public export
@@ -118,7 +120,7 @@ parameters {auto env : ApiEnv}
     -> io (Either String Issue)
   updateIssue id subj desc itype ver = do
     let body := buildUpdateIssueBody subj desc itype ver
-    resp <- authPut env (env.base ++ "/issues/" ++ show id.id) body
+    resp <- authPatch env (env.base ++ "/issues/" ++ show id.id) body
     pure $ case resp.status.code of
              200 => case decodeEither resp.body of
                       Left  err  => Left err

@@ -44,14 +44,16 @@ buildUpdateStoryBody :
   -> (version : Version)
   -> String
 buildUpdateStoryBody subj desc mstone ver =
-  "{" ++ concat fields ++ ",\"version\":" ++ show ver.version ++ "}"
+  "{" ++ joined ++ ",\"version\":" ++ show ver.version ++ "}"
   where
     fields : List String
     fields = catMaybes
-      [ case subj of { Nothing => Nothing; Just s => Just (",\"subject\":" ++ encode s) }
-      , case desc of { Nothing => Nothing; Just d => Just (",\"description\":" ++ encode d) }
-      , case mstone of { Nothing => Nothing; Just m => Just (",\"milestone\":" ++ show (parseBits64 m)) }
+      [ case subj of { Nothing => Nothing; Just s => Just ("\"subject\":" ++ encode s) }
+      , case desc of { Nothing => Nothing; Just d => Just ("\"description\":" ++ encode d) }
+      , case mstone of { Nothing => Nothing; Just m => Just ("\"milestone\":" ++ show (parseBits64 m)) }
       ]
+    joined : String
+    joined = concat $ intersperse "," fields
 
 parameters {auto env : ApiEnv}
 
@@ -131,7 +133,7 @@ parameters {auto env : ApiEnv}
     -> io (Either String UserStory)
   updateStory id subj desc mstone ver = do
     let body := buildUpdateStoryBody subj desc mstone ver
-    resp <- authPut env (env.base ++ "/userstories/" ++ show id.id) body
+    resp <- authPatch env (env.base ++ "/userstories/" ++ show id.id) body
     pure $ case resp.status.code of
              200 => case decodeEither resp.body of
                       Left  err  => Left err

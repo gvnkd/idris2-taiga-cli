@@ -32,7 +32,7 @@ parameters {auto env : ApiEnv}
   listMemberships :
        (project : String)
     -> {auto _ : HasIO io}
-    -> io (Either String (List UserSummary))
+    -> io (Either String (List Model.User.Membership))
   listMemberships project = do
     let url := env.base ++ "/memberships?project=" ++ project
     resp <- authGet env url
@@ -47,7 +47,7 @@ parameters {auto env : ApiEnv}
   listRoles :
        (project : String)
     -> {auto _ : HasIO io}
-    -> io (Either String (List String))
+    -> io (Either String (List Model.User.Role))
   listRoles project = do
     let url := env.base ++ "/roles?project=" ++ project
     resp <- authGet env url

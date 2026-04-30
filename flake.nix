@@ -115,11 +115,12 @@
       let
         pkgs = nixpkgs.legacyPackages.${system};
         idris2Pkgs = import ./nix/idris2_packages.nix { inherit pkgs inputs; };
+        python = pkgs.python3.withPackages (ps: [ ps.pytest ps.requests ]);
       in
       {
         devShells.default = pkgs.mkShell {
           buildInputs =
-            [ idris2Pkgs.idris2 pkgs.rlwrap pkgs.python3 ]
+            [ idris2Pkgs.idris2 pkgs.rlwrap python ]
             ++ (with pkgs; [
               (writeShellScriptBin "build" ''
                 idris2 --build taiga-cli.ipkg "$@"

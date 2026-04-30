@@ -25,3 +25,28 @@ record UserSummary where
   username : String
 
 %runElab derive "UserSummary" [Show,Eq,ToJSON,FromJSON]
+
+||| Membership record from /memberships endpoint.
+public export
+record Membership where
+  constructor MkMembership
+  id : Nat64Id
+  user : Bits64
+  project : Bits64
+  role : Bits64
+  is_admin : Bool
+  full_name : String
+  email : String
+
+%runElab derive "Membership" [Show,Eq,ToJSON,FromJSON]
+
+||| Role record from /roles endpoint.
+public export
+record Role where
+  constructor MkRole
+  id : Nat64Id
+  name : String
+  slug : String
+  project : Bits64
+
+%runElab derive "Role" [Show,Eq,ToJSON,FromJSON]

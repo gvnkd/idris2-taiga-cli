@@ -42,14 +42,16 @@ buildUpdateEpicBody :
   -> (version : Version)
   -> String
 buildUpdateEpicBody subj desc stat ver =
-  "{" ++ concat fields ++ ",\"version\":" ++ show ver.version ++ "}"
+  "{" ++ joined ++ ",\"version\":" ++ show ver.version ++ "}"
   where
     fields : List String
     fields = catMaybes
-      [ case subj of { Nothing => Nothing; Just s => Just (",\"subject\":" ++ encode s) }
-      , case desc of { Nothing => Nothing; Just d => Just (",\"description\":" ++ encode d) }
-      , case stat of { Nothing => Nothing; Just s => Just (",\"status\":" ++ show (parseBits64 s)) }
+      [ case subj of { Nothing => Nothing; Just s => Just ("\"subject\":" ++ encode s) }
+      , case desc of { Nothing => Nothing; Just d => Just ("\"description\":" ++ encode d) }
+      , case stat of { Nothing => Nothing; Just s => Just ("\"status\":" ++ show (parseBits64 s)) }
       ]
+    joined : String
+    joined = concat $ intersperse "," fields
 
 parameters {auto env : ApiEnv}
 
@@ -121,7 +123,7 @@ parameters {auto env : ApiEnv}
     -> io (Either String Epic)
   updateEpic id subj desc stat ver = do
     let body := buildUpdateEpicBody subj desc stat ver
-    resp <- authPut env (env.base ++ "/epics/" ++ show id.id) body
+    resp <- authPatch env (env.base ++ "/epics/" ++ show id.id) body
     pure $ case resp.status.code of
              200 => case decodeEither resp.body of
                       Left  err  => Left err

@@ -66,14 +66,16 @@ parameters {auto env : ApiEnv}
   buildUpdateMilestoneBody :
        Maybe String -> Maybe String -> Maybe String -> Version -> String
   buildUpdateMilestoneBody name estStart estFinish ver =
-    "{" ++ concat fields ++ ",\"version\":" ++ show ver.version ++ "}"
+    "{" ++ joined ++ ",\"version\":" ++ show ver.version ++ "}"
     where
       fields : List String
       fields = catMaybes
-        [ case name      of { Nothing => Nothing; Just s => Just (",\"name\":" ++ encode s) }
-        , case estStart  of { Nothing => Nothing; Just s => Just (",\"estimated_start\":" ++ encode s) }
-        , case estFinish of { Nothing => Nothing; Just s => Just (",\"estimated_finish\":" ++ encode s) }
+        [ case name      of { Nothing => Nothing; Just s => Just ("\"name\":" ++ encode s) }
+        , case estStart  of { Nothing => Nothing; Just s => Just ("\"estimated_start\":" ++ encode s) }
+        , case estFinish of { Nothing => Nothing; Just s => Just ("\"estimated_finish\":" ++ encode s) }
         ]
+      joined : String
+      joined = concat $ intersperse "," fields
 
   ||| Update an existing milestone (OCC-aware).
   public export
@@ -87,7 +89,7 @@ parameters {auto env : ApiEnv}
     -> io (Either String Milestone)
   updateMilestone id name estStart estFinish ver = do
     let body := buildUpdateMilestoneBody name estStart estFinish ver
-    resp <- authPut env (env.base ++ "/milestones/" ++ show id.id) body
+    resp <- authPatch env (env.base ++ "/milestones/" ++ show id.id) body
     pure $ case resp.status.code of
              200 => case decodeEither resp.body of
                       Left  err  => Left err
