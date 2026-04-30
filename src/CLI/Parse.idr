@@ -80,9 +80,9 @@ nextArg (x :: _) = pure x
 ||| Functor instance: map a function over the parser's result.
 public export
 Functor Parser where
-  map f p = MkParser (\st => case run p st of
-                                Left  e        => Left e
-                                Right (v, st') => Right (f v, st'))
+ map f p = MkParser (\st => case run p st of
+                                 Left  e      => Left e
+                                 Right (v, s) => Right (f v, s))
 
 ||| Applicative instance: sequential parser composition.
 public export
