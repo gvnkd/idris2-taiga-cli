@@ -11,6 +11,7 @@ import JSON.ToJSON
 import Model.Auth
 import Model.User
 import Taiga.Api
+import Taiga.Env
 
 %language ElabReflection
 
@@ -18,35 +19,32 @@ import Taiga.Api
 ||| Sends {"type":"normal","username":"…","password":"…"} to POST /auth.
 public export
 login :
-      HasIO io
-   => (base : String)
-   -> (creds : Credentials)
-   -> io (Either String Token)
-login base creds
-   = let body := "{\"type\":\"normal\",\"username\":\"" ++ creds.username ++ "\",\"password\":\"" ++ creds.password ++ "\"}"
-     in do resp <- httpPost (base ++ "/auth") Nothing body
-           case resp.status.code of
-             200 => case decodeEither resp.body of
-                      Left  err  => pure $ Left err
-                      Right tok => pure $ Right tok
-             _     => pure $ Left ("login failed with status " ++ show resp.status.code)
+     HasIO io
+  => (base : String)
+  -> (creds : Credentials)
+  -> io (Either String Token)
+login base creds = do
+   resp <- httpPost (base ++ "/auth") Nothing bodyStr
+   expectJson resp 200 "login"
+   where
+     bodyStr : String
+     bodyStr = "{\"type\":\"normal\",\"username\":\"" ++ creds.username
+               ++ "\",\"password\":\"" ++ creds.password ++ "\"}"
 
 ||| Refresh an expiring token using its refresh counterpart.
 ||| Sends {"refresh":"…"} to POST /auth/refresh.
 public export
 refreshToken :
-      HasIO io
-   => (base : String)
-   -> (refresh : String)
-   -> io (Either String Token)
-refreshToken base refreshTok
-   = let body := "{\"refresh\":\"" ++ refreshTok ++ "\"}"
-     in do resp <- httpPost (base ++ "/auth/refresh") Nothing body
-           case resp.status.code of
-             200 => case decodeEither resp.body of
-                      Left  err  => pure $ Left err
-                      Right tok => pure $ Right tok
-             _     => pure $ Left ("token refresh failed with status " ++ show resp.status.code)
+     HasIO io
+  => (base : String)
+  -> (refresh : String)
+  -> io (Either String Token)
+refreshToken base refreshTok = do
+   resp <- httpPost (base ++ "/auth/refresh") Nothing bodyStr
+   expectJson resp 200 "token refresh"
+   where
+     bodyStr : String
+     bodyStr = "{\"refresh\":\"" ++ refreshTok ++ "\"}"
 
 ||| Get the profile of the currently authenticated user.
 public export
@@ -55,8 +53,7 @@ me :
   => (base : String)
   -> (token : String)
   -> io (Either String User)
-me base token
-  = do resp <- httpGet (base ++ "/users/me") (Just token)
-       case decodeEither resp.body of
-         Left err  => pure $ Left err
-         Right u   => pure $ Right u
+me base token = do
+   resp <- httpGet (base ++ "/users/me") (Just token)
+   expectJson resp 200 "get user profile"
+

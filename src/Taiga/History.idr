@@ -23,11 +23,7 @@ parameters {auto env : ApiEnv}
     -> io (Either String (List HistoryEntry))
   fetchHistoryList url = do
     resp <- authGet env url
-    pure $ if resp.status.code == 200
-             then case decodeEither resp.body of
-                    Left  err  => Left err
-                    Right hs  => Right hs
-             else Left $ "list history failed with status " ++ show resp.status.code
+    expectJson resp 200 "list history"
 
   ||| List all history entries (including comments) for an entity.
   |||
@@ -49,9 +45,12 @@ parameters {auto env : ApiEnv}
     -> io (Either String String)
   patchUrl url body = do
     resp <- authPatch env url body
-    pure $ if resp.status.code == 200
-             then Right "patched"
-             else Left $ "patch failed with status " ++ show resp.status.code
+    expectRaw resp 200 "patch"
+
+  ||| Resolve the correct plural URL path for an entity type.
+  entityPlural : String -> String
+  entityPlural "userstory" = "userstories"
+  entityPlural other       = other ++ "s"
 
   ||| Add a comment to an entity by PATCHing the entity with a comment field.
   |||
@@ -64,9 +63,11 @@ parameters {auto env : ApiEnv}
     -> (version : Bits32)
     -> {auto _ : HasIO io}
     -> io (Either String String)
-  addComment entity eid txt ver =
-    patchUrl (env.base ++ "/" ++ entity ++ "s/" ++ show eid.id)
-      ("{\"comment\":" ++ encode txt ++ ",\"version\":" ++ show ver ++ "}")
+  addComment entity eid txt ver = do
+    let url := env.base ++ "/" ++ entityPlural entity ++ "/" ++ show eid.id
+        body := "{\"comment\":" ++ encode txt ++ ",\"version\":" ++ show ver ++ "}"
+    resp <- authPatch env url body
+    expectRaw resp 200 "add comment"
 
   ||| Edit an existing comment is not supported by Taiga's API.
   ||| Returns a descriptive error.

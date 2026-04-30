@@ -11,11 +11,13 @@ import Data.List
 
 %language ElabReflection
 
+||| Format a description field for JSON.
 public export
 formatStoryDesc : Maybe String -> String
 formatStoryDesc Nothing  = ""
 formatStoryDesc (Just d) = ",\"description\":" ++ encode d
 
+||| Format a milestone field for JSON.
 public export
 formatStoryMilestone : Maybe Nat64Id -> String
 formatStoryMilestone Nothing  = ""
@@ -48,9 +50,9 @@ buildUpdateStoryBody subj desc mstone ver =
   where
     fields : List String
     fields = catMaybes
-      [ case subj of { Nothing => Nothing; Just s => Just ("\"subject\":" ++ encode s) }
-      , case desc of { Nothing => Nothing; Just d => Just ("\"description\":" ++ encode d) }
-      , case mstone of { Nothing => Nothing; Just m => Just ("\"milestone\":" ++ show (parseBits64 m)) }
+      [ map (\s => "\"subject\":" ++ encode s) subj
+      , map (\d => "\"description\":" ++ encode d) desc
+      , map (\m => "\"milestone\":" ++ show (parseBits64 m)) mstone
       ]
     joined : String
     joined = concat $ intersperse "," fields
@@ -65,11 +67,7 @@ parameters {auto env : ApiEnv}
     -> io (Either String (List UserStorySummary))
   fetchStoryList url = do
     resp <- authGet env url
-    pure $ case resp.status.code of
-             200 => case decodeEither resp.body of
-                      Left  err  => Left err
-                      Right ss  => Right ss
-             _     => Left ("list stories failed with status " ++ show resp.status.code)
+    expectJson resp 200 "list stories"
 
   ||| List user stories in a project.
   public export
@@ -81,11 +79,11 @@ parameters {auto env : ApiEnv}
     -> io (Either String (List UserStorySummary))
   listStories project page pageSize =
     let qs := buildQueryString $
-                 ("project", project) ::
-                 catMaybes
-                   [ case page of { Nothing => Nothing; Just p => Just ("page", show p) }
-                   , case pageSize of { Nothing => Nothing; Just s => Just ("page_size", show s) }
-                   ]
+                  ("project", project) ::
+                  catMaybes
+                    [ map (\p => ("page", show p)) page
+                    , map (\s => ("page_size", show s)) pageSize
+                    ]
      in fetchStoryList (env.base ++ "/userstories" ++ qs)
 
   ||| Get a user story by its ID.
@@ -97,11 +95,7 @@ parameters {auto env : ApiEnv}
   getStory id = do
     let url := env.base ++ "/userstories/" ++ show id.id
     resp <- authGet env url
-    pure $ case resp.status.code of
-             200 => case decodeEither resp.body of
-                      Left  err  => Left err
-                      Right s   => Right s
-             _     => Left ("get story failed with status " ++ show resp.status.code)
+    expectJson resp 200 "get story"
 
   ||| Create a new user story.
   public export
@@ -115,11 +109,7 @@ parameters {auto env : ApiEnv}
   createStory project subject desc mstone = do
     let body := buildCreateStoryBody project subject desc mstone
     resp <- authPost env (env.base ++ "/userstories") body
-    pure $ case resp.status.code of
-             201 => case decodeEither resp.body of
-                      Left  err  => Left err
-                      Right s   => Right s
-             _     => Left ("create story failed with status " ++ show resp.status.code)
+    expectJson resp 201 "create story"
 
   ||| Update an existing user story (OCC-aware).
   public export
@@ -134,11 +124,7 @@ parameters {auto env : ApiEnv}
   updateStory id subj desc mstone ver = do
     let body := buildUpdateStoryBody subj desc mstone ver
     resp <- authPatch env (env.base ++ "/userstories/" ++ show id.id) body
-    pure $ case resp.status.code of
-             200 => case decodeEither resp.body of
-                      Left  err  => Left err
-                      Right s   => Right s
-             _     => Left ("update story failed with status " ++ show resp.status.code)
+    expectJson resp 200 "update story"
 
   ||| Delete a user story.
   public export
@@ -149,6 +135,4 @@ parameters {auto env : ApiEnv}
   deleteStory id = do
     let url := env.base ++ "/userstories/" ++ show id.id
     resp <- authDelete env url
-    pure $ case resp.status.code of
-             204 => Right ()
-             _     => Left ("delete story failed with status " ++ show resp.status.code)
+    expectOk resp 204 "delete story"

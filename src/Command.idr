@@ -349,24 +349,16 @@ private mkListProjectsCmd   : ListProjectsArgs -> Command
 mkListProjectsCmd a         = CmdListProjects a.member
 
 private mkNat64Id : Bits64 -> Nat64Id
-mkNat64Id n = MkNat64Id n
-
-private mkSlug : String -> Slug
-mkSlug s = MkSlug s
+mkNat64Id = MkNat64Id
 
 private mkVersion : Bits32 -> Version
-mkVersion n = MkVersion n
+mkVersion = MkVersion
 
 private toMaybeNat64Id : Maybe Bits64 -> Maybe Nat64Id
-toMaybeNat64Id Nothing  = Nothing
-toMaybeNat64Id (Just n) = Just $ MkNat64Id n
-
-private toMaybeSlug : Maybe String -> Maybe Slug
-toMaybeSlug Nothing    = Nothing
-toMaybeSlug (Just s)   = Just $ MkSlug s
+toMaybeNat64Id = map MkNat64Id
 
 private mkGetProjectCmd     : GetProjectArgs -> Command
-mkGetProjectCmd a           = CmdGetProject (toMaybeNat64Id a.id) (toMaybeSlug a.slug)
+mkGetProjectCmd a           = CmdGetProject (toMaybeNat64Id a.id) (map MkSlug a.slug)
 
 private mkListEpicsCmd      : StringArgs -> Command
 mkListEpicsCmd a            = CmdListEpics a.project

@@ -33,7 +33,10 @@ record DateTime where
   constructor MkDateTime
   dateTime : String
 
-||| --- Show instances (needed before EntityRef derive) ---
+%runElab derive "Nat64Id" [Eq, Ord]
+%runElab derive "Slug" [Eq, Ord]
+%runElab derive "Version" [Eq, Ord]
+%runElab derive "DateTime" [Eq, Ord]
 
 public export
 Show Nat64Id where
@@ -50,38 +53,6 @@ Show Version where
 public export
 Show DateTime where
   show (MkDateTime s) = "DateTime " ++ show s
-
-||| --- Eq instances ---
-
-public export
-Eq Nat64Id where
-  (MkNat64Id a) == (MkNat64Id b) = a == b
-
-public export
-Eq Slug where
-  (MkSlug a) == (MkSlug b) = a == b
-
-public export
-Eq Version where
-  (MkVersion a) == (MkVersion b) = a == b
-
-public export
-Eq DateTime where
-  (MkDateTime a) == (MkDateTime b) = a == b
-
-||| --- Ord instances ---
-
-public export
-Ord Nat64Id where
-  compare (MkNat64Id a) (MkNat64Id b) = compare a b
-
-public export
-Ord Slug where
-  compare (MkSlug a) (MkSlug b) = compare a b
-
-public export
-Ord Version where
-  compare (MkVersion a) (MkVersion b) = compare a b
 
 ||| --- FromJSON: bare integer / string round-trip ---
 

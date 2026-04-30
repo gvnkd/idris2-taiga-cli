@@ -12,11 +12,13 @@ import Data.List
 %language ElabReflection
 
 ||| Format a description field for JSON.
+public export
 formatEpicDesc : Maybe String -> String
 formatEpicDesc Nothing  = ""
 formatEpicDesc (Just d) = ",\"description\":" ++ encode d
 
 ||| Format a status field for JSON.
+public export
 formatEpicStatus : Maybe String -> String
 formatEpicStatus Nothing  = ""
 formatEpicStatus (Just s) = ",\"status\":" ++ show (parseBits64 s)
@@ -46,9 +48,9 @@ buildUpdateEpicBody subj desc stat ver =
   where
     fields : List String
     fields = catMaybes
-      [ case subj of { Nothing => Nothing; Just s => Just ("\"subject\":" ++ encode s) }
-      , case desc of { Nothing => Nothing; Just d => Just ("\"description\":" ++ encode d) }
-      , case stat of { Nothing => Nothing; Just s => Just ("\"status\":" ++ show (parseBits64 s)) }
+      [ map (\s => "\"subject\":" ++ encode s) subj
+      , map (\d => "\"description\":" ++ encode d) desc
+      , map (\s => "\"status\":" ++ show (parseBits64 s)) stat
       ]
     joined : String
     joined = concat $ intersperse "," fields
@@ -67,16 +69,12 @@ parameters {auto env : ApiEnv}
     let qs  := buildQueryString $
                   ("project", project) ::
                   catMaybes
-                    [ case page of { Nothing => Nothing; Just p => Just ("page", show p) }
-                    , case pageSize of { Nothing => Nothing; Just s => Just ("page_size", show s) }
+                    [ map (\p => ("page", show p)) page
+                    , map (\s => ("page_size", show s)) pageSize
                     ]
         url := env.base ++ "/epics" ++ qs
     resp <- authGet env url
-    pure $ case resp.status.code of
-             200 => case decodeEither resp.body of
-                      Left  err  => Left err
-                      Right es  => Right es
-             _     => Left ("list epics failed with status " ++ show resp.status.code)
+    expectJson resp 200 "list epics"
 
   ||| Get an epic by its ID.
   public export
@@ -87,11 +85,7 @@ parameters {auto env : ApiEnv}
   getEpic id = do
     let url := env.base ++ "/epics/" ++ show id.id
     resp <- authGet env url
-    pure $ case resp.status.code of
-             200 => case decodeEither resp.body of
-                      Left  err  => Left err
-                      Right e   => Right e
-             _     => Left ("get epic failed with status " ++ show resp.status.code)
+    expectJson resp 200 "get epic"
 
   ||| Create a new epic.
   public export
@@ -105,11 +99,7 @@ parameters {auto env : ApiEnv}
   createEpic project subject desc stat = do
     let body := buildCreateEpicBody project subject desc stat
     resp <- authPost env (env.base ++ "/epics") body
-    pure $ case resp.status.code of
-             201 => case decodeEither resp.body of
-                      Left  err  => Left err
-                      Right e   => Right e
-             _     => Left ("create epic failed with status " ++ show resp.status.code)
+    expectJson resp 201 "create epic"
 
   ||| Update an existing epic (OCC-aware).
   public export
@@ -124,11 +114,7 @@ parameters {auto env : ApiEnv}
   updateEpic id subj desc stat ver = do
     let body := buildUpdateEpicBody subj desc stat ver
     resp <- authPatch env (env.base ++ "/epics/" ++ show id.id) body
-    pure $ case resp.status.code of
-             200 => case decodeEither resp.body of
-                      Left  err  => Left err
-                      Right e   => Right e
-             _     => Left ("update epic failed with status " ++ show resp.status.code)
+    expectJson resp 200 "update epic"
 
   ||| Delete an epic.
   public export
@@ -139,6 +125,4 @@ parameters {auto env : ApiEnv}
   deleteEpic id = do
     let url := env.base ++ "/epics/" ++ show id.id
     resp <- authDelete env url
-    pure $ case resp.status.code of
-             204 => Right ()
-             _     => Left ("delete epic failed with status " ++ show resp.status.code)
+    expectOk resp 204 "delete epic"

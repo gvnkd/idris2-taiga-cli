@@ -25,16 +25,12 @@ parameters {auto env : ApiEnv}
     let qs  := buildQueryString $
                   ("project", project) ::
                   catMaybes
-                    [ case page of { Nothing => Nothing; Just p => Just ("page", show p) }
-                    , case pageSize of { Nothing => Nothing; Just s => Just ("page_size", show s) }
+                    [ map (\p => ("page", show p)) page
+                    , map (\s => ("page_size", show s)) pageSize
                     ]
         url := env.base ++ "/wiki" ++ qs
     resp <- authGet env url
-    pure $ case resp.status.code of
-             200 => case decodeEither resp.body of
-                      Left  err  => Left err
-                      Right ws  => Right ws
-             _     => Left ("list wiki failed with status " ++ show resp.status.code)
+    expectJson resp 200 "list wiki"
 
   ||| Get a wiki page by its ID.
   public export
@@ -45,11 +41,7 @@ parameters {auto env : ApiEnv}
   getWiki id = do
     let url := env.base ++ "/wiki/" ++ show id.id
     resp <- authGet env url
-    pure $ case resp.status.code of
-             200 => case decodeEither resp.body of
-                      Left  err  => Left err
-                      Right w   => Right w
-             _     => Left ("get wiki failed with status " ++ show resp.status.code)
+    expectJson resp 200 "get wiki"
 
   ||| Build JSON body for creating a wiki page.
   buildCreateWikiBody : String -> String -> String -> String
@@ -69,11 +61,7 @@ parameters {auto env : ApiEnv}
   createWiki project slug content = do
     let body := buildCreateWikiBody project slug content
     resp <- authPost env (env.base ++ "/wiki") body
-    pure $ case resp.status.code of
-             201 => case decodeEither resp.body of
-                      Left  err  => Left err
-                      Right w   => Right w
-             _     => Left ("create wiki failed with status " ++ show resp.status.code)
+    expectJson resp 201 "create wiki"
 
   ||| Build JSON body for updating a wiki page.
   buildUpdateWikiBody : Maybe String -> Maybe String -> Version -> String
@@ -82,8 +70,8 @@ parameters {auto env : ApiEnv}
     where
       fields : List String
       fields = catMaybes
-        [ case content of { Nothing => Nothing; Just c => Just ("\"content\":" ++ encode c) }
-        , case slug    of { Nothing => Nothing; Just s => Just ("\"slug\":" ++ encode s) }
+        [ map (\c => "\"content\":" ++ encode c) content
+        , map (\s => "\"slug\":" ++ encode s) slug
         ]
       joined : String
       joined = concat $ intersperse "," fields
@@ -100,11 +88,7 @@ parameters {auto env : ApiEnv}
   updateWiki id content slug ver = do
     let body := buildUpdateWikiBody content slug ver
     resp <- authPatch env (env.base ++ "/wiki/" ++ show id.id) body
-    pure $ case resp.status.code of
-             200 => case decodeEither resp.body of
-                      Left  err  => Left err
-                      Right w   => Right w
-             _     => Left ("update wiki failed with status " ++ show resp.status.code)
+    expectJson resp 200 "update wiki"
 
   ||| Delete a wiki page.
   public export
@@ -115,6 +99,4 @@ parameters {auto env : ApiEnv}
   deleteWiki id = do
     let url := env.base ++ "/wiki/" ++ show id.id
     resp <- authDelete env url
-    pure $ case resp.status.code of
-             204 => Right ()
-             _     => Left ("delete wiki failed with status " ++ show resp.status.code)
+    expectOk resp 204 "delete wiki"

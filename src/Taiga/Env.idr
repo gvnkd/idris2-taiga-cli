@@ -7,6 +7,7 @@ module Taiga.Env
 
 import Data.Bits
 import Data.List
+import JSON.FromJSON
 import Taiga.Api
 
 %language ElabReflection
@@ -78,3 +79,49 @@ authPatch :
   -> (body : String)
   -> io HttpResponse
 authPatch env url body = httpPatch url (Just env.token) body
+
+||| Parse an HTTP response as JSON on a specific status code.
+||| Returns `Right` with the decoded value if the status matches,
+||| otherwise returns `Left` with an error message.
+public export
+expectJson :
+     FromJSON a =>
+     HasIO io =>
+     (resp : HttpResponse) ->
+     (okStatus : Bits16) ->
+     (errMsg   : String) ->
+     io (Either String a)
+expectJson resp okStatus errMsg =
+  pure $ if resp.status.code == okStatus
+           then decodeEither resp.body
+           else Left $ errMsg ++ " failed with status "
+                         ++ show resp.status.code
+
+||| Check an HTTP response for a specific status code without parsing JSON.
+||| Returns `Right ()` on match, otherwise `Left` with an error message.
+public export
+expectOk :
+     HasIO io =>
+     (resp : HttpResponse) ->
+     (okStatus : Bits16) ->
+     (errMsg   : String) ->
+     io (Either String ())
+expectOk resp okStatus errMsg =
+  pure $ if resp.status.code == okStatus
+           then Right ()
+           else Left $ errMsg ++ " failed with status "
+                         ++ show resp.status.code
+
+||| Parse an HTTP response returning raw body on success.
+public export
+expectRaw :
+     HasIO io =>
+     (resp : HttpResponse) ->
+     (okStatus : Bits16) ->
+     (errMsg   : String) ->
+     io (Either String String)
+expectRaw resp okStatus errMsg =
+  pure $ if resp.status.code == okStatus
+           then Right resp.body
+           else Left $ errMsg ++ " failed with status "
+                         ++ show resp.status.code

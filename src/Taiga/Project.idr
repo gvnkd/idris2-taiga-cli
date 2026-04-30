@@ -24,17 +24,13 @@ parameters {auto env : ApiEnv}
   listProjects member page pageSize = do
     let qs  := buildQueryString $
                   catMaybes
-                    [ case member of { Nothing => Nothing; Just m => Just ("member", m) }
-                    , case page of { Nothing => Nothing; Just p => Just ("page", show p) }
-                    , case pageSize of { Nothing => Nothing; Just s => Just ("page_size", show s) }
+                    [ map (\m => ("member", m)) member
+                    , map (\p => ("page", show p)) page
+                    , map (\s => ("page_size", show s)) pageSize
                     ]
         url := env.base ++ "/projects" ++ qs
     resp <- authGet env url
-    pure $ case resp.status.code of
-             200 => case decodeEither resp.body of
-                      Left  err  => Left err
-                      Right ps  => Right ps
-             _     => Left ("list projects failed with status " ++ show resp.status.code)
+    expectJson resp 200 "list projects"
 
   ||| Get a project by its ID.
   public export
@@ -45,11 +41,7 @@ parameters {auto env : ApiEnv}
   getProjectById id = do
     let url := env.base ++ "/projects/" ++ show id.id
     resp <- authGet env url
-    pure $ case resp.status.code of
-             200 => case decodeEither resp.body of
-                      Left  err  => Left err
-                      Right p   => Right p
-             _     => Left ("get project failed with status " ++ show resp.status.code)
+    expectJson resp 200 "get project"
 
   ||| Get a project by its slug.
   public export
@@ -60,8 +52,4 @@ parameters {auto env : ApiEnv}
   getProjectBySlug slug = do
     let url := env.base ++ "/projects/" ++ slug.slug
     resp <- authGet env url
-    pure $ case resp.status.code of
-             200 => case decodeEither resp.body of
-                      Left  err  => Left err
-                      Right p   => Right p
-             _     => Left ("get project by slug failed with status " ++ show resp.status.code)
+    expectJson resp 200 "get project by slug"

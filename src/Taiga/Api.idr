@@ -61,13 +61,6 @@ runCurlCmdIO cmd'
                              Left  _     => pure (MkHttpResponse (MkStatusCode 1) "")
                              Right text => pure (parseHttpResponse text)
 
-||| Run a curl command and parse its output into an HttpResponse.
-runCurlCmd :
-     {auto _ : HasIO io}
-  -> (cmd : String)
-  -> io HttpResponse
-runCurlCmd cmd = runCurlCmdIO cmd
-
 ||| Perform a GET request and return the response body.
 public export
 httpGet :
@@ -75,7 +68,7 @@ httpGet :
   => (url : String)
   -> (auth : Maybe String)
   -> io HttpResponse
-httpGet url auth = runCurlCmd (buildCurlGet url auth)
+httpGet url auth = runCurlCmdIO (buildCurlGet url auth)
 
 ||| Build curl command for a POST request with JSON body.
 buildCurlPost : (url : String) -> (auth : Maybe String) -> (body : String) -> String
@@ -94,7 +87,7 @@ httpPost :
    -> (auth : Maybe String)
    -> (body : String)
    -> io HttpResponse
-httpPost url auth body = runCurlCmd (buildCurlPost url auth body)
+httpPost url auth body = runCurlCmdIO (buildCurlPost url auth body)
 
 ||| Build curl command for a generic HTTP method with optional JSON body.
 buildCurlMethod :
@@ -120,7 +113,7 @@ httpPut :
    -> (auth : Maybe String)
    -> (body : String)
    -> io HttpResponse
-httpPut url auth body = runCurlCmd (buildCurlMethod "PUT" url auth (Just body))
+httpPut url auth body = runCurlCmdIO (buildCurlMethod "PUT" url auth (Just body))
 
 ||| Perform a PATCH request with a JSON body.
 public export
@@ -130,7 +123,7 @@ httpPatch :
    -> (auth : Maybe String)
    -> (body : String)
    -> io HttpResponse
-httpPatch url auth body = runCurlCmd (buildCurlMethod "PATCH" url auth (Just body))
+httpPatch url auth body = runCurlCmdIO (buildCurlMethod "PATCH" url auth (Just body))
 
 ||| Perform a DELETE request.
 public export
@@ -139,4 +132,4 @@ httpDelete :
    => (url : String)
    -> (auth : Maybe String)
    -> io HttpResponse
-httpDelete url auth = runCurlCmd (buildCurlMethod "DELETE" url auth Nothing)
+httpDelete url auth = runCurlCmdIO (buildCurlMethod "DELETE" url auth Nothing)

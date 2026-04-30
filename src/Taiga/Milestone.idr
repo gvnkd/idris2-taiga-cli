@@ -25,16 +25,12 @@ parameters {auto env : ApiEnv}
     let qs  := buildQueryString $
                   ("project", project) ::
                   catMaybes
-                    [ case page of { Nothing => Nothing; Just p => Just ("page", show p) }
-                    , case pageSize of { Nothing => Nothing; Just s => Just ("page_size", show s) }
+                    [ map (\p => ("page", show p)) page
+                    , map (\s => ("page_size", show s)) pageSize
                     ]
         url := env.base ++ "/milestones" ++ qs
     resp <- authGet env url
-    pure $ case resp.status.code of
-             200 => case decodeEither resp.body of
-                      Left  err  => Left err
-                      Right ms  => Right ms
-             _     => Left ("list milestones failed with status " ++ show resp.status.code)
+    expectJson resp 200 "list milestones"
 
   ||| Build JSON body for creating a milestone.
   buildCreateMilestoneBody : String -> String -> String -> String -> String
@@ -56,11 +52,7 @@ parameters {auto env : ApiEnv}
   createMilestone project name estStart estFinish = do
     let body := buildCreateMilestoneBody project name estStart estFinish
     resp <- authPost env (env.base ++ "/milestones") body
-    pure $ case resp.status.code of
-             201 => case decodeEither resp.body of
-                      Left  err  => Left err
-                      Right m   => Right m
-             _     => Left ("create milestone failed with status " ++ show resp.status.code)
+    expectJson resp 201 "create milestone"
 
   ||| Build JSON body for updating a milestone.
   buildUpdateMilestoneBody :
@@ -70,9 +62,9 @@ parameters {auto env : ApiEnv}
     where
       fields : List String
       fields = catMaybes
-        [ case name      of { Nothing => Nothing; Just s => Just ("\"name\":" ++ encode s) }
-        , case estStart  of { Nothing => Nothing; Just s => Just ("\"estimated_start\":" ++ encode s) }
-        , case estFinish of { Nothing => Nothing; Just s => Just ("\"estimated_finish\":" ++ encode s) }
+        [ map (\s => "\"name\":" ++ encode s) name
+        , map (\s => "\"estimated_start\":" ++ encode s) estStart
+        , map (\s => "\"estimated_finish\":" ++ encode s) estFinish
         ]
       joined : String
       joined = concat $ intersperse "," fields
@@ -90,8 +82,4 @@ parameters {auto env : ApiEnv}
   updateMilestone id name estStart estFinish ver = do
     let body := buildUpdateMilestoneBody name estStart estFinish ver
     resp <- authPatch env (env.base ++ "/milestones/" ++ show id.id) body
-    pure $ case resp.status.code of
-             200 => case decodeEither resp.body of
-                      Left  err  => Left err
-                      Right m   => Right m
-             _     => Left ("update milestone failed with status " ++ show resp.status.code)
+    expectJson resp 200 "update milestone"

@@ -22,18 +22,22 @@ buildCreateBody :
 buildCreateBody project subject story desc stat =
   "{\"project\":" ++ show (parseBits64 project) ++
   ",\"subject\":" ++ encode subject ++
-  case story of
-    Nothing  => ""
-    Just s   => ",\"userstory\":" ++ show s.id
-  ++
-  case desc of
-    Nothing  => ""
-    Just d   => ",\"description\":" ++ encode d
-  ++
-  case stat of
-    Nothing  => ""
-    Just s   => ",\"status\":" ++ show (parseBits64 s)
-  ++ "}"
+  maybeStoryField story ++
+  maybeDescField desc ++
+  maybeStatusField stat ++ "}"
+
+  where
+    maybeStoryField : Maybe Nat64Id -> String
+    maybeStoryField Nothing  = ""
+    maybeStoryField (Just s) = ",\"userstory\":" ++ show s.id
+
+    maybeDescField : Maybe String -> String
+    maybeDescField Nothing  = ""
+    maybeDescField (Just d) = ",\"description\":" ++ encode d
+
+    maybeStatusField : Maybe String -> String
+    maybeStatusField Nothing  = ""
+    maybeStatusField (Just s) = ",\"status\":" ++ show (parseBits64 s)
 
 ||| Build JSON body for updating a task.
 buildUpdateBody : Maybe String -> Maybe String -> Maybe String -> Version -> String
@@ -43,9 +47,9 @@ buildUpdateBody subj desc stat ver =
   where
     fields : List String
     fields = catMaybes
-      [ case subj of { Nothing => Nothing; Just s => Just ("\"subject\":" ++ encode s) }
-      , case desc of { Nothing => Nothing; Just d => Just ("\"description\":" ++ encode d) }
-      , case stat of { Nothing => Nothing; Just s => Just ("\"status\":" ++ show (parseBits64 s)) }
+      [ map (\s => "\"subject\":" ++ encode s) subj
+      , map (\d => "\"description\":" ++ encode d) desc
+      , map (\s => "\"status\":" ++ show (parseBits64 s)) stat
       ]
     joined : String
     joined = concat $ intersperse "," fields
@@ -74,18 +78,14 @@ parameters {auto env : ApiEnv}
   listTasks project story page pageSize = do
     let qs  := buildQueryString $
                   catMaybes
-                    [ case project of { Nothing => Nothing; Just p => Just ("project", p) }
-                    , case story of { Nothing => Nothing; Just s => Just ("userstory", show s.id) }
-                    , case page of { Nothing => Nothing; Just p => Just ("page", show p) }
-                    , case pageSize of { Nothing => Nothing; Just s => Just ("page_size", show s) }
+                    [ map (\p => ("project", p)) project
+                    , map (\s => ("userstory", show s.id)) story
+                    , map (\p => ("page", show p)) page
+                    , map (\s => ("page_size", show s)) pageSize
                     ]
         url := env.base ++ "/tasks" ++ qs
     resp <- authGet env url
-    pure $ case resp.status.code of
-             200 => case decodeEither resp.body of
-                      Left  err  => Left err
-                      Right ts  => Right ts
-             _     => Left ("list tasks failed with status " ++ show resp.status.code)
+    expectJson resp 200 "list tasks"
 
   ||| Get a task by its ID.
   public export
@@ -96,11 +96,7 @@ parameters {auto env : ApiEnv}
   getTask id = do
     let url := env.base ++ "/tasks/" ++ show id.id
     resp <- authGet env url
-    pure $ case resp.status.code of
-             200 => case decodeEither resp.body of
-                      Left  err  => Left err
-                      Right t   => Right t
-             _     => Left ("get task failed with status " ++ show resp.status.code)
+    expectJson resp 200 "get task"
 
   ||| Build JSON body for creating a task.
   buildCreateTaskBody :
@@ -108,11 +104,27 @@ parameters {auto env : ApiEnv}
   buildCreateTaskBody project subject story desc stat ms =
     "{\"project\":" ++ show (parseBits64 project) ++
     ",\"subject\":" ++ encode subject ++
-    case story of { Nothing => ""; Just s => ",\"userstory\":" ++ show s.id } ++
-    case desc of  { Nothing => ""; Just d => ",\"description\":" ++ encode d } ++
-    case stat of  { Nothing => ""; Just s => ",\"status\":" ++ show (parseBits64 s) } ++
-    case ms of    { Nothing => ""; Just m => ",\"milestone\":" ++ show m } ++
-    "}"
+    maybeStoryField story ++
+    maybeDescField desc ++
+    maybeStatusField stat ++
+    maybeMilestoneField ms ++ "}"
+
+  where
+    maybeStoryField : Maybe Nat64Id -> String
+    maybeStoryField Nothing  = ""
+    maybeStoryField (Just s) = ",\"userstory\":" ++ show s.id
+
+    maybeDescField : Maybe String -> String
+    maybeDescField Nothing  = ""
+    maybeDescField (Just d) = ",\"description\":" ++ encode d
+
+    maybeStatusField : Maybe String -> String
+    maybeStatusField Nothing  = ""
+    maybeStatusField (Just s) = ",\"status\":" ++ show (parseBits64 s)
+
+    maybeMilestoneField : Maybe Bits64 -> String
+    maybeMilestoneField Nothing   = ""
+    maybeMilestoneField (Just m) = ",\"milestone\":" ++ show m
 
   ||| Create a new task.
   public export
@@ -128,11 +140,7 @@ parameters {auto env : ApiEnv}
   createTask project subject story desc stat ms = do
     let body := buildCreateTaskBody project subject story desc stat ms
     resp <- authPost env (env.base ++ "/tasks") body
-    pure $ case resp.status.code of
-             201 => case decodeEither resp.body of
-                      Left  err  => Left err
-                      Right t   => Right t
-             _     => Left ("create task failed with status " ++ show resp.status.code)
+    expectJson resp 201 "create task"
 
   ||| Update an existing task (OCC-aware).
   public export
@@ -147,11 +155,7 @@ parameters {auto env : ApiEnv}
   updateTask id subj desc stat ver = do
     let body := buildUpdateBody subj desc stat ver
     resp <- authPatch env (env.base ++ "/tasks/" ++ show id.id) body
-    pure $ case resp.status.code of
-             200 => case decodeEither resp.body of
-                      Left  err  => Left err
-                      Right t   => Right t
-             _     => Left ("update task failed with status " ++ show resp.status.code)
+    expectJson resp 200 "update task"
 
   ||| Delete a task.
   public export
@@ -162,9 +166,7 @@ parameters {auto env : ApiEnv}
   deleteTask id = do
     let url := env.base ++ "/tasks/" ++ show id.id
     resp <- authDelete env url
-    pure $ case resp.status.code of
-             204 => Right ()
-             _     => Left ("delete task failed with status " ++ show resp.status.code)
+    expectOk resp 204 "delete task"
 
   ||| Change the status of a task via PATCH.
   |||
@@ -180,11 +182,7 @@ parameters {auto env : ApiEnv}
   changeTaskStatus id newSt ver = do
     let body := buildStatusBody newSt ver
     resp <- authPatch env (env.base ++ "/tasks/" ++ show id.id) body
-    pure $ case resp.status.code of
-             200 => case decodeEither resp.body of
-                      Left  err  => Left err
-                      Right t   => Right t
-             _     => Left ("change task status failed with status " ++ show resp.status.code)
+    expectJson resp 200 "change task status"
 
   ||| Add a comment to a task.
   public export
@@ -198,6 +196,4 @@ parameters {auto env : ApiEnv}
     let url  := env.base ++ "/tasks/" ++ show id.id
         body := buildCommentBody txt ver
     resp <- authPatch env url body
-    pure $ case resp.status.code of
-             200 => Right "comment added"
-             _     => Left ("add task comment failed with status " ++ show resp.status.code)
+    expectRaw resp 200 "add task comment"

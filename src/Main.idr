@@ -26,8 +26,8 @@ import Data.List
 
 ||| Read raw JSON from stdin.
 readStdin :
-     HasIO io
-  => io String
+     {auto _ : HasIO io}
+  -> io String
 readStdin = do
   raw <- fRead stdin
   case raw of
@@ -36,8 +36,8 @@ readStdin = do
 
 ||| Write a JSON string to stdout.
 writeStdout :
-     HasIO io
-  => String -> io ()
+     {auto _ : HasIO io}
+  -> String -> io ()
 writeStdout = putStr
 
 ||| Print a human-readable error and exit.

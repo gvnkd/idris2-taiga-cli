@@ -35,12 +35,22 @@ record Parser a where
 ||| Attempt to read a non-negative integer from a string argument.
 public export
 readNat64 : String -> Either String Bits64
-readNat64 s = pure $ cast s
+readNat64 s =
+  let n := cast {to = Integer} s in
+  if s == "0" then Right 0
+  else if n == 0 then Left "not a number"
+  else if n < 0 then Left "negative number"
+  else Right $ cast n
 
 ||| Attempt to read a non-negative integer (version / id helper).
 public export
 readNat32 : String -> Either String Bits32
-readNat32 s = pure $ cast s
+readNat32 s =
+  let n := cast {to = Integer} s in
+  if s == "0" then Right 0
+  else if n == 0 then Left "not a number"
+  else if n < 0 then Left "negative number"
+  else Right $ cast n
 
 ||| Check whether a flag string starts with "--".
 public export
@@ -71,8 +81,8 @@ nextArg (x :: _) = pure x
 public export
 Functor Parser where
   map f p = MkParser (\st => case run p st of
-                               Left  e       => Left e
-                               Right (v, st') => Right (f v, st'))
+                                Left  e        => Left e
+                                Right (v, st') => Right (f v, st'))
 
 ||| Applicative instance: sequential parser composition.
 public export
@@ -118,19 +128,6 @@ isEmpty = MkParser
 setBase : String -> Parser ()
 setBase url = MkParser
   (\st => Right ((), MkState st.rest (Just url)))
-
-||| Lift a pure function into the parser.
-liftParser : (a -> b) -> Parser a -> Parser b
-liftParser f p = MkParser
-  (\st => case run p st of
-             Left  e       => Left e
-             Right (v, st') => Right (f v, st'))
-
-||| Sequence two parsers, keeping only the second result.
-thenDiscard : Parser a -> Parser b -> Parser b
-thenDiscard px py = do
-  _ <- px
-  py
 
 ||| Fail with an error message.
 failParse : String -> Parser a

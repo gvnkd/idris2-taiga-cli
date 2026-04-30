@@ -25,16 +25,12 @@ parameters {auto env : ApiEnv}
     let qs  := buildQueryString $
                   ("project", project) ::
                   catMaybes
-                    [ case page of { Nothing => Nothing; Just p => Just ("page", show p) }
-                    , case pageSize of { Nothing => Nothing; Just s => Just ("page_size", show s) }
+                    [ map (\p => ("page", show p)) page
+                    , map (\s => ("page_size", show s)) pageSize
                     ]
         url := env.base ++ "/issues" ++ qs
     resp <- authGet env url
-    pure $ case resp.status.code of
-             200 => case decodeEither resp.body of
-                      Left  err  => Left err
-                      Right is  => Right is
-             _     => Left ("list issues failed with status " ++ show resp.status.code)
+    expectJson resp 200 "list issues"
 
   ||| Get an issue by its ID.
   public export
@@ -45,11 +41,7 @@ parameters {auto env : ApiEnv}
   getIssue id = do
     let url := env.base ++ "/issues/" ++ show id.id
     resp <- authGet env url
-    pure $ case resp.status.code of
-             200 => case decodeEither resp.body of
-                      Left  err  => Left err
-                      Right i   => Right i
-             _     => Left ("get issue failed with status " ++ show resp.status.code)
+    expectJson resp 200 "get issue"
 
   ||| Build JSON body for creating an issue.
   buildCreateIssueBody :
@@ -63,11 +55,15 @@ parameters {auto env : ApiEnv}
   buildCreateIssueBody project subject desc prio sev itype =
     "{\"project\":" ++ show (parseBits64 project) ++
     ",\"subject\":" ++ encode subject ++
-    case desc of { Nothing => ""; Just d => ",\"description\":" ++ encode d } ++
-    case prio of { Nothing => ""; Just p => ",\"priority\":" ++ encode p } ++
-    case sev of  { Nothing => ""; Just s => ",\"severity\":" ++ encode s } ++
-    case itype of { Nothing => ""; Just t => ",\"issue_type\":" ++ encode t } ++
-    "}"
+    maybeField "description" desc ++
+    maybeField "priority" prio ++
+    maybeField "severity" sev ++
+    maybeField "issue_type" itype ++ "}"
+
+  where
+    maybeField : String -> Maybe String -> String
+    maybeField _ Nothing   = ""
+    maybeField key (Just v) = ",\"" ++ key ++ "\":" ++ encode v
 
   ||| Create a new issue.
   public export
@@ -83,11 +79,7 @@ parameters {auto env : ApiEnv}
   createIssue project subject desc prio sev itype = do
     let body := buildCreateIssueBody project subject desc prio sev itype
     resp <- authPost env (env.base ++ "/issues") body
-    pure $ case resp.status.code of
-             201 => case decodeEither resp.body of
-                      Left  err  => Left err
-                      Right i   => Right i
-             _     => Left ("create issue failed with status " ++ show resp.status.code)
+    expectJson resp 201 "create issue"
 
   ||| Build JSON body for updating an issue.
   buildUpdateIssueBody :
@@ -101,9 +93,9 @@ parameters {auto env : ApiEnv}
     where
       fields : List String
       fields = catMaybes
-        [ case subj  of { Nothing => Nothing; Just s => Just ("\"subject\":" ++ encode s) }
-        , case desc  of { Nothing => Nothing; Just d => Just ("\"description\":" ++ encode d) }
-        , case itype of { Nothing => Nothing; Just t => Just ("\"issue_type\":" ++ encode t) }
+        [ map (\s => "\"subject\":" ++ encode s) subj
+        , map (\d => "\"description\":" ++ encode d) desc
+        , map (\t => "\"issue_type\":" ++ encode t) itype
         ]
       joined : String
       joined = concat $ intersperse "," fields
@@ -121,11 +113,7 @@ parameters {auto env : ApiEnv}
   updateIssue id subj desc itype ver = do
     let body := buildUpdateIssueBody subj desc itype ver
     resp <- authPatch env (env.base ++ "/issues/" ++ show id.id) body
-    pure $ case resp.status.code of
-             200 => case decodeEither resp.body of
-                      Left  err  => Left err
-                      Right i   => Right i
-             _     => Left ("update issue failed with status " ++ show resp.status.code)
+    expectJson resp 200 "update issue"
 
   ||| Delete an issue.
   public export
@@ -136,6 +124,4 @@ parameters {auto env : ApiEnv}
   deleteIssue id = do
     let url := env.base ++ "/issues/" ++ show id.id
     resp <- authDelete env url
-    pure $ case resp.status.code of
-             204 => Right ()
-             _     => Left ("delete issue failed with status " ++ show resp.status.code)
+    expectOk resp 204 "delete issue"
