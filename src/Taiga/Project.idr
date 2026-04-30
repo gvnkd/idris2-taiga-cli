@@ -39,7 +39,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String Project)
   getProjectById id = do
-    let url := env.base ++ "/projects/" ++ show id.id
+    let url := env.base ++ "/projects/" ++ showId id
     resp <- authGet env url
     expectJson resp 200 "get project"
 

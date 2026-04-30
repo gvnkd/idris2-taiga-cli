@@ -7,6 +7,7 @@ module Taiga.Env
 
 import Data.Bits
 import Data.List
+import Model.Common
 import JSON.FromJSON
 import JSON.ToJSON
 import JSON.Encoder
@@ -58,6 +59,11 @@ omitNothing :
   -> Maybe (String, v)
 omitNothing _ Nothing  = Nothing
 omitNothing key (Just x) = Just (jpair key x)
+
+||| Show a Nat64Id as its underlying numeric string.
+public export
+showId : Nat64Id -> String
+showId n = show n.id
 
 ||| Parse a string as a Bits64 value.
 public export

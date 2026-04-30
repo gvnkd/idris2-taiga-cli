@@ -86,7 +86,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String UserStory)
   getStory id = do
-    let url := env.base ++ "/userstories/" ++ show id.id
+    let url := env.base ++ "/userstories/" ++ showId id
     resp <- authGet env url
     expectJson resp 200 "get story"
 
@@ -116,7 +116,7 @@ parameters {auto env : ApiEnv}
     -> io (Either String UserStory)
   updateStory id subj desc mstone ver = do
     let body := encode $ MkUpdateStoryBody subj desc (map parseBits64 mstone) ver
-    resp <- authPatch env (env.base ++ "/userstories/" ++ show id.id) body
+    resp <- authPatch env (env.base ++ "/userstories/" ++ showId id) body
     expectJson resp 200 "update story"
 
   ||| Delete a user story.
@@ -126,6 +126,6 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String ())
   deleteStory id = do
-    let url := env.base ++ "/userstories/" ++ show id.id
+    let url := env.base ++ "/userstories/" ++ showId id
     resp <- authDelete env url
     expectOk resp 204 "delete story"

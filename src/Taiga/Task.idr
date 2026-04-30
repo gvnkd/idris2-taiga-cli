@@ -99,7 +99,7 @@ parameters {auto env : ApiEnv}
     let qs  := buildQueryString $
                   catMaybes
                     [ map (\p => ("project", p)) project
-                    , map (\s => ("userstory", show s.id)) story
+                    , map (\s => ("userstory", showId s)) story
                     , map (\p => ("page", show p)) page
                     , map (\s => ("page_size", show s)) pageSize
                     ]
@@ -114,7 +114,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String Task)
   getTask id = do
-    let url := env.base ++ "/tasks/" ++ show id.id
+    let url := env.base ++ "/tasks/" ++ showId id
     resp <- authGet env url
     expectJson resp 200 "get task"
 
@@ -146,7 +146,7 @@ parameters {auto env : ApiEnv}
     -> io (Either String Task)
   updateTask id subj desc stat ver = do
     let body := encode $ MkUpdateTaskBody subj desc (map parseBits64 stat) ver
-    resp <- authPatch env (env.base ++ "/tasks/" ++ show id.id) body
+    resp <- authPatch env (env.base ++ "/tasks/" ++ showId id) body
     expectJson resp 200 "update task"
 
   ||| Delete a task.
@@ -156,7 +156,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String ())
   deleteTask id = do
-    let url := env.base ++ "/tasks/" ++ show id.id
+    let url := env.base ++ "/tasks/" ++ showId id
     resp <- authDelete env url
     expectOk resp 204 "delete task"
 
@@ -173,7 +173,7 @@ parameters {auto env : ApiEnv}
     -> io (Either String Task)
   changeTaskStatus id newSt ver = do
     let body := encode $ MkChangeTaskStatusBody newSt ver
-    resp <- authPatch env (env.base ++ "/tasks/" ++ show id.id) body
+    resp <- authPatch env (env.base ++ "/tasks/" ++ showId id) body
     expectJson resp 200 "change task status"
 
   ||| Add a comment to a task.
@@ -185,7 +185,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String String)
   taskComment id txt ver = do
-    let url  := env.base ++ "/tasks/" ++ show id.id
+    let url  := env.base ++ "/tasks/" ++ showId id
         body := encode $ MkTaskCommentBody txt ver
     resp <- authPatch env url body
     expectRaw resp 200 "add task comment"

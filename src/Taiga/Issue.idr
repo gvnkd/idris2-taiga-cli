@@ -82,7 +82,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String Issue)
   getIssue id = do
-    let url := env.base ++ "/issues/" ++ show id.id
+    let url := env.base ++ "/issues/" ++ showId id
     resp <- authGet env url
     expectJson resp 200 "get issue"
 
@@ -114,7 +114,7 @@ parameters {auto env : ApiEnv}
     -> io (Either String Issue)
   updateIssue id subj desc itype ver = do
     let body := encode $ MkUpdateIssueBody subj desc itype ver
-    resp <- authPatch env (env.base ++ "/issues/" ++ show id.id) body
+    resp <- authPatch env (env.base ++ "/issues/" ++ showId id) body
     expectJson resp 200 "update issue"
 
   ||| Delete an issue.
@@ -124,6 +124,6 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String ())
   deleteIssue id = do
-    let url := env.base ++ "/issues/" ++ show id.id
+    let url := env.base ++ "/issues/" ++ showId id
     resp <- authDelete env url
     expectOk resp 204 "delete issue"

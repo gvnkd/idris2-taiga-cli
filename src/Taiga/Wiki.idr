@@ -74,7 +74,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String WikiPage)
   getWiki id = do
-    let url := env.base ++ "/wiki/" ++ show id.id
+    let url := env.base ++ "/wiki/" ++ showId id
     resp <- authGet env url
     expectJson resp 200 "get wiki"
 
@@ -102,7 +102,7 @@ parameters {auto env : ApiEnv}
     -> io (Either String WikiPage)
   updateWiki id content slug ver = do
     let body := encode $ MkUpdateWikiBody content slug ver
-    resp <- authPatch env (env.base ++ "/wiki/" ++ show id.id) body
+    resp <- authPatch env (env.base ++ "/wiki/" ++ showId id) body
     expectJson resp 200 "update wiki"
 
   ||| Delete a wiki page.
@@ -112,6 +112,6 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String ())
   deleteWiki id = do
-    let url := env.base ++ "/wiki/" ++ show id.id
+    let url := env.base ++ "/wiki/" ++ showId id
     resp <- authDelete env url
     expectOk resp 204 "delete wiki"

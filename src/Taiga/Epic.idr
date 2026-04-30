@@ -78,7 +78,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String Epic)
   getEpic id = do
-    let url := env.base ++ "/epics/" ++ show id.id
+    let url := env.base ++ "/epics/" ++ showId id
     resp <- authGet env url
     expectJson resp 200 "get epic"
 
@@ -108,7 +108,7 @@ parameters {auto env : ApiEnv}
     -> io (Either String Epic)
   updateEpic id subj desc stat ver = do
     let body := encode $ MkUpdateEpicBody subj desc (map parseBits64 stat) ver
-    resp <- authPatch env (env.base ++ "/epics/" ++ show id.id) body
+    resp <- authPatch env (env.base ++ "/epics/" ++ showId id) body
     expectJson resp 200 "update epic"
 
   ||| Delete an epic.
@@ -118,6 +118,6 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String ())
   deleteEpic id = do
-    let url := env.base ++ "/epics/" ++ show id.id
+    let url := env.base ++ "/epics/" ++ showId id
     resp <- authDelete env url
     expectOk resp 204 "delete epic"

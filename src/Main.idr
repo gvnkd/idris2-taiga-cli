@@ -54,14 +54,6 @@ auth_to_token' : AuthInfo -> Maybe Token
 auth_to_token' (TokenAuth t)     = Just $ MkToken { auth_token = t, refresh = Nothing }
 auth_to_token' (CredentialAuth _) = Nothing
 
-||| Resolve the base URL for a CLI invocation.
-||| Falls back to `--base` flag, then environment, then default.
-resolveBaseUrl : Maybe String -> Maybe String
-resolveBaseUrl baseUrl =
-  case baseUrl of
-    Just url  => Just url
-    Nothing   => Nothing
-
 ||| Run the agent path: read JSON from stdin, dispatch, write response.
 runAgent : IO ()
 runAgent = do
@@ -88,7 +80,7 @@ runCLI rawArgs =
   case parseArgs rawArgs of
     Left err => cliError err
     Right res =>
-      let base    := resolveBaseUrl res.base_url
+      let base    := res.base_url
           command := toCommand res.cli_args
        in case res.cli_args of
             ArgStdin => runAgent

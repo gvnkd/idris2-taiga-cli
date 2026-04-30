@@ -97,5 +97,5 @@ parameters {auto env : ApiEnv}
     -> io (Either String Milestone)
   updateMilestone id name estStart estFinish ver = do
     let body := encode $ MkUpdateMilestoneBody name estStart estFinish ver
-    resp <- authPatch env (env.base ++ "/milestones/" ++ show id.id) body
+    resp <- authPatch env (env.base ++ "/milestones/" ++ showId id) body
     expectJson resp 200 "update milestone"
