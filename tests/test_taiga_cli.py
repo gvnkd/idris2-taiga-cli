@@ -1,3 +1,4 @@
+import json
 import time
 import pytest
 
@@ -16,6 +17,51 @@ class TestAuth:
         proj = client.get_project_by_id(12)
         assert proj["id"] == 12
         assert proj["slug"] == "taiga"
+
+
+class TestErrors:
+    """Error-case tests — verify failure paths return proper errors."""
+
+    def test_get_nonexistent_task(self, client):
+        resp = client._err("get-task", {"id": 99999, "maybeNat64ArgsTag": ""})
+        assert "err" in resp
+
+    def test_update_wrong_version_occ_conflict(self, client):
+        """Update with wrong version should fail (OCC conflict)."""
+        ts = str(int(time.time()))
+        created = client._json("create-task", {
+            "project": "12", "subject": f"occ test {ts}",
+            "story": None, "description": None,
+            "status": None, "milestone": None,
+        })
+        tid = created["id"]
+        try:
+            err = client._err("update-task", {
+                "id": tid, "subject": "fail update",
+                "description": None, "status": None,
+                "version": 99999,
+            })
+            assert "err" in err
+        finally:
+            client.delete_task(tid)
+
+    def test_invalid_command_name(self, client):
+        from conftest import _run
+        resp = _run("nonexistent-cmd", {}, client.token)
+        assert resp["tag"] == "Err"
+
+
+class TestRefresh:
+    """Token refresh tests."""
+
+    def test_refresh_returns_new_token(self, client):
+        from conftest import _run, _assert_ok, auth_info
+        # Get the original login response to extract refresh token
+        creds = {"username": "rune", "password": "rune-secret-42"}
+        resp = _run("login", creds)
+        payload = json.loads(_assert_ok(resp))
+        refresh_tok = payload.get("refresh")
+        assert refresh_tok is not None, "Login should return a refresh token"
 
 
 class TestEpicCRUD:
@@ -105,8 +151,10 @@ class TestTaskSpecial:
 
     def test_task_comment(self, client, task_id):
         """task-comment uses raw response (not JSON)."""
-        tid, ver = task_id
-        # OCC: need fresh version after status change; comment is separate op at same base version
+        tid, _ = task_id
+        # Fetch fresh version — prior tests may have mutated the task
+        fresh = client.get_task(tid)
+        ver = fresh["version"]
         result = client.task_comment(tid, "pytest comment", ver)
         assert "comment" in result.lower()
 
@@ -163,8 +211,8 @@ class TestMilestoneCRUD:
         ts = self._ts()
         name = f"pytest milestone {ts}"
         created = client.create_milestone(name)
-        mid = created["id"]
-        updated = client.update_milestone(mid, name=f"{name} updated")
+        mid, ver1 = created["id"], created.get("version", 1)
+        updated = client.update_milestone(mid, name=f"{name} updated", version=ver1)
         assert "updated" in updated["name"].lower()
 
 

@@ -1,5 +1,7 @@
 import json
 import subprocess
+from datetime import date, timedelta
+
 import pytest
 
 BIN = "/srv/taiga-cli/build/exec/taiga-cli"
@@ -30,12 +32,17 @@ def _assert_ok(resp):
 
 
 @pytest.fixture(scope="session")
-def auth_token():
-    """Login once per session, return token for reuse."""
+def auth_info():
+    """Login once per session, return (token, refresh)."""
     creds = {"username": "rune", "password": "rune-secret-42"}
     resp = _run("login", creds)
     payload = json.loads(_assert_ok(resp))
-    return payload["auth_token"]
+    return payload["auth_token"], payload.get("refresh")
+
+
+@pytest.fixture(scope="session")
+def auth_token(auth_info):
+    return auth_info[0]
 
 
 class TaigaClient:
@@ -53,6 +60,16 @@ class TaigaClient:
     def _raw(self, cmd, args):
         """Call command and return the raw (non-JSON-decoded) payload string."""
         return _assert_ok(_run(cmd, args, self.token))
+
+    def _err(self, cmd, args):
+        """Call command and assert response is Err, return error details."""
+        resp = _run(cmd, args, self.token)
+        assert resp["tag"] == "Err", f"Expected Err, got Ok: {resp}"
+        return resp["contents"]
+
+    def refresh(self, token):
+        """Refresh the auth token and return new token string."""
+        return self._json("refresh", {"token": token})
 
     # --- auth -----------------------------------------------------------------
     def me(self):
@@ -197,21 +214,20 @@ class TaigaClient:
         return self._json("list-milestones", {"project": PROJECT_ID, "stringArgsTag": ""})
 
     def create_milestone(self, name):
-        ts = str(int(__import__("time").time()))
-        day1 = min(int(ts[:2]), 28)
-        day2 = min(day1 + 1, 28)
+        today = date.today()
+        tomorrow = today + timedelta(days=1)
         return self._json("create-milestone", {
             "project": PROJECT_ID,
             "name": name,
-            "estimated_start": f"2026-05-{day1:02d}",
-            "estimated_finish": f"2026-05-{day2:02d}",
+            "estimated_start": today.isoformat(),
+            "estimated_finish": tomorrow.isoformat(),
         })
 
-    def update_milestone(self, mid, name=None):
+    def update_milestone(self, mid, name=None, version=1):
         return self._json("update-milestone", {
             "id": mid, "name": name,
             "estimated_start": None, "estimated_finish": None,
-            "version": 1,
+            "version": version,
         })
 
     # --- comments -------------------------------------------------------------

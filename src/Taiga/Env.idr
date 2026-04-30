@@ -74,12 +74,6 @@ buildUrl segments params base =
       query  := buildQueryString params
    in base ++ path ++ query
 
-||| Convert a Maybe value to a list of one element or empty.
-||| Used with catMaybes to build optional query param lists.
-public export
-maybeParam : (String, String) -> List (String, String)
-maybeParam p = [p]
-
 ||| Parse a string as a Bits64 value.
 public export
 parseBits64 : String -> Bits64

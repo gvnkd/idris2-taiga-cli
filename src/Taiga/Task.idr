@@ -86,107 +86,107 @@ ToJSON TaskCommentBody where
 
 parameters {auto env : ApiEnv}
 
-   ||| List tasks in a project or belonging to a story.
-   public export
-   listTasks :
-        (project : Maybe String)
-     -> (story : Maybe Nat64Id)
-     -> (page : Maybe Bits32)
-     -> (pageSize : Maybe Bits32)
-     -> {auto _ : HasIO io}
-     -> io (Either String (List TaskSummary))
-   listTasks project story page pageSize = do
-     let opts := concat $ catMaybes
-                    [ map (\p => [("project", p)]) project
-                    , map (\s => [("userstory", showId s)]) story
-                    , map (\p => [("page", show p)]) page
-                    , map (\s => [("page_size", show s)]) pageSize ]
-         url  := buildUrl ["tasks"] opts env.base
-     resp <- authGet env url
-     expectJson resp 200 "list tasks"
+  ||| List tasks in a project or belonging to a story.
+  public export
+  listTasks :
+       (project : Maybe String)
+    -> (story : Maybe Nat64Id)
+    -> (page : Maybe Bits32)
+    -> (pageSize : Maybe Bits32)
+    -> {auto _ : HasIO io}
+    -> io (Either String (List TaskSummary))
+  listTasks project story page pageSize = do
+    let opts := concat $ catMaybes
+                   [ map (\p => [("project", p)]) project
+                   , map (\s => [("userstory", showId s)]) story
+                   , map (\p => [("page", show p)]) page
+                   , map (\s => [("page_size", show s)]) pageSize ]
+        url  := buildUrl ["tasks"] opts env.base
+    resp <- authGet env url
+    expectJson resp 200 "list tasks"
 
-   ||| Get a task by its ID.
-   public export
-   getTask :
-        (id : Nat64Id)
-     -> {auto _ : HasIO io}
-     -> io (Either String Task)
-   getTask id = do
-     let url := buildUrl ["tasks", showId id] [] env.base
-     resp <- authGet env url
-     expectJson resp 200 "get task"
+  ||| Get a task by its ID.
+  public export
+  getTask :
+       (id : Nat64Id)
+    -> {auto _ : HasIO io}
+    -> io (Either String Task)
+  getTask id = do
+    let url := buildUrl ["tasks", showId id] [] env.base
+    resp <- authGet env url
+    expectJson resp 200 "get task"
 
-   ||| Create a new task.
-   public export
-   createTask :
-        (project : String)
-     -> (subject : String)
-     -> (story : Maybe Nat64Id)
-     -> (description : Maybe String)
-     -> (status : Maybe String)
-     -> (milestone : Maybe Bits64)
-     -> {auto _ : HasIO io}
-     -> io (Either String Task)
-   createTask project subject story desc stat ms = do
-     let body := encode $ MkCreateTaskBody (parseBits64 project) subject story desc (map parseBits64 stat) ms
-         url  := buildUrl ["tasks"] [] env.base
-     resp <- authPost env url body
-     expectJson resp 201 "create task"
+  ||| Create a new task.
+  public export
+  createTask :
+       (project : String)
+    -> (subject : String)
+    -> (story : Maybe Nat64Id)
+    -> (description : Maybe String)
+    -> (status : Maybe String)
+    -> (milestone : Maybe Bits64)
+    -> {auto _ : HasIO io}
+    -> io (Either String Task)
+  createTask project subject story desc stat ms = do
+    let body := encode $ MkCreateTaskBody (parseBits64 project) subject story desc (map parseBits64 stat) ms
+        url  := buildUrl ["tasks"] [] env.base
+    resp <- authPost env url body
+    expectJson resp 201 "create task"
 
-   ||| Update an existing task (OCC-aware).
-   public export
-   updateTask :
-        (id : Nat64Id)
-     -> (subject : Maybe String)
-     -> (description : Maybe String)
-     -> (status : Maybe String)
-     -> (version : Version)
-     -> {auto _ : HasIO io}
-     -> io (Either String Task)
-   updateTask id subj desc stat ver = do
-     let body := encode $ MkUpdateTaskBody subj desc (map parseBits64 stat) ver
-         url  := buildUrl ["tasks", showId id] [] env.base
-     resp <- authPatch env url body
-     expectJson resp 200 "update task"
+  ||| Update an existing task (OCC-aware).
+  public export
+  updateTask :
+       (id : Nat64Id)
+    -> (subject : Maybe String)
+    -> (description : Maybe String)
+    -> (status : Maybe String)
+    -> (version : Version)
+    -> {auto _ : HasIO io}
+    -> io (Either String Task)
+  updateTask id subj desc stat ver = do
+    let body := encode $ MkUpdateTaskBody subj desc (map parseBits64 stat) ver
+        url  := buildUrl ["tasks", showId id] [] env.base
+    resp <- authPatch env url body
+    expectJson resp 200 "update task"
 
-   ||| Delete a task.
-   public export
-   deleteTask :
-        (id : Nat64Id)
-     -> {auto _ : HasIO io}
-     -> io (Either String ())
-   deleteTask id = do
-     let url := buildUrl ["tasks", showId id] [] env.base
-     resp <- authDelete env url
-     expectOk resp 204 "delete task"
+  ||| Delete a task.
+  public export
+  deleteTask :
+       (id : Nat64Id)
+    -> {auto _ : HasIO io}
+    -> io (Either String ())
+  deleteTask id = do
+    let url := buildUrl ["tasks", showId id] [] env.base
+    resp <- authDelete env url
+    expectOk resp 204 "delete task"
 
-   ||| Change the status of a task via PATCH.
-   |||
-   ||| The caller must supply the current `version` for OCC, and the
-   ||| target `status` as its numeric ID (e.g. 36 = New, 39 = Closed).
-   public export
-   changeTaskStatus :
-        (id : Nat64Id)
-     -> (newStatus : Bits64)
-     -> (version : Version)
-     -> {auto _ : HasIO io}
-     -> io (Either String Task)
-   changeTaskStatus id newSt ver = do
-     let body := encode $ MkChangeTaskStatusBody newSt ver
-         url  := buildUrl ["tasks", showId id] [] env.base
-     resp <- authPatch env url body
-     expectJson resp 200 "change task status"
+  ||| Change the status of a task via PATCH.
+  |||
+  ||| The caller must supply the current `version` for OCC, and the
+  ||| target `status` as its numeric ID (e.g. 36 = New, 39 = Closed).
+  public export
+  changeTaskStatus :
+       (id : Nat64Id)
+    -> (newStatus : Bits64)
+    -> (version : Version)
+    -> {auto _ : HasIO io}
+    -> io (Either String Task)
+  changeTaskStatus id newSt ver = do
+    let body := encode $ MkChangeTaskStatusBody newSt ver
+        url  := buildUrl ["tasks", showId id] [] env.base
+    resp <- authPatch env url body
+    expectJson resp 200 "change task status"
 
-   ||| Add a comment to a task.
-   public export
-   taskComment :
-        (id : Nat64Id)
-     -> (text : String)
-     -> (version : Version)
-     -> {auto _ : HasIO io}
-     -> io (Either String String)
-   taskComment id txt ver = do
-     let url  := buildUrl ["tasks", showId id] [] env.base
-         body := encode $ MkTaskCommentBody txt ver
-     resp <- authPatch env url body
-     expectRaw resp 200 "add task comment"
+  ||| Add a comment to a task.
+  public export
+  taskComment :
+       (id : Nat64Id)
+    -> (text : String)
+    -> (version : Version)
+    -> {auto _ : HasIO io}
+    -> io (Either String String)
+  taskComment id txt ver = do
+    let url  := buildUrl ["tasks", showId id] [] env.base
+        body := encode $ MkTaskCommentBody txt ver
+    resp <- authPatch env url body
+    expectRaw resp 200 "add task comment"
