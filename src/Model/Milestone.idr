@@ -13,13 +13,11 @@ record Milestone where
   id : Nat64Id
   name : String
   slug : Slug
-  estimatedStart : Maybe DateTime
-  estimatedFinish : Maybe DateTime
-  version : Version
+  estimated_start : Maybe DateTime
+  estimated_finish : Maybe DateTime
 
 %runElab derive "Milestone" [Show,Eq,ToJSON,FromJSON]
 
-||| Compact serialisation for list responses.
 public export
 record MilestoneSummary where
   constructor MkMilestoneSummary

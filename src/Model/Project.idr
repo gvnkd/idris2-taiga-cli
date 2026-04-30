@@ -14,8 +14,8 @@ record Project where
   slug : Slug
   name : String
   description : String
-  isPublic : Bool
-  createdDate : DateTime
+  is_private : Bool
+  created_date : DateTime
 
 %runElab derive "Project" [Show,Eq,ToJSON,FromJSON]
 

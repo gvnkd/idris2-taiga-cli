@@ -19,7 +19,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String (List UserSummary))
   listUsers project = do
-    let url := env.base ++ "/projects/" ++ project ++ "/members"
+    let url := env.base ++ "/users?project=" ++ project
     resp <- authGet env url
     pure $ case resp.status.code of
              200 => case decodeEither resp.body of
@@ -34,7 +34,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String (List UserSummary))
   listMemberships project = do
-    let url := env.base ++ "/projects/" ++ project ++ "/memberships"
+    let url := env.base ++ "/memberships?project=" ++ project
     resp <- authGet env url
     pure $ case resp.status.code of
              200 => case decodeEither resp.body of
@@ -49,7 +49,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String (List String))
   listRoles project = do
-    let url := env.base ++ "/projects/" ++ project ++ "/roles"
+    let url := env.base ++ "/roles?project=" ++ project
     resp <- authGet env url
     pure $ case resp.status.code of
              200 => case decodeEither resp.body of

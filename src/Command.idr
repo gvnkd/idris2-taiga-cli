@@ -41,6 +41,7 @@ import Taiga.Env
 record RefreshArgs where
   constructor MkRefreshArgs
   refresh : String
+  refreshArgsTag : String
 
 %runElab derive "RefreshArgs" [Show,FromJSON]
 
@@ -49,32 +50,42 @@ record RefreshArgs where
 record ListProjectsArgs where
   constructor MkListProjectsArgs
   member : Maybe String
+  listProjectsTag : String
+
 %runElab derive "ListProjectsArgs" [Show,FromJSON]
 
 record GetProjectArgs where
   constructor MkGetProjectArgs
-  id : Maybe Nat64Id
-  slug : Maybe Slug
+  id : Maybe Bits64
+  slug : Maybe String
 %runElab derive "GetProjectArgs" [Show,FromJSON]
 
 record StringArgs where
   constructor MkStringArgs
   project : String
+  stringArgsTag : String
+
 %runElab derive "StringArgs" [Show,FromJSON]
 
 record MaybeStringArgs where
   constructor MkMaybeStringArgs
   project : Maybe String
+  maybeStringArgsTag : String
+
 %runElab derive "MaybeStringArgs" [Show,FromJSON]
 
 record MaybeNat64Args where
   constructor MkMaybeNat64Args
-  id : Maybe Nat64Id
+  id : Maybe Bits64
+  maybeNat64ArgsTag : String
+
 %runElab derive "MaybeNat64Args" [Show,FromJSON]
 
 record Nat64Args where
   constructor MkNat64Args
-  id : Nat64Id
+  id : Bits64
+  nat64ArgsTag : String
+
 %runElab derive "Nat64Args" [Show,FromJSON]
 
 record SearchArgs where
@@ -99,11 +110,11 @@ record CreateEpicArgs where
 
 record UpdateEpicArgs where
   constructor MkUpdateEpicArgs
-  id : Nat64Id
+  id : Bits64
   subject : Maybe String
   description : Maybe String
   status : Maybe String
-  version : Version
+  version : Bits32
 %runElab derive "UpdateEpicArgs" [Show,FromJSON]
 
 record CreateStoryArgs where
@@ -111,23 +122,23 @@ record CreateStoryArgs where
   project : String
   subject : String
   description : Maybe String
-  milestone : Maybe Nat64Id
+  milestone : Maybe Bits64
 %runElab derive "CreateStoryArgs" [Show,FromJSON]
 
 record UpdateStoryArgs where
   constructor MkUpdateStoryArgs
-  id : Nat64Id
+  id : Bits64
   subject : Maybe String
   description : Maybe String
   milestone : Maybe String
-  version : Version
+  version : Bits32
 %runElab derive "UpdateStoryArgs" [Show,FromJSON]
 
 record CreateTaskArgs where
   constructor MkCreateTaskArgs
   project : String
   subject : String
-  story : Maybe Nat64Id
+  story : Maybe Bits64
   description : Maybe String
   status : Maybe String
   milestone : Maybe Bits64
@@ -136,25 +147,25 @@ record CreateTaskArgs where
 
 record UpdateTaskArgs where
   constructor MkUpdateTaskArgs
-  id : Nat64Id
+  id : Bits64
   subject : Maybe String
   description : Maybe String
   status : Maybe String
-  version : Version
+  version : Bits32
 %runElab derive "UpdateTaskArgs" [Show,FromJSON]
 
 record ChangeTaskStatusArgs where
   constructor MkChangeTaskStatusArgs
-  id : Nat64Id
+  id : Bits64
   status : Bits64
-  version : Version
+  version : Bits32
 %runElab derive "ChangeTaskStatusArgs" [Show,FromJSON]
 
 record TaskCommentArgs where
   constructor MkTaskCommentArgs
-  id : Nat64Id
+  id : Bits64
   text : String
-  version : Version
+  version : Bits32
 %runElab derive "TaskCommentArgs" [Show,FromJSON]
 
 record CreateIssueArgs where
@@ -169,11 +180,11 @@ record CreateIssueArgs where
 
 record UpdateIssueArgs where
   constructor MkUpdateIssueArgs
-  id : Nat64Id
+  id : Bits64
   subject : Maybe String
   description : Maybe String
   type : Maybe String
-  version : Version
+  version : Bits32
 %runElab derive "UpdateIssueArgs" [Show,FromJSON]
 
 record CreateWikiArgs where
@@ -185,38 +196,38 @@ record CreateWikiArgs where
 
 record UpdateWikiArgs where
   constructor MkUpdateWikiArgs
-  id : Nat64Id
+  id : Bits64
   content : Maybe String
   slug : Maybe String
-  version : Version
+  version : Bits32
 %runElab derive "UpdateWikiArgs" [Show,FromJSON]
 
 record EntityIdArgs where
   constructor MkEntityIdArgs
   entity : String
-  id : Nat64Id
+  id : Bits64
 %runElab derive "EntityIdArgs" [Show,FromJSON]
 
 record CommentArgs where
   constructor MkCommentArgs
   entity : String
-  id : Nat64Id
+  id : Bits64
   text : String
 %runElab derive "CommentArgs" [Show,FromJSON]
 
 record EditCommentArgs where
   constructor MkEditCommentArgs
   entity : String
-  id : Nat64Id
-  commentId : Nat64Id
+  id : Bits64
+  commentId : Bits64
   text : String
 %runElab derive "EditCommentArgs" [Show,FromJSON]
 
 record DeleteCommentArgs where
   constructor MkDeleteCommentArgs
   entity : String
-  id : Nat64Id
-  commentId : Nat64Id
+  id : Bits64
+  commentId : Bits64
 %runElab derive "DeleteCommentArgs" [Show,FromJSON]
 
 record CreateMilestoneArgs where
@@ -229,11 +240,11 @@ record CreateMilestoneArgs where
 
 record UpdateMilestoneArgs where
   constructor MkUpdateMilestoneArgs
-  id : Nat64Id
+  id : Bits64
   name : Maybe String
   estimated_start : Maybe String
   estimated_finish : Maybe String
-  version : Version
+  version : Bits32
 %runElab derive "UpdateMilestoneArgs" [Show,FromJSON]
 
 ||| Sum type of all supported commands.
@@ -337,38 +348,55 @@ mkRefreshCmd r              = CmdRefresh r.refresh
 private mkListProjectsCmd   : ListProjectsArgs -> Command
 mkListProjectsCmd a         = CmdListProjects a.member
 
+private mkNat64Id : Bits64 -> Nat64Id
+mkNat64Id n = MkNat64Id n
+
+private mkSlug : String -> Slug
+mkSlug s = MkSlug s
+
+private mkVersion : Bits32 -> Version
+mkVersion n = MkVersion n
+
+private toMaybeNat64Id : Maybe Bits64 -> Maybe Nat64Id
+toMaybeNat64Id Nothing  = Nothing
+toMaybeNat64Id (Just n) = Just $ MkNat64Id n
+
+private toMaybeSlug : Maybe String -> Maybe Slug
+toMaybeSlug Nothing    = Nothing
+toMaybeSlug (Just s)   = Just $ MkSlug s
+
 private mkGetProjectCmd     : GetProjectArgs -> Command
-mkGetProjectCmd a           = CmdGetProject a.id a.slug
+mkGetProjectCmd a           = CmdGetProject (toMaybeNat64Id a.id) (toMaybeSlug a.slug)
 
 private mkListEpicsCmd      : StringArgs -> Command
 mkListEpicsCmd a            = CmdListEpics a.project
 
 private mkGetEpicCmd        : MaybeNat64Args -> Command
-mkGetEpicCmd a              = CmdGetEpic a.id
+mkGetEpicCmd a              = CmdGetEpic (toMaybeNat64Id a.id)
 
 private mkListStoriesCmd    : StringArgs -> Command
 mkListStoriesCmd a          = CmdListStories a.project
 
 private mkGetStoryCmd       : MaybeNat64Args -> Command
-mkGetStoryCmd a             = CmdGetStory a.id
+mkGetStoryCmd a             = CmdGetStory (toMaybeNat64Id a.id)
 
 private mkListTasksCmd      : MaybeStringArgs -> Command
 mkListTasksCmd a            = CmdListTasks a.project
 
 private mkGetTaskCmd        : MaybeNat64Args -> Command
-mkGetTaskCmd a              = CmdGetTask a.id
+mkGetTaskCmd a              = CmdGetTask (toMaybeNat64Id a.id)
 
 private mkListIssuesCmd     : StringArgs -> Command
 mkListIssuesCmd a           = CmdListIssues a.project
 
 private mkGetIssueCmd       : MaybeNat64Args -> Command
-mkGetIssueCmd a             = CmdGetIssue a.id
+mkGetIssueCmd a             = CmdGetIssue (toMaybeNat64Id a.id)
 
 private mkListWikiCmd       : StringArgs -> Command
 mkListWikiCmd a             = CmdListWiki a.project
 
 private mkGetWikiCmd        : MaybeNat64Args -> Command
-mkGetWikiCmd a              = CmdGetWiki a.id
+mkGetWikiCmd a              = CmdGetWiki (toMaybeNat64Id a.id)
 
 private mkListMilestonesCmd : StringArgs -> Command
 mkListMilestonesCmd a       = CmdListMilestones a.project
@@ -392,74 +420,74 @@ private mkCreateEpicCmd     : CreateEpicArgs -> Command
 mkCreateEpicCmd a           = CmdCreateEpic a.project a.subject a.description a.status
 
 private mkUpdateEpicCmd     : UpdateEpicArgs -> Command
-mkUpdateEpicCmd a           = CmdUpdateEpic a.id a.subject a.description a.status a.version
+mkUpdateEpicCmd a           = CmdUpdateEpic (mkNat64Id a.id) a.subject a.description a.status (mkVersion a.version)
 
 private mkDeleteEpicCmd     : Nat64Args -> Command
-mkDeleteEpicCmd a           = CmdDeleteEpic a.id
+mkDeleteEpicCmd a           = CmdDeleteEpic (mkNat64Id a.id)
 
 private mkCreateStoryCmd    : CreateStoryArgs -> Command
-mkCreateStoryCmd a          = CmdCreateStory a.project a.subject a.description a.milestone
+mkCreateStoryCmd a          = CmdCreateStory a.project a.subject a.description (toMaybeNat64Id a.milestone)
 
 private mkUpdateStoryCmd    : UpdateStoryArgs -> Command
-mkUpdateStoryCmd a          = CmdUpdateStory a.id a.subject a.description a.milestone a.version
+mkUpdateStoryCmd a          = CmdUpdateStory (mkNat64Id a.id) a.subject a.description a.milestone (mkVersion a.version)
 
 private mkDeleteStoryCmd    : Nat64Args -> Command
-mkDeleteStoryCmd a          = CmdDeleteStory a.id
+mkDeleteStoryCmd a          = CmdDeleteStory (mkNat64Id a.id)
 
 private mkCreateTaskCmd     : CreateTaskArgs -> Command
 mkCreateTaskCmd a           =
-  CmdCreateTask a.project a.subject a.story a.description a.status a.milestone
+  CmdCreateTask a.project a.subject (toMaybeNat64Id a.story) a.description a.status a.milestone
 
 private mkUpdateTaskCmd     : UpdateTaskArgs -> Command
-mkUpdateTaskCmd a           = CmdUpdateTask a.id a.subject a.description a.status a.version
+mkUpdateTaskCmd a           = CmdUpdateTask (mkNat64Id a.id) a.subject a.description a.status (mkVersion a.version)
 
 private mkDeleteTaskCmd     : Nat64Args -> Command
-mkDeleteTaskCmd a           = CmdDeleteTask a.id
+mkDeleteTaskCmd a           = CmdDeleteTask (mkNat64Id a.id)
 
 private mkWatchTaskCmd      : Nat64Args -> Command
-mkWatchTaskCmd a            = CmdWatchTask a.id
+mkWatchTaskCmd a            = CmdWatchTask (mkNat64Id a.id)
 
 private mkChangeTaskStatusCmd : ChangeTaskStatusArgs -> Command
-mkChangeTaskStatusCmd a     = CmdChangeTaskStatus a.id a.status a.version
+mkChangeTaskStatusCmd a     = CmdChangeTaskStatus (mkNat64Id a.id) a.status (mkVersion a.version)
 
 private mkTaskCommentCmd    : TaskCommentArgs -> Command
-mkTaskCommentCmd a          = CmdTaskComment a.id a.text a.version
+mkTaskCommentCmd a          = CmdTaskComment (mkNat64Id a.id) a.text (mkVersion a.version)
 
 private mkCreateIssueCmd    : CreateIssueArgs -> Command
 mkCreateIssueCmd a          = CmdCreateIssue a.project a.subject a.description a.priority a.severity a.type
 
 private mkUpdateIssueCmd    : UpdateIssueArgs -> Command
-mkUpdateIssueCmd a          = CmdUpdateIssue a.id a.subject a.description a.type a.version
+mkUpdateIssueCmd a          = CmdUpdateIssue (mkNat64Id a.id) a.subject a.description a.type (mkVersion a.version)
 
 private mkDeleteIssueCmd    : Nat64Args -> Command
-mkDeleteIssueCmd a          = CmdDeleteIssue a.id
+mkDeleteIssueCmd a          = CmdDeleteIssue (mkNat64Id a.id)
 
 private mkCreateWikiCmd     : CreateWikiArgs -> Command
 mkCreateWikiCmd a           = CmdCreateWiki a.project a.slug a.content
 
 private mkUpdateWikiCmd     : UpdateWikiArgs -> Command
-mkUpdateWikiCmd a           = CmdUpdateWiki a.id a.content a.slug a.version
+mkUpdateWikiCmd a           = CmdUpdateWiki (mkNat64Id a.id) a.content a.slug (mkVersion a.version)
 
 private mkDeleteWikiCmd     : Nat64Args -> Command
-mkDeleteWikiCmd a           = CmdDeleteWiki a.id
+mkDeleteWikiCmd a           = CmdDeleteWiki (mkNat64Id a.id)
 
 private mkCommentCmd        : CommentArgs -> Command
-mkCommentCmd a              = CmdComment a.entity a.id a.text
+mkCommentCmd a              = CmdComment a.entity (mkNat64Id a.id) a.text
 
 private mkEditCommentCmd    : EditCommentArgs -> Command
-mkEditCommentCmd a          = CmdEditComment a.entity a.id a.commentId a.text
+mkEditCommentCmd a          = CmdEditComment a.entity (mkNat64Id a.id) (mkNat64Id a.commentId) a.text
 
 private mkDeleteCommentCmd  : DeleteCommentArgs -> Command
-mkDeleteCommentCmd a        = CmdDeleteComment a.entity a.id a.commentId
+mkDeleteCommentCmd a        = CmdDeleteComment a.entity (mkNat64Id a.id) (mkNat64Id a.commentId)
 
 private mkListCommentsCmd   : EntityIdArgs -> Command
-mkListCommentsCmd a         = CmdListComments a.entity a.id
+mkListCommentsCmd a         = CmdListComments a.entity (mkNat64Id a.id)
 
 private mkCreateMilestoneCmd : CreateMilestoneArgs -> Command
 mkCreateMilestoneCmd a      = CmdCreateMilestone a.project a.name a.estimated_start a.estimated_finish
 
 private mkUpdateMilestoneCmd : UpdateMilestoneArgs -> Command
-mkUpdateMilestoneCmd a      = CmdUpdateMilestone a.id a.name a.estimated_start a.estimated_finish a.version
+mkUpdateMilestoneCmd a      = CmdUpdateMilestone (mkNat64Id a.id) a.name a.estimated_start a.estimated_finish (mkVersion a.version)
 
 ||| Parse a command name and JSON arguments into a Command.
 public export

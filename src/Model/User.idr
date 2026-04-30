@@ -12,7 +12,7 @@ record User where
   constructor MkUser
   id : Nat64Id
   username : String
-  fullName : String
+  full_name : String
   email : String
 
 %runElab derive "User" [Show,Eq,ToJSON,FromJSON]

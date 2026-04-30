@@ -10,22 +10,19 @@ import Model.Common
 public export
 record HistoryAuthor where
   constructor MkHistoryAuthor
-  id : Bits64
+  pk : Bits64
   username : String
   name : String
 
 %runElab derive "HistoryAuthor" [Show,Eq,ToJSON,FromJSON]
 
-||| A history entry (comment or status change) on any entity.
 public export
 record HistoryEntry where
   constructor MkHistoryEntry
   id : String
   user : HistoryAuthor
   created_at : String
-  comment : String
-  status_from : Maybe String
-  status_to : Maybe String
+  comment : Maybe String
 
 %runElab derive "HistoryEntry" [Show,Eq,ToJSON,FromJSON]
 

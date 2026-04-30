@@ -14,18 +14,17 @@ record Epic where
   ref : Bits32
   subject : String
   description : String
-  status : String
-  version : Version
+  status : Maybe Bits64
+  version : Maybe Version
 
 %runElab derive "Epic" [Show,Eq,ToJSON,FromJSON]
 
-||| Compact serialisation for list responses.
 public export
 record EpicSummary where
   constructor MkEpicSummary
   id : Nat64Id
   ref : Bits32
   subject : String
-  status : String
+  status : Maybe Bits64
 
 %runElab derive "EpicSummary" [Show,Eq,ToJSON,FromJSON]

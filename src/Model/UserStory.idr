@@ -14,20 +14,19 @@ record UserStory where
   ref : Bits32
   subject : String
   description : String
-  status : String
+  status : Maybe String
   milestone : Maybe Nat64Id
   version : Version
 
 %runElab derive "UserStory" [Show,Eq,ToJSON,FromJSON]
 
-||| Compact serialisation for list responses.
 public export
 record UserStorySummary where
   constructor MkUserStorySummary
   id : Nat64Id
   ref : Bits32
   subject : String
-  status : String
+  status : Maybe String
   milestone : Maybe Nat64Id
 
 %runElab derive "UserStorySummary" [Show,Eq,ToJSON,FromJSON]

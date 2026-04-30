@@ -14,22 +14,19 @@ record Issue where
   ref : Bits32
   subject : String
   description : String
-  status : String
+  status : Maybe String
   priority : Maybe String
   severity : Maybe String
-  issueType : Maybe String
-  version : Version
 
 %runElab derive "Issue" [Show,Eq,ToJSON,FromJSON]
 
-||| Compact serialisation for list responses.
 public export
 record IssueSummary where
   constructor MkIssueSummary
   id : Nat64Id
   ref : Bits32
   subject : String
-  status : String
+  status : Maybe String
   priority : Maybe String
 
 %runElab derive "IssueSummary" [Show,Eq,ToJSON,FromJSON]
