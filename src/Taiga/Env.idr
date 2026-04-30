@@ -12,12 +12,36 @@ import Taiga.Api
 
 %language ElabReflection
 
-||| Build a query string from key-value pairs.
+||| URL-encode a string: spaces become %20, other special chars encoded.
+public export
+urlEncode : String -> String
+urlEncode s = concat $ map encodeChar (unpack s)
+
+  where isSafe : Char -> Bool
+        isSafe c = any (== c) (unpack "-._~")
+
+        hexDigit : Bits8 -> Char
+        hexDigit n = case n of
+          0  => '0'; 1  => '1'; 2  => '2'; 3  => '3'
+          4  => '4'; 5  => '5'; 6  => '6'; 7  => '7'
+          8  => '8'; 9  => '9'; 10 => 'A'; 11 => 'B'
+          12 => 'C'; 13 => 'D'; 14 => 'E'; _  => 'F'
+
+        hexDigitHex : Nat -> String
+        hexDigitHex n = pack [hexDigit $ cast n]
+
+        hex2 : Nat -> String
+        hex2 n = hexDigitHex (n `div` 16) ++ hexDigitHex (n `mod` 16)
+
+        encodeChar : Char -> String
+        encodeChar c = if isAlphaNum c || isSafe c then pack [c] else "%" ++ hex2 (cast $ ord c)
+
+||| Build a query string from key-value pairs with URL encoding.
 public export
 buildQueryString : List (String, String) -> String
 buildQueryString [] = ""
 buildQueryString kvs =
-  let pairs := map (\(k, v) => k ++ "=" ++ v) kvs
+  let pairs := map (\(k, v) => urlEncode k ++ "=" ++ urlEncode v) kvs
    in "?" ++ concat (intersperse "&" pairs)
 
 ||| Parse a string as a Bits64 value.

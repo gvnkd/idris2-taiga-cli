@@ -19,11 +19,10 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String String)
   search project text = do
-    let url := env.base ++ "/search?project=" ++ project ++ "&text=" ++ text
+    let qs := buildQueryString [("project", project), ("text", text)]
+        url := env.base ++ "/search" ++ qs
     resp <- authGet env url
-    pure $ case resp.status.code of
-             200 => Right resp.body
-             _     => Left ("search failed with status " ++ show resp.status.code)
+    expectRaw resp 200 "search"
 
   ||| Resolve an entity by its slug or ref.
   public export
@@ -33,8 +32,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String String)
   resolve project ref = do
-    let url := env.base ++ "/resolver?project=" ++ project ++ "&ref=" ++ ref
+    let qs := buildQueryString [("project", project), ("ref", ref)]
+        url := env.base ++ "/resolver" ++ qs
     resp <- authGet env url
-    pure $ case resp.status.code of
-             200 => Right resp.body
-             _     => Left ("resolve failed with status " ++ show resp.status.code)
+    expectRaw resp 200 "resolve"
