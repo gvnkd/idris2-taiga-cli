@@ -3,6 +3,7 @@ module Taiga.Wiki
 
 import JSON.FromJSON
 import JSON.ToJSON
+import JSON.Encoder
 import Model.Common
 import Model.WikiPage
 import Taiga.Api
@@ -10,6 +11,40 @@ import Taiga.Env
 import Data.List
 
 %language ElabReflection
+
+||| Request body for creating a wiki page.
+public export
+record CreateWikiBody where
+  constructor MkCreateWikiBody
+  project : Bits64
+  slug    : String
+  content : String
+
+public export
+ToJSON CreateWikiBody where
+  toJSON b =
+    object
+      [ jpair "project" b.project
+      , jpair "slug" b.slug
+      , jpair "content" b.content
+      ]
+
+||| Request body for updating a wiki page.
+public export
+record UpdateWikiBody where
+  constructor MkUpdateWikiBody
+  content : Maybe String
+  slug    : Maybe String
+  version : Version
+
+public export
+ToJSON UpdateWikiBody where
+  toJSON b =
+    object $ catMaybes
+      [ omitNothing "content" b.content
+      , omitNothing "slug" b.slug
+      , Just $ jpair "version" b.version
+      ]
 
 parameters {auto env : ApiEnv}
 
@@ -43,13 +78,6 @@ parameters {auto env : ApiEnv}
     resp <- authGet env url
     expectJson resp 200 "get wiki"
 
-  ||| Build JSON body for creating a wiki page.
-  buildCreateWikiBody : String -> String -> String -> String
-  buildCreateWikiBody project slug content =
-    "{\"project\":" ++ show (parseBits64 project) ++
-    ",\"slug\":" ++ encode slug ++
-    ",\"content\":" ++ encode content ++ "}"
-
   ||| Create a new wiki page.
   public export
   createWiki :
@@ -59,22 +87,9 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String WikiPage)
   createWiki project slug content = do
-    let body := buildCreateWikiBody project slug content
+    let body := encode $ MkCreateWikiBody (parseBits64 project) slug content
     resp <- authPost env (env.base ++ "/wiki") body
     expectJson resp 201 "create wiki"
-
-  ||| Build JSON body for updating a wiki page.
-  buildUpdateWikiBody : Maybe String -> Maybe String -> Version -> String
-  buildUpdateWikiBody content slug ver =
-    "{" ++ joined ++ ",\"version\":" ++ show ver.version ++ "}"
-    where
-      fields : List String
-      fields = catMaybes
-        [ map (\c => "\"content\":" ++ encode c) content
-        , map (\s => "\"slug\":" ++ encode s) slug
-        ]
-      joined : String
-      joined = concat $ intersperse "," fields
 
   ||| Update an existing wiki page (OCC-aware).
   public export
@@ -86,7 +101,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String WikiPage)
   updateWiki id content slug ver = do
-    let body := buildUpdateWikiBody content slug ver
+    let body := encode $ MkUpdateWikiBody content slug ver
     resp <- authPatch env (env.base ++ "/wiki/" ++ show id.id) body
     expectJson resp 200 "update wiki"
 

@@ -8,12 +8,30 @@ module Taiga.Auth
 
 import JSON.FromJSON
 import JSON.ToJSON
+import JSON.Encoder
 import Model.Auth
 import Model.User
 import Taiga.Api
 import Taiga.Env
 
 %language ElabReflection
+
+||| Request body for login endpoint.
+public export
+record LoginBody where
+  constructor MkLoginBody
+  type     : String
+  username : String
+  password : String
+
+public export
+ToJSON LoginBody where
+  toJSON b =
+    object
+      [ jpair "type" b.type
+      , jpair "username" b.username
+      , jpair "password" b.password
+      ]
 
 ||| Exchange username and password for an auth token.
 ||| Sends {"type":"normal","username":"…","password":"…"} to POST /auth.
@@ -24,12 +42,19 @@ login :
   -> (creds : Credentials)
   -> io (Either String Token)
 login base creds = do
-   resp <- httpPost (base ++ "/auth") Nothing bodyStr
+   let body := encode $ MkLoginBody "normal" creds.username creds.password
+   resp <- httpPost (base ++ "/auth") Nothing body
    expectJson resp 200 "login"
-   where
-     bodyStr : String
-     bodyStr = "{\"type\":\"normal\",\"username\":\"" ++ creds.username
-               ++ "\",\"password\":\"" ++ creds.password ++ "\"}"
+
+||| Request body for token refresh endpoint.
+public export
+record RefreshBody where
+  constructor MkRefreshBody
+  refresh : String
+
+public export
+ToJSON RefreshBody where
+  toJSON b = object [jpair "refresh" b.refresh]
 
 ||| Refresh an expiring token using its refresh counterpart.
 ||| Sends {"refresh":"…"} to POST /auth/refresh.
@@ -40,11 +65,9 @@ refreshToken :
   -> (refresh : String)
   -> io (Either String Token)
 refreshToken base refreshTok = do
-   resp <- httpPost (base ++ "/auth/refresh") Nothing bodyStr
+   let body := encode $ MkRefreshBody refreshTok
+   resp <- httpPost (base ++ "/auth/refresh") Nothing body
    expectJson resp 200 "token refresh"
-   where
-     bodyStr : String
-     bodyStr = "{\"refresh\":\"" ++ refreshTok ++ "\"}"
 
 ||| Get the profile of the currently authenticated user.
 public export

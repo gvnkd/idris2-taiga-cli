@@ -3,6 +3,7 @@ module Taiga.Milestone
 
 import JSON.FromJSON
 import JSON.ToJSON
+import JSON.Encoder
 import Model.Common
 import Model.Milestone
 import Taiga.Api
@@ -10,6 +11,44 @@ import Taiga.Env
 import Data.List
 
 %language ElabReflection
+
+||| Request body for creating a milestone.
+public export
+record CreateMilestoneBody where
+  constructor MkCreateMilestoneBody
+  project         : Bits64
+  name            : String
+  estimatedStart  : String
+  estimatedFinish : String
+
+public export
+ToJSON CreateMilestoneBody where
+  toJSON b =
+    object
+      [ jpair "project" b.project
+      , jpair "name" b.name
+      , jpair "estimated_start" b.estimatedStart
+      , jpair "estimated_finish" b.estimatedFinish
+      ]
+
+||| Request body for updating a milestone.
+public export
+record UpdateMilestoneBody where
+  constructor MkUpdateMilestoneBody
+  name            : Maybe String
+  estimatedStart  : Maybe String
+  estimatedFinish : Maybe String
+  version         : Version
+
+public export
+ToJSON UpdateMilestoneBody where
+  toJSON b =
+    object $ catMaybes
+      [ omitNothing "name" b.name
+      , omitNothing "estimated_start" b.estimatedStart
+      , omitNothing "estimated_finish" b.estimatedFinish
+      , Just $ jpair "version" b.version
+      ]
 
 parameters {auto env : ApiEnv}
 
@@ -32,14 +71,6 @@ parameters {auto env : ApiEnv}
     resp <- authGet env url
     expectJson resp 200 "list milestones"
 
-  ||| Build JSON body for creating a milestone.
-  buildCreateMilestoneBody : String -> String -> String -> String -> String
-  buildCreateMilestoneBody project name estStart estFinish =
-    "{\"project\":" ++ show (parseBits64 project) ++
-    ",\"name\":" ++ encode name ++
-    ",\"estimated_start\":" ++ encode estStart ++
-    ",\"estimated_finish\":" ++ encode estFinish ++ "}"
-
   ||| Create a new milestone.
   public export
   createMilestone :
@@ -50,24 +81,9 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String Milestone)
   createMilestone project name estStart estFinish = do
-    let body := buildCreateMilestoneBody project name estStart estFinish
+    let body := encode $ MkCreateMilestoneBody (parseBits64 project) name estStart estFinish
     resp <- authPost env (env.base ++ "/milestones") body
     expectJson resp 201 "create milestone"
-
-  ||| Build JSON body for updating a milestone.
-  buildUpdateMilestoneBody :
-       Maybe String -> Maybe String -> Maybe String -> Version -> String
-  buildUpdateMilestoneBody name estStart estFinish ver =
-    "{" ++ joined ++ ",\"version\":" ++ show ver.version ++ "}"
-    where
-      fields : List String
-      fields = catMaybes
-        [ map (\s => "\"name\":" ++ encode s) name
-        , map (\s => "\"estimated_start\":" ++ encode s) estStart
-        , map (\s => "\"estimated_finish\":" ++ encode s) estFinish
-        ]
-      joined : String
-      joined = concat $ intersperse "," fields
 
   ||| Update an existing milestone (OCC-aware).
   public export
@@ -80,6 +96,6 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String Milestone)
   updateMilestone id name estStart estFinish ver = do
-    let body := buildUpdateMilestoneBody name estStart estFinish ver
+    let body := encode $ MkUpdateMilestoneBody name estStart estFinish ver
     resp <- authPatch env (env.base ++ "/milestones/" ++ show id.id) body
     expectJson resp 200 "update milestone"

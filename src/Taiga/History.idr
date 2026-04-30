@@ -7,12 +7,28 @@ module Taiga.History
 
 import JSON.FromJSON
 import JSON.ToJSON
+import JSON.Encoder
 import Model.Common
 import Model.Comment
 import Taiga.Api
 import Taiga.Env
 
 %language ElabReflection
+
+||| Request body for adding a comment to an entity.
+public export
+record CommentBody where
+  constructor MkCommentBody
+  comment : String
+  version : Bits32
+
+public export
+ToJSON CommentBody where
+  toJSON b =
+    object
+      [ jpair "comment" b.comment
+      , jpair "version" b.version
+      ]
 
 parameters {auto env : ApiEnv}
 
@@ -65,7 +81,7 @@ parameters {auto env : ApiEnv}
     -> io (Either String String)
   addComment entity eid txt ver = do
     let url := env.base ++ "/" ++ entityPlural entity ++ "/" ++ show eid.id
-        body := "{\"comment\":" ++ encode txt ++ ",\"version\":" ++ show ver ++ "}"
+        body := encode $ MkCommentBody txt ver
     resp <- authPatch env url body
     expectRaw resp 200 "add comment"
 

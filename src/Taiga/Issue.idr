@@ -3,6 +3,7 @@ module Taiga.Issue
 
 import JSON.FromJSON
 import JSON.ToJSON
+import JSON.Encoder
 import Model.Common
 import Model.Issue
 import Taiga.Api
@@ -10,6 +11,48 @@ import Taiga.Env
 import Data.List
 
 %language ElabReflection
+
+||| Request body for creating an issue.
+public export
+record CreateIssueBody where
+  constructor MkCreateIssueBody
+  project     : Bits64
+  subject     : String
+  description : Maybe String
+  priority    : Maybe String
+  severity    : Maybe String
+  issueType   : Maybe String
+
+public export
+ToJSON CreateIssueBody where
+  toJSON b =
+    object $ catMaybes
+      [ Just $ jpair "project" b.project
+      , Just $ jpair "subject" b.subject
+      , omitNothing "description" b.description
+      , omitNothing "priority" b.priority
+      , omitNothing "severity" b.severity
+      , omitNothing "issue_type" b.issueType
+      ]
+
+||| Request body for updating an issue.
+public export
+record UpdateIssueBody where
+  constructor MkUpdateIssueBody
+  subject     : Maybe String
+  description : Maybe String
+  issueType   : Maybe String
+  version     : Version
+
+public export
+ToJSON UpdateIssueBody where
+  toJSON b =
+    object $ catMaybes
+      [ omitNothing "subject" b.subject
+      , omitNothing "description" b.description
+      , omitNothing "issue_type" b.issueType
+      , Just $ jpair "version" b.version
+      ]
 
 parameters {auto env : ApiEnv}
 
@@ -43,28 +86,6 @@ parameters {auto env : ApiEnv}
     resp <- authGet env url
     expectJson resp 200 "get issue"
 
-  ||| Build JSON body for creating an issue.
-  buildCreateIssueBody :
-       (project : String)
-    -> (subject : String)
-    -> (description : Maybe String)
-    -> (priority : Maybe String)
-    -> (severity : Maybe String)
-    -> (issueType : Maybe String)
-    -> String
-  buildCreateIssueBody project subject desc prio sev itype =
-    "{\"project\":" ++ show (parseBits64 project) ++
-    ",\"subject\":" ++ encode subject ++
-    maybeField "description" desc ++
-    maybeField "priority" prio ++
-    maybeField "severity" sev ++
-    maybeField "issue_type" itype ++ "}"
-
-  where
-    maybeField : String -> Maybe String -> String
-    maybeField _ Nothing   = ""
-    maybeField key (Just v) = ",\"" ++ key ++ "\":" ++ encode v
-
   ||| Create a new issue.
   public export
   createIssue :
@@ -77,28 +98,9 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String Issue)
   createIssue project subject desc prio sev itype = do
-    let body := buildCreateIssueBody project subject desc prio sev itype
+    let body := encode $ MkCreateIssueBody (parseBits64 project) subject desc prio sev itype
     resp <- authPost env (env.base ++ "/issues") body
     expectJson resp 201 "create issue"
-
-  ||| Build JSON body for updating an issue.
-  buildUpdateIssueBody :
-       (subject : Maybe String)
-    -> (description : Maybe String)
-    -> (issueType : Maybe String)
-    -> (version : Version)
-    -> String
-  buildUpdateIssueBody subj desc itype ver =
-    "{" ++ joined ++ ",\"version\":" ++ show ver.version ++ "}"
-    where
-      fields : List String
-      fields = catMaybes
-        [ map (\s => "\"subject\":" ++ encode s) subj
-        , map (\d => "\"description\":" ++ encode d) desc
-        , map (\t => "\"issue_type\":" ++ encode t) itype
-        ]
-      joined : String
-      joined = concat $ intersperse "," fields
 
   ||| Update an existing issue (OCC-aware).
   public export
@@ -111,7 +113,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String Issue)
   updateIssue id subj desc itype ver = do
-    let body := buildUpdateIssueBody subj desc itype ver
+    let body := encode $ MkUpdateIssueBody subj desc itype ver
     resp <- authPatch env (env.base ++ "/issues/" ++ show id.id) body
     expectJson resp 200 "update issue"
 

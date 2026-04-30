@@ -3,6 +3,7 @@ module Taiga.Epic
 
 import JSON.FromJSON
 import JSON.ToJSON
+import JSON.Encoder
 import Model.Common
 import Model.Epic
 import Taiga.Api
@@ -11,49 +12,43 @@ import Data.List
 
 %language ElabReflection
 
-||| Format a description field for JSON.
+||| Request body for creating an epic.
 public export
-formatEpicDesc : Maybe String -> String
-formatEpicDesc Nothing  = ""
-formatEpicDesc (Just d) = ",\"description\":" ++ encode d
+record CreateEpicBody where
+  constructor MkCreateEpicBody
+  project     : Bits64
+  subject     : String
+  description : Maybe String
+  status      : Maybe Bits64
 
-||| Format a status field for JSON.
 public export
-formatEpicStatus : Maybe String -> String
-formatEpicStatus Nothing  = ""
-formatEpicStatus (Just s) = ",\"status\":" ++ show (parseBits64 s)
-
-||| Build JSON body for creating an epic.
-buildCreateEpicBody :
-     (project : String)
-  -> (subject : String)
-  -> (description : Maybe String)
-  -> (status : Maybe String)
-  -> String
-buildCreateEpicBody project subject desc stat =
-  "{\"project\":" ++ show (parseBits64 project) ++
-  ",\"subject\":" ++ encode subject ++
-  formatEpicDesc desc ++
-  formatEpicStatus stat ++ "}"
-
-||| Build JSON body for updating an epic.
-buildUpdateEpicBody :
-     (subject : Maybe String)
-  -> (description : Maybe String)
-  -> (status : Maybe String)
-  -> (version : Version)
-  -> String
-buildUpdateEpicBody subj desc stat ver =
-  "{" ++ joined ++ ",\"version\":" ++ show ver.version ++ "}"
-  where
-    fields : List String
-    fields = catMaybes
-      [ map (\s => "\"subject\":" ++ encode s) subj
-      , map (\d => "\"description\":" ++ encode d) desc
-      , map (\s => "\"status\":" ++ show (parseBits64 s)) stat
+ToJSON CreateEpicBody where
+  toJSON b =
+    object $ catMaybes
+      [ Just $ jpair "project" b.project
+      , Just $ jpair "subject" b.subject
+      , omitNothing "description" b.description
+      , omitNothing "status" b.status
       ]
-    joined : String
-    joined = concat $ intersperse "," fields
+
+||| Request body for updating an epic.
+public export
+record UpdateEpicBody where
+  constructor MkUpdateEpicBody
+  subject     : Maybe String
+  description : Maybe String
+  status      : Maybe Bits64
+  version     : Version
+
+public export
+ToJSON UpdateEpicBody where
+  toJSON b =
+    object $ catMaybes
+      [ omitNothing "subject" b.subject
+      , omitNothing "description" b.description
+      , omitNothing "status" b.status
+      , Just $ jpair "version" b.version
+      ]
 
 parameters {auto env : ApiEnv}
 
@@ -97,7 +92,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String Epic)
   createEpic project subject desc stat = do
-    let body := buildCreateEpicBody project subject desc stat
+    let body := encode $ MkCreateEpicBody (parseBits64 project) subject desc (map parseBits64 stat)
     resp <- authPost env (env.base ++ "/epics") body
     expectJson resp 201 "create epic"
 
@@ -112,7 +107,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String Epic)
   updateEpic id subj desc stat ver = do
-    let body := buildUpdateEpicBody subj desc stat ver
+    let body := encode $ MkUpdateEpicBody subj desc (map parseBits64 stat) ver
     resp <- authPatch env (env.base ++ "/epics/" ++ show id.id) body
     expectJson resp 200 "update epic"
 

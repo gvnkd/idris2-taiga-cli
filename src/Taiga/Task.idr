@@ -3,6 +3,7 @@ module Taiga.Task
 
 import JSON.FromJSON
 import JSON.ToJSON
+import JSON.Encoder
 import Model.Common
 import Model.Task
 import Taiga.Api
@@ -11,58 +12,77 @@ import Data.List
 
 %language ElabReflection
 
-||| Build JSON body for creating a task.
-buildCreateBody :
-     (project : String)
-  -> (subject : String)
-  -> (story : Maybe Nat64Id)
-  -> (description : Maybe String)
-  -> (status : Maybe String)
-  -> String
-buildCreateBody project subject story desc stat =
-  "{\"project\":" ++ show (parseBits64 project) ++
-  ",\"subject\":" ++ encode subject ++
-  maybeStoryField story ++
-  maybeDescField desc ++
-  maybeStatusField stat ++ "}"
+||| Request body for creating a task.
+public export
+record CreateTaskBody where
+  constructor MkCreateTaskBody
+  project     : Bits64
+  subject     : String
+  story       : Maybe Nat64Id
+  description : Maybe String
+  status      : Maybe Bits64
+  milestone   : Maybe Bits64
 
-  where
-    maybeStoryField : Maybe Nat64Id -> String
-    maybeStoryField Nothing  = ""
-    maybeStoryField (Just s) = ",\"userstory\":" ++ show s.id
-
-    maybeDescField : Maybe String -> String
-    maybeDescField Nothing  = ""
-    maybeDescField (Just d) = ",\"description\":" ++ encode d
-
-    maybeStatusField : Maybe String -> String
-    maybeStatusField Nothing  = ""
-    maybeStatusField (Just s) = ",\"status\":" ++ show (parseBits64 s)
-
-||| Build JSON body for updating a task.
-buildUpdateBody : Maybe String -> Maybe String -> Maybe String -> Version -> String
-buildUpdateBody subj desc stat ver =
-  "{" ++ joined ++ ",\"version\":" ++ show ver.version ++ "}"
-
-  where
-    fields : List String
-    fields = catMaybes
-      [ map (\s => "\"subject\":" ++ encode s) subj
-      , map (\d => "\"description\":" ++ encode d) desc
-      , map (\s => "\"status\":" ++ show (parseBits64 s)) stat
+public export
+ToJSON CreateTaskBody where
+  toJSON b =
+    object $ catMaybes
+      [ Just $ jpair "project" b.project
+      , Just $ jpair "subject" b.subject
+      , omitNothing "userstory" b.story
+      , omitNothing "description" b.description
+      , omitNothing "status" b.status
+      , omitNothing "milestone" b.milestone
       ]
-    joined : String
-    joined = concat $ intersperse "," fields
 
-||| Build JSON body for changing task status.
-buildStatusBody : Bits64 -> Version -> String
-buildStatusBody newSt ver =
-  "{\"status\":" ++ show newSt ++ ",\"version\":" ++ show ver.version ++ "}"
+||| Request body for updating a task.
+public export
+record UpdateTaskBody where
+  constructor MkUpdateTaskBody
+  subject     : Maybe String
+  description : Maybe String
+  status      : Maybe Bits64
+  version     : Version
 
-||| Build JSON body for adding a comment.
-buildCommentBody : String -> Version -> String
-buildCommentBody txt ver =
-  "{\"comment\":" ++ encode txt ++ ",\"version\":" ++ show ver.version ++ "}"
+public export
+ToJSON UpdateTaskBody where
+  toJSON b =
+    object $ catMaybes
+      [ omitNothing "subject" b.subject
+      , omitNothing "description" b.description
+      , omitNothing "status" b.status
+      , Just $ jpair "version" b.version
+      ]
+
+||| Request body for changing task status.
+public export
+record ChangeTaskStatusBody where
+  constructor MkChangeTaskStatusBody
+  status  : Bits64
+  version : Version
+
+public export
+ToJSON ChangeTaskStatusBody where
+  toJSON b =
+    object
+      [ jpair "status" b.status
+      , jpair "version" b.version
+      ]
+
+||| Request body for adding a comment to a task.
+public export
+record TaskCommentBody where
+  constructor MkTaskCommentBody
+  comment : String
+  version : Version
+
+public export
+ToJSON TaskCommentBody where
+  toJSON b =
+    object
+      [ jpair "comment" b.comment
+      , jpair "version" b.version
+      ]
 
 parameters {auto env : ApiEnv}
 
@@ -98,34 +118,6 @@ parameters {auto env : ApiEnv}
     resp <- authGet env url
     expectJson resp 200 "get task"
 
-  ||| Build JSON body for creating a task.
-  buildCreateTaskBody :
-       String -> String -> Maybe Nat64Id -> Maybe String -> Maybe String -> Maybe Bits64 -> String
-  buildCreateTaskBody project subject story desc stat ms =
-    "{\"project\":" ++ show (parseBits64 project) ++
-    ",\"subject\":" ++ encode subject ++
-    maybeStoryField story ++
-    maybeDescField desc ++
-    maybeStatusField stat ++
-    maybeMilestoneField ms ++ "}"
-
-  where
-    maybeStoryField : Maybe Nat64Id -> String
-    maybeStoryField Nothing  = ""
-    maybeStoryField (Just s) = ",\"userstory\":" ++ show s.id
-
-    maybeDescField : Maybe String -> String
-    maybeDescField Nothing  = ""
-    maybeDescField (Just d) = ",\"description\":" ++ encode d
-
-    maybeStatusField : Maybe String -> String
-    maybeStatusField Nothing  = ""
-    maybeStatusField (Just s) = ",\"status\":" ++ show (parseBits64 s)
-
-    maybeMilestoneField : Maybe Bits64 -> String
-    maybeMilestoneField Nothing   = ""
-    maybeMilestoneField (Just m) = ",\"milestone\":" ++ show m
-
   ||| Create a new task.
   public export
   createTask :
@@ -138,7 +130,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String Task)
   createTask project subject story desc stat ms = do
-    let body := buildCreateTaskBody project subject story desc stat ms
+    let body := encode $ MkCreateTaskBody (parseBits64 project) subject story desc (map parseBits64 stat) ms
     resp <- authPost env (env.base ++ "/tasks") body
     expectJson resp 201 "create task"
 
@@ -153,7 +145,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String Task)
   updateTask id subj desc stat ver = do
-    let body := buildUpdateBody subj desc stat ver
+    let body := encode $ MkUpdateTaskBody subj desc (map parseBits64 stat) ver
     resp <- authPatch env (env.base ++ "/tasks/" ++ show id.id) body
     expectJson resp 200 "update task"
 
@@ -180,7 +172,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String Task)
   changeTaskStatus id newSt ver = do
-    let body := buildStatusBody newSt ver
+    let body := encode $ MkChangeTaskStatusBody newSt ver
     resp <- authPatch env (env.base ++ "/tasks/" ++ show id.id) body
     expectJson resp 200 "change task status"
 
@@ -194,6 +186,6 @@ parameters {auto env : ApiEnv}
     -> io (Either String String)
   taskComment id txt ver = do
     let url  := env.base ++ "/tasks/" ++ show id.id
-        body := buildCommentBody txt ver
+        body := encode $ MkTaskCommentBody txt ver
     resp <- authPatch env url body
     expectRaw resp 200 "add task comment"

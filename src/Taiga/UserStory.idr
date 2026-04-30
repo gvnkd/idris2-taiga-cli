@@ -3,6 +3,7 @@ module Taiga.UserStory
 
 import JSON.FromJSON
 import JSON.ToJSON
+import JSON.Encoder
 import Model.Common
 import Model.UserStory
 import Taiga.Api
@@ -11,51 +12,43 @@ import Data.List
 
 %language ElabReflection
 
-||| Format a description field for JSON.
+||| Request body for creating a user story.
 public export
-formatStoryDesc : Maybe String -> String
-formatStoryDesc Nothing  = ""
-formatStoryDesc (Just d) = ",\"description\":" ++ encode d
+record CreateStoryBody where
+  constructor MkCreateStoryBody
+  project     : Bits64
+  subject     : String
+  description : Maybe String
+  milestone   : Maybe Nat64Id
 
-||| Format a milestone field for JSON.
 public export
-formatStoryMilestone : Maybe Nat64Id -> String
-formatStoryMilestone Nothing  = ""
-formatStoryMilestone (Just m) = ",\"milestone\":" ++ show m.id
-
-||| Build JSON body for creating a user story.
-public export
-buildCreateStoryBody :
-     (project : String)
-  -> (subject : String)
-  -> (description : Maybe String)
-  -> (milestone : Maybe Nat64Id)
-  -> String
-buildCreateStoryBody project subject desc mstone =
-  "{\"project\":" ++ show (parseBits64 project) ++
-  ",\"subject\":" ++ encode subject ++
-  formatStoryDesc desc ++
-  formatStoryMilestone mstone ++ "}"
-
-||| Build JSON body for updating a user story.
-public export
-buildUpdateStoryBody :
-     (subject : Maybe String)
-  -> (description : Maybe String)
-  -> (milestone : Maybe String)
-  -> (version : Version)
-  -> String
-buildUpdateStoryBody subj desc mstone ver =
-  "{" ++ joined ++ ",\"version\":" ++ show ver.version ++ "}"
-  where
-    fields : List String
-    fields = catMaybes
-      [ map (\s => "\"subject\":" ++ encode s) subj
-      , map (\d => "\"description\":" ++ encode d) desc
-      , map (\m => "\"milestone\":" ++ show (parseBits64 m)) mstone
+ToJSON CreateStoryBody where
+  toJSON b =
+    object $ catMaybes
+      [ Just $ jpair "project" b.project
+      , Just $ jpair "subject" b.subject
+      , omitNothing "description" b.description
+      , omitNothing "milestone" b.milestone
       ]
-    joined : String
-    joined = concat $ intersperse "," fields
+
+||| Request body for updating a user story.
+public export
+record UpdateStoryBody where
+  constructor MkUpdateStoryBody
+  subject     : Maybe String
+  description : Maybe String
+  milestone   : Maybe Bits64
+  version     : Version
+
+public export
+ToJSON UpdateStoryBody where
+  toJSON b =
+    object $ catMaybes
+      [ omitNothing "subject" b.subject
+      , omitNothing "description" b.description
+      , omitNothing "milestone" b.milestone
+      , Just $ jpair "version" b.version
+      ]
 
 parameters {auto env : ApiEnv}
 
@@ -107,7 +100,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String UserStory)
   createStory project subject desc mstone = do
-    let body := buildCreateStoryBody project subject desc mstone
+    let body := encode $ MkCreateStoryBody (parseBits64 project) subject desc mstone
     resp <- authPost env (env.base ++ "/userstories") body
     expectJson resp 201 "create story"
 
@@ -122,7 +115,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String UserStory)
   updateStory id subj desc mstone ver = do
-    let body := buildUpdateStoryBody subj desc mstone ver
+    let body := encode $ MkUpdateStoryBody subj desc (map parseBits64 mstone) ver
     resp <- authPatch env (env.base ++ "/userstories/" ++ show id.id) body
     expectJson resp 200 "update story"
 

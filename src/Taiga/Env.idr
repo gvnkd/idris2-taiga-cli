@@ -8,6 +8,8 @@ module Taiga.Env
 import Data.Bits
 import Data.List
 import JSON.FromJSON
+import JSON.ToJSON
+import JSON.Encoder
 import Taiga.Api
 
 %language ElabReflection
@@ -43,6 +45,19 @@ buildQueryString [] = ""
 buildQueryString kvs =
   let pairs := map (\(k, v) => urlEncode k ++ "=" ++ urlEncode v) kvs
    in "?" ++ concat (intersperse "&" pairs)
+
+||| Omit a JSON object field when its value is `Nothing`.
+||| Must be polymorphic in the encoder type `v` so it can be used
+||| inside `ToJSON.toJSON` implementations (rank-2 type).
+public export
+omitNothing :
+     ToJSON a
+  => Encoder v
+  => (key   : String)
+  -> (value : Maybe a)
+  -> Maybe (String, v)
+omitNothing _ Nothing  = Nothing
+omitNothing key (Just x) = Just (jpair key x)
 
 ||| Parse a string as a Bits64 value.
 public export
