@@ -61,13 +61,11 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String (List MilestoneSummary))
   listMilestones project page pageSize = do
-    let qs  := buildQueryString $
-                  ("project", project) ::
-                  catMaybes
-                    [ map (\p => ("page", show p)) page
-                    , map (\s => ("page_size", show s)) pageSize
-                    ]
-        url := env.base ++ "/milestones" ++ qs
+    let opts   := concat $ catMaybes
+                     [ map (\p => [("page", show p)]) page
+                     , map (\s => [("page_size", show s)]) pageSize ]
+        params := [("project", project)] ++ opts
+        url    := buildUrl ["milestones"] params env.base
     resp <- authGet env url
     expectJson resp 200 "list milestones"
 
@@ -82,7 +80,8 @@ parameters {auto env : ApiEnv}
     -> io (Either String Milestone)
   createMilestone project name estStart estFinish = do
     let body := encode $ MkCreateMilestoneBody (parseBits64 project) name estStart estFinish
-    resp <- authPost env (env.base ++ "/milestones") body
+        url  := buildUrl ["milestones"] [] env.base
+    resp <- authPost env url body
     expectJson resp 201 "create milestone"
 
   ||| Update an existing milestone (OCC-aware).
@@ -97,5 +96,6 @@ parameters {auto env : ApiEnv}
     -> io (Either String Milestone)
   updateMilestone id name estStart estFinish ver = do
     let body := encode $ MkUpdateMilestoneBody name estStart estFinish ver
-    resp <- authPatch env (env.base ++ "/milestones/" ++ showId id) body
+        url  := buildUrl ["milestones", showId id] [] env.base
+    resp <- authPatch env url body
     expectJson resp 200 "update milestone"

@@ -61,13 +61,11 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String (List EpicSummary))
   listEpics project page pageSize = do
-    let qs  := buildQueryString $
-                  ("project", project) ::
-                  catMaybes
-                    [ map (\p => ("page", show p)) page
-                    , map (\s => ("page_size", show s)) pageSize
-                    ]
-        url := env.base ++ "/epics" ++ qs
+    let opts   := concat $ catMaybes
+                     [ map (\p => [("page", show p)]) page
+                     , map (\s => [("page_size", show s)]) pageSize ]
+        params := [("project", project)] ++ opts
+        url    := buildUrl ["epics"] params env.base
     resp <- authGet env url
     expectJson resp 200 "list epics"
 
@@ -78,7 +76,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String Epic)
   getEpic id = do
-    let url := env.base ++ "/epics/" ++ showId id
+    let url := buildUrl ["epics", showId id] [] env.base
     resp <- authGet env url
     expectJson resp 200 "get epic"
 
@@ -93,7 +91,8 @@ parameters {auto env : ApiEnv}
     -> io (Either String Epic)
   createEpic project subject desc stat = do
     let body := encode $ MkCreateEpicBody (parseBits64 project) subject desc (map parseBits64 stat)
-    resp <- authPost env (env.base ++ "/epics") body
+        url  := buildUrl ["epics"] [] env.base
+    resp <- authPost env url body
     expectJson resp 201 "create epic"
 
   ||| Update an existing epic (OCC-aware).
@@ -108,7 +107,8 @@ parameters {auto env : ApiEnv}
     -> io (Either String Epic)
   updateEpic id subj desc stat ver = do
     let body := encode $ MkUpdateEpicBody subj desc (map parseBits64 stat) ver
-    resp <- authPatch env (env.base ++ "/epics/" ++ showId id) body
+        url  := buildUrl ["epics", showId id] [] env.base
+    resp <- authPatch env url body
     expectJson resp 200 "update epic"
 
   ||| Delete an epic.
@@ -118,6 +118,6 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String ())
   deleteEpic id = do
-    let url := env.base ++ "/epics/" ++ showId id
+    let url := buildUrl ["epics", showId id] [] env.base
     resp <- authDelete env url
     expectOk resp 204 "delete epic"

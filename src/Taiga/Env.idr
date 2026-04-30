@@ -65,6 +65,21 @@ public export
 showId : Nat64Id -> String
 showId n = show n.id
 
+||| Build an API URL from base, path segments, and optional query params.
+||| Eliminates all manual string concatenation in endpoint code.
+public export
+buildUrl : List String -> List (String, String) -> String -> String
+buildUrl segments params base =
+  let path   := concat $ map (\s => "/" ++ s) segments
+      query  := buildQueryString params
+   in base ++ path ++ query
+
+||| Convert a Maybe value to a list of one element or empty.
+||| Used with catMaybes to build optional query param lists.
+public export
+maybeParam : (String, String) -> List (String, String)
+maybeParam p = [p]
+
 ||| Parse a string as a Bits64 value.
 public export
 parseBits64 : String -> Bits64

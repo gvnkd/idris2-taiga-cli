@@ -51,7 +51,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String (List HistoryEntry))
   listHistory entity eid =
-    fetchHistoryList (env.base ++ "/history/" ++ entity ++ "/" ++ showId eid)
+    fetchHistoryList (buildUrl ["history", entity, showId eid] [] env.base)
 
   ||| Send a PATCH and return success/error string.
   patchUrl :
@@ -80,7 +80,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String String)
   addComment entity eid txt ver = do
-    let url := env.base ++ "/" ++ entityPlural entity ++ "/" ++ showId eid
+    let url  := buildUrl [entityPlural entity, showId eid] [] env.base
         body := encode $ MkCommentBody txt ver
     resp <- authPatch env url body
     expectRaw resp 200 "add comment"

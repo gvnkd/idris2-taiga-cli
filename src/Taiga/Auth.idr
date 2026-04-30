@@ -43,7 +43,8 @@ login :
   -> io (Either String Token)
 login base creds = do
    let body := encode $ MkLoginBody "normal" creds.username creds.password
-   resp <- httpPost (base ++ "/auth") Nothing body
+       url  := buildUrl ["auth"] [] base
+   resp <- httpPost url Nothing body
    expectJson resp 200 "login"
 
 ||| Request body for token refresh endpoint.
@@ -66,7 +67,8 @@ refreshToken :
   -> io (Either String Token)
 refreshToken base refreshTok = do
    let body := encode $ MkRefreshBody refreshTok
-   resp <- httpPost (base ++ "/auth/refresh") Nothing body
+       url  := buildUrl ["auth", "refresh"] [] base
+   resp <- httpPost url Nothing body
    expectJson resp 200 "token refresh"
 
 ||| Get the profile of the currently authenticated user.
@@ -77,6 +79,7 @@ me :
   -> (token : String)
   -> io (Either String User)
 me base token = do
-   resp <- httpGet (base ++ "/users/me") (Just token)
+   let url := buildUrl ["users", "me"] [] base
+   resp <- httpGet url (Just token)
    expectJson resp 200 "get user profile"
 

@@ -65,13 +65,11 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String (List IssueSummary))
   listIssues project page pageSize = do
-    let qs  := buildQueryString $
-                  ("project", project) ::
-                  catMaybes
-                    [ map (\p => ("page", show p)) page
-                    , map (\s => ("page_size", show s)) pageSize
-                    ]
-        url := env.base ++ "/issues" ++ qs
+    let opts   := concat $ catMaybes
+                     [ map (\p => [("page", show p)]) page
+                     , map (\s => [("page_size", show s)]) pageSize ]
+        params := [("project", project)] ++ opts
+        url    := buildUrl ["issues"] params env.base
     resp <- authGet env url
     expectJson resp 200 "list issues"
 
@@ -82,7 +80,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String Issue)
   getIssue id = do
-    let url := env.base ++ "/issues/" ++ showId id
+    let url := buildUrl ["issues", showId id] [] env.base
     resp <- authGet env url
     expectJson resp 200 "get issue"
 
@@ -99,7 +97,8 @@ parameters {auto env : ApiEnv}
     -> io (Either String Issue)
   createIssue project subject desc prio sev itype = do
     let body := encode $ MkCreateIssueBody (parseBits64 project) subject desc prio sev itype
-    resp <- authPost env (env.base ++ "/issues") body
+        url  := buildUrl ["issues"] [] env.base
+    resp <- authPost env url body
     expectJson resp 201 "create issue"
 
   ||| Update an existing issue (OCC-aware).
@@ -114,7 +113,8 @@ parameters {auto env : ApiEnv}
     -> io (Either String Issue)
   updateIssue id subj desc itype ver = do
     let body := encode $ MkUpdateIssueBody subj desc itype ver
-    resp <- authPatch env (env.base ++ "/issues/" ++ showId id) body
+        url  := buildUrl ["issues", showId id] [] env.base
+    resp <- authPatch env url body
     expectJson resp 200 "update issue"
 
   ||| Delete an issue.
@@ -124,6 +124,6 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String ())
   deleteIssue id = do
-    let url := env.base ++ "/issues/" ++ showId id
+    let url := buildUrl ["issues", showId id] [] env.base
     resp <- authDelete env url
     expectOk resp 204 "delete issue"

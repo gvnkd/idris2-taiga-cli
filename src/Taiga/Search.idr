@@ -19,8 +19,8 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String String)
   search project text = do
-    let qs := buildQueryString [("project", project), ("text", text)]
-        url := env.base ++ "/search" ++ qs
+    let params := [("project", project), ("text", text)]
+        url    := buildUrl ["search"] params env.base
     resp <- authGet env url
     expectRaw resp 200 "search"
 
@@ -32,7 +32,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String String)
   resolve project ref = do
-    let qs := buildQueryString [("project", project), ("ref", ref)]
-        url := env.base ++ "/resolver" ++ qs
+    let params := [("project", project), ("ref", ref)]
+        url    := buildUrl ["resolver"] params env.base
     resp <- authGet env url
     expectRaw resp 200 "resolve"

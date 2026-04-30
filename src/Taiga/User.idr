@@ -19,7 +19,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String (List UserSummary))
   listUsers project = do
-    let url := env.base ++ "/users" ++ buildQueryString [("project", project)]
+    let url := buildUrl ["users"] [("project", project)] env.base
     resp <- authGet env url
     expectJson resp 200 "list users"
 
@@ -30,7 +30,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String (List Model.User.Membership))
   listMemberships project = do
-    let url := env.base ++ "/memberships" ++ buildQueryString [("project", project)]
+    let url := buildUrl ["memberships"] [("project", project)] env.base
     resp <- authGet env url
     expectJson resp 200 "list memberships"
 
@@ -41,6 +41,6 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String (List Model.User.Role))
   listRoles project = do
-    let url := env.base ++ "/roles" ++ buildQueryString [("project", project)]
+    let url := buildUrl ["roles"] [("project", project)] env.base
     resp <- authGet env url
     expectJson resp 200 "list roles"
