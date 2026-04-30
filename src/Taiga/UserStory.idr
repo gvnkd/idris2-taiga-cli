@@ -11,19 +11,6 @@ import Data.List
 
 %language ElabReflection
 
-||| Build a query string from key-value pairs.
-public export
-buildQueryString : List (String, String) -> String
-buildQueryString [] = ""
-buildQueryString kvs =
-  let pairs := map (\(k, v) => k ++ "=" ++ v) kvs
-   in "?" ++ concat (intersperse "&" pairs)
-
-||| Parse string as Bits64 for JSON project field.
-public export
-parseProjectBits : String -> Bits64
-parseProjectBits = cast
-
 public export
 formatStoryDesc : Maybe String -> String
 formatStoryDesc Nothing  = ""
@@ -43,7 +30,7 @@ buildCreateStoryBody :
   -> (milestone : Maybe Nat64Id)
   -> String
 buildCreateStoryBody project subject desc mstone =
-  "{\"project\":" ++ show (parseProjectBits project) ++
+  "{\"project\":" ++ show (parseBits64 project) ++
   ",\"subject\":" ++ encode subject ++
   formatStoryDesc desc ++
   formatStoryMilestone mstone ++ "}"
@@ -63,7 +50,7 @@ buildUpdateStoryBody subj desc mstone ver =
     fields = catMaybes
       [ case subj of { Nothing => Nothing; Just s => Just (",\"subject\":" ++ encode s) }
       , case desc of { Nothing => Nothing; Just d => Just (",\"description\":" ++ encode d) }
-      , case mstone of { Nothing => Nothing; Just m => Just (",\"milestone\":" ++ show (parseProjectBits m)) }
+      , case mstone of { Nothing => Nothing; Just m => Just (",\"milestone\":" ++ show (parseBits64 m)) }
       ]
 
 parameters {auto env : ApiEnv}

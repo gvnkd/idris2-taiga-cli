@@ -23,13 +23,13 @@ login :
    -> (creds : Credentials)
    -> io (Either String Token)
 login base creds
-  = do let body := "{\"type\":\"normal\",\"username\":\"" ++ creds.username ++ "\",\"password\":\"" ++ creds.password ++ "\"}"
-       resp <- httpPost (base ++ "/auth") Nothing body
-       case resp.status.code of
-         200 => case decodeEither resp.body of
-                  Left  err  => pure $ Left err
-                  Right tok => pure $ Right tok
-         _     => pure $ Left ("login failed with status " ++ show resp.status.code)
+   = let body := "{\"type\":\"normal\",\"username\":\"" ++ creds.username ++ "\",\"password\":\"" ++ creds.password ++ "\"}"
+     in do resp <- httpPost (base ++ "/auth") Nothing body
+           case resp.status.code of
+             200 => case decodeEither resp.body of
+                      Left  err  => pure $ Left err
+                      Right tok => pure $ Right tok
+             _     => pure $ Left ("login failed with status " ++ show resp.status.code)
 
 ||| Refresh an expiring token using its refresh counterpart.
 ||| Sends {"refresh":"…"} to POST /auth/refresh.
@@ -40,13 +40,13 @@ refreshToken :
    -> (refresh : String)
    -> io (Either String Token)
 refreshToken base refreshTok
-  = do let body := "{\"refresh\":\"" ++ refreshTok ++ "\""
-       resp <- httpPost (base ++ "/auth/refresh") Nothing body
-       case resp.status.code of
-         200 => case decodeEither resp.body of
-                  Left  err  => pure $ Left err
-                  Right tok => pure $ Right tok
-         _     => pure $ Left ("token refresh failed with status " ++ show resp.status.code)
+   = let body := "{\"refresh\":\"" ++ refreshTok ++ "\"}"
+     in do resp <- httpPost (base ++ "/auth/refresh") Nothing body
+           case resp.status.code of
+             200 => case decodeEither resp.body of
+                      Left  err  => pure $ Left err
+                      Right tok => pure $ Right tok
+             _     => pure $ Left ("token refresh failed with status " ++ show resp.status.code)
 
 ||| Get the profile of the currently authenticated user.
 public export
@@ -56,7 +56,7 @@ me :
   -> (token : String)
   -> io (Either String User)
 me base token
-  = do resp <- httpGet (base ++ "/user") (Just token)
+  = do resp <- httpGet (base ++ "/users/me") (Just token)
        case decodeEither resp.body of
          Left err  => pure $ Left err
          Right u   => pure $ Right u

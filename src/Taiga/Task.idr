@@ -11,17 +11,6 @@ import Data.List
 
 %language ElabReflection
 
-||| Build a query string from key-value pairs.
-buildQueryString : List (String, String) -> String
-buildQueryString [] = ""
-buildQueryString kvs =
-  let pairs := map (\(k, v) => k ++ "=" ++ v) kvs
-   in "?" ++ concat (intersperse "&" pairs)
-
-||| Parse a string as a Bits64 value.
-parseBits64 : String -> Bits64
-parseBits64 = cast
-
 ||| Build JSON body for creating a task.
 buildCreateBody :
      (project : String)
@@ -113,13 +102,14 @@ parameters {auto env : ApiEnv}
 
   ||| Build JSON body for creating a task.
   buildCreateTaskBody :
-       String -> String -> Maybe Nat64Id -> Maybe String -> Maybe String -> String
-  buildCreateTaskBody project subject story desc stat =
+       String -> String -> Maybe Nat64Id -> Maybe String -> Maybe String -> Maybe Bits64 -> String
+  buildCreateTaskBody project subject story desc stat ms =
     "{\"project\":" ++ show (parseBits64 project) ++
     ",\"subject\":" ++ encode subject ++
     case story of { Nothing => ""; Just s => ",\"userstory\":" ++ show s.id } ++
     case desc of  { Nothing => ""; Just d => ",\"description\":" ++ encode d } ++
     case stat of  { Nothing => ""; Just s => ",\"status\":" ++ show (parseBits64 s) } ++
+    case ms of    { Nothing => ""; Just m => ",\"milestone\":" ++ show m } ++
     "}"
 
   ||| Create a new task.
@@ -130,10 +120,11 @@ parameters {auto env : ApiEnv}
     -> (story : Maybe Nat64Id)
     -> (description : Maybe String)
     -> (status : Maybe String)
+    -> (milestone : Maybe Bits64)
     -> {auto _ : HasIO io}
     -> io (Either String Task)
-  createTask project subject story desc stat = do
-    let body := buildCreateTaskBody project subject story desc stat
+  createTask project subject story desc stat ms = do
+    let body := buildCreateTaskBody project subject story desc stat ms
     resp <- authPost env (env.base ++ "/tasks") body
     pure $ case resp.status.code of
              201 => case decodeEither resp.body of

@@ -87,12 +87,15 @@ runCLI : List String -> IO ()
 runCLI rawArgs =
   case parseArgs rawArgs of
     Left err => cliError err
-    Right res => case res.cli_args of
-       ArgStdin => runAgent
-       ArgHelp  => putStrLn usage
-       _        => do
-         let base := resolveBaseUrl res.base_url
-         putStrLn "CLI args parsed successfully"
+    Right res =>
+      let base    := resolveBaseUrl res.base_url
+          command := toCommand res.cli_args
+       in case res.cli_args of
+            ArgStdin => runAgent
+            ArgHelp  => putStrLn usage
+            _        => do
+              resp <- dispatchCommand command Nothing base
+              cliPrintResponse resp
 
 ||| Top-level entry point.
 |||

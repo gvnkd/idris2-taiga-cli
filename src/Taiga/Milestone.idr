@@ -11,14 +11,6 @@ import Data.List
 
 %language ElabReflection
 
-||| Build a query string from key-value pairs.
-public export
-buildQueryString : List (String, String) -> String
-buildQueryString [] = ""
-buildQueryString kvs =
-  let pairs := map (\(k, v) => k ++ "=" ++ v) kvs
-   in "?" ++ concat (intersperse "&" pairs)
-
 parameters {auto env : ApiEnv}
 
   ||| List milestones in a project.
@@ -43,10 +35,6 @@ parameters {auto env : ApiEnv}
                       Left  err  => Left err
                       Right ms  => Right ms
              _     => Left ("list milestones failed with status " ++ show resp.status.code)
-
-  ||| Parse string as Bits64.
-  parseBits64 : String -> Bits64
-  parseBits64 = cast
 
   ||| Build JSON body for creating a milestone.
   buildCreateMilestoneBody : String -> String -> String -> String -> String

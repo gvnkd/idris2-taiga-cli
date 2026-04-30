@@ -19,7 +19,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String String)
   search project text = do
-    let url := env.base ++ "/global_search?project=" ++ project ++ "&text=" ++ text
+    let url := env.base ++ "/search?project=" ++ project ++ "&text=" ++ text
     resp <- authGet env url
     pure $ case resp.status.code of
              200 => Right resp.body
@@ -33,7 +33,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String String)
   resolve project ref = do
-    let url := env.base ++ "/resolve?project=" ++ project ++ "&ref=" ++ ref
+    let url := env.base ++ "/resolver?project=" ++ project ++ "&ref=" ++ ref
     resp <- authGet env url
     pure $ case resp.status.code of
              200 => Right resp.body

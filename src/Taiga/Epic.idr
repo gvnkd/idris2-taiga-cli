@@ -11,27 +11,15 @@ import Data.List
 
 %language ElabReflection
 
-||| Build a query string from key-value pairs.
-public export
-buildQueryString : List (String, String) -> String
-buildQueryString [] = ""
-buildQueryString kvs =
-  let pairs := map (\(k, v) => k ++ "=" ++ v) kvs
-   in "?" ++ concat (intersperse "&" pairs)
-
 ||| Format a description field for JSON.
 formatEpicDesc : Maybe String -> String
 formatEpicDesc Nothing  = ""
 formatEpicDesc (Just d) = ",\"description\":" ++ encode d
 
-||| Parse string as Bits64 for JSON status field.
-parseStatusBits : String -> Bits64
-parseStatusBits = cast
-
 ||| Format a status field for JSON.
 formatEpicStatus : Maybe String -> String
 formatEpicStatus Nothing  = ""
-formatEpicStatus (Just s) = ",\"status\":" ++ show (parseStatusBits s)
+formatEpicStatus (Just s) = ",\"status\":" ++ show (parseBits64 s)
 
 ||| Build JSON body for creating an epic.
 buildCreateEpicBody :
@@ -41,7 +29,7 @@ buildCreateEpicBody :
   -> (status : Maybe String)
   -> String
 buildCreateEpicBody project subject desc stat =
-  "{\"project\":" ++ show (parseStatusBits project) ++
+  "{\"project\":" ++ show (parseBits64 project) ++
   ",\"subject\":" ++ encode subject ++
   formatEpicDesc desc ++
   formatEpicStatus stat ++ "}"
@@ -60,7 +48,7 @@ buildUpdateEpicBody subj desc stat ver =
     fields = catMaybes
       [ case subj of { Nothing => Nothing; Just s => Just (",\"subject\":" ++ encode s) }
       , case desc of { Nothing => Nothing; Just d => Just (",\"description\":" ++ encode d) }
-      , case stat of { Nothing => Nothing; Just s => Just (",\"status\":" ++ show (parseStatusBits s)) }
+      , case stat of { Nothing => Nothing; Just s => Just (",\"status\":" ++ show (parseBits64 s)) }
       ]
 
 parameters {auto env : ApiEnv}

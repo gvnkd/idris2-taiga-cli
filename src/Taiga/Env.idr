@@ -5,9 +5,24 @@
 ||| function signature.
 module Taiga.Env
 
+import Data.Bits
+import Data.List
 import Taiga.Api
 
 %language ElabReflection
+
+||| Build a query string from key-value pairs.
+public export
+buildQueryString : List (String, String) -> String
+buildQueryString [] = ""
+buildQueryString kvs =
+  let pairs := map (\(k, v) => k ++ "=" ++ v) kvs
+   in "?" ++ concat (intersperse "&" pairs)
+
+||| Parse a string as a Bits64 value.
+public export
+parseBits64 : String -> Bits64
+parseBits64 = cast
 
 ||| Holds the base URL and bearer token for all API calls.
 public export

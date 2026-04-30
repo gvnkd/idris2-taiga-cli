@@ -11,14 +11,6 @@ import Data.List
 
 %language ElabReflection
 
-||| Build a query string from key-value pairs.
-public export
-buildQueryString : List (String, String) -> String
-buildQueryString [] = ""
-buildQueryString kvs =
-  let pairs := map (\(k, v) => k ++ "=" ++ v) kvs
-   in "?" ++ concat (intersperse "&" pairs)
-
 parameters {auto env : ApiEnv}
 
   ||| List visible projects.

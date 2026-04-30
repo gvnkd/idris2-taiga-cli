@@ -44,6 +44,198 @@ record RefreshArgs where
 
 %runElab derive "RefreshArgs" [Show,FromJSON]
 
+||| --- Argument records for agent-mode command parsing ---
+
+record ListProjectsArgs where
+  constructor MkListProjectsArgs
+  member : Maybe String
+%runElab derive "ListProjectsArgs" [Show,FromJSON]
+
+record GetProjectArgs where
+  constructor MkGetProjectArgs
+  id : Maybe Nat64Id
+  slug : Maybe Slug
+%runElab derive "GetProjectArgs" [Show,FromJSON]
+
+record StringArgs where
+  constructor MkStringArgs
+  project : String
+%runElab derive "StringArgs" [Show,FromJSON]
+
+record MaybeStringArgs where
+  constructor MkMaybeStringArgs
+  project : Maybe String
+%runElab derive "MaybeStringArgs" [Show,FromJSON]
+
+record MaybeNat64Args where
+  constructor MkMaybeNat64Args
+  id : Maybe Nat64Id
+%runElab derive "MaybeNat64Args" [Show,FromJSON]
+
+record Nat64Args where
+  constructor MkNat64Args
+  id : Nat64Id
+%runElab derive "Nat64Args" [Show,FromJSON]
+
+record SearchArgs where
+  constructor MkSearchArgs
+  project : String
+  text : String
+%runElab derive "SearchArgs" [Show,FromJSON]
+
+record ResolveArgs where
+  constructor MkResolveArgs
+  project : String
+  ref : String
+%runElab derive "ResolveArgs" [Show,FromJSON]
+
+record CreateEpicArgs where
+  constructor MkCreateEpicArgs
+  project : String
+  subject : String
+  description : Maybe String
+  status : Maybe String
+%runElab derive "CreateEpicArgs" [Show,FromJSON]
+
+record UpdateEpicArgs where
+  constructor MkUpdateEpicArgs
+  id : Nat64Id
+  subject : Maybe String
+  description : Maybe String
+  status : Maybe String
+  version : Version
+%runElab derive "UpdateEpicArgs" [Show,FromJSON]
+
+record CreateStoryArgs where
+  constructor MkCreateStoryArgs
+  project : String
+  subject : String
+  description : Maybe String
+  milestone : Maybe Nat64Id
+%runElab derive "CreateStoryArgs" [Show,FromJSON]
+
+record UpdateStoryArgs where
+  constructor MkUpdateStoryArgs
+  id : Nat64Id
+  subject : Maybe String
+  description : Maybe String
+  milestone : Maybe String
+  version : Version
+%runElab derive "UpdateStoryArgs" [Show,FromJSON]
+
+record CreateTaskArgs where
+  constructor MkCreateTaskArgs
+  project : String
+  subject : String
+  story : Maybe Nat64Id
+  description : Maybe String
+  status : Maybe String
+  milestone : Maybe Bits64
+
+%runElab derive "CreateTaskArgs" [Show,FromJSON]
+
+record UpdateTaskArgs where
+  constructor MkUpdateTaskArgs
+  id : Nat64Id
+  subject : Maybe String
+  description : Maybe String
+  status : Maybe String
+  version : Version
+%runElab derive "UpdateTaskArgs" [Show,FromJSON]
+
+record ChangeTaskStatusArgs where
+  constructor MkChangeTaskStatusArgs
+  id : Nat64Id
+  status : Bits64
+  version : Version
+%runElab derive "ChangeTaskStatusArgs" [Show,FromJSON]
+
+record TaskCommentArgs where
+  constructor MkTaskCommentArgs
+  id : Nat64Id
+  text : String
+  version : Version
+%runElab derive "TaskCommentArgs" [Show,FromJSON]
+
+record CreateIssueArgs where
+  constructor MkCreateIssueArgs
+  project : String
+  subject : String
+  description : Maybe String
+  priority : Maybe String
+  severity : Maybe String
+  type : Maybe String
+%runElab derive "CreateIssueArgs" [Show,FromJSON]
+
+record UpdateIssueArgs where
+  constructor MkUpdateIssueArgs
+  id : Nat64Id
+  subject : Maybe String
+  description : Maybe String
+  type : Maybe String
+  version : Version
+%runElab derive "UpdateIssueArgs" [Show,FromJSON]
+
+record CreateWikiArgs where
+  constructor MkCreateWikiArgs
+  project : String
+  slug : String
+  content : String
+%runElab derive "CreateWikiArgs" [Show,FromJSON]
+
+record UpdateWikiArgs where
+  constructor MkUpdateWikiArgs
+  id : Nat64Id
+  content : Maybe String
+  slug : Maybe String
+  version : Version
+%runElab derive "UpdateWikiArgs" [Show,FromJSON]
+
+record EntityIdArgs where
+  constructor MkEntityIdArgs
+  entity : String
+  id : Nat64Id
+%runElab derive "EntityIdArgs" [Show,FromJSON]
+
+record CommentArgs where
+  constructor MkCommentArgs
+  entity : String
+  id : Nat64Id
+  text : String
+%runElab derive "CommentArgs" [Show,FromJSON]
+
+record EditCommentArgs where
+  constructor MkEditCommentArgs
+  entity : String
+  id : Nat64Id
+  commentId : Nat64Id
+  text : String
+%runElab derive "EditCommentArgs" [Show,FromJSON]
+
+record DeleteCommentArgs where
+  constructor MkDeleteCommentArgs
+  entity : String
+  id : Nat64Id
+  commentId : Nat64Id
+%runElab derive "DeleteCommentArgs" [Show,FromJSON]
+
+record CreateMilestoneArgs where
+  constructor MkCreateMilestoneArgs
+  project : String
+  name : String
+  estimated_start : String
+  estimated_finish : String
+%runElab derive "CreateMilestoneArgs" [Show,FromJSON]
+
+record UpdateMilestoneArgs where
+  constructor MkUpdateMilestoneArgs
+  id : Nat64Id
+  name : Maybe String
+  estimated_start : Maybe String
+  estimated_finish : Maybe String
+  version : Version
+%runElab derive "UpdateMilestoneArgs" [Show,FromJSON]
+
 ||| Sum type of all supported commands.
 public export
 data Command : Type where
@@ -83,7 +275,7 @@ data Command : Type where
   CmdDeleteStory : Nat64Id -> Command
 
   -- Write / mutation commands — tasks
-  CmdCreateTask     : String -> String -> Maybe Nat64Id -> Maybe String -> Maybe String -> Command
+  CmdCreateTask     : String -> String -> Maybe Nat64Id -> Maybe String -> Maybe String -> Maybe Bits64 -> Command
   CmdUpdateTask     : Nat64Id -> Maybe String -> Maybe String -> Maybe String -> Version -> Command
   CmdDeleteTask     : Nat64Id -> Command
   CmdWatchTask      : Nat64Id -> Command
@@ -113,751 +305,278 @@ data Command : Type where
 %runElab derive "Command" [Show,ToJSON,FromJSON]
 
 ||| Helper: wrap an Either result in a Response.
-wrapResult : (a -> String) -> Either String a -> Response
+private wrapResult : (a -> String) -> Either String a -> Response
 wrapResult encodeFn (Left err)  = Err $ MkErrorResponse False "api_error" err
 wrapResult encodeFn (Right val) = Ok $ MkSuccess True (encodeFn val)
 
-||| Dispatch CmdLogin: authenticate and return token.
-dispatchLogin :
+||| Helper: dispatch login (no auth needed, just base URL).
+private dispatchLogin' :
       HasIO io
-   => (creds : Credentials)
-   -> (base : Maybe String)
-   -> io Response
-dispatchLogin _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchLogin creds (Just baseUrl)
-  = Prelude.map (wrapResult encode) (login baseUrl creds)
+   => Credentials -> Maybe String -> io Response
+dispatchLogin' _ Nothing =
+  pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
+dispatchLogin' creds (Just baseUrl) =
+  Prelude.map (wrapResult encode) (login baseUrl creds)
 
-||| Dispatch CmdRefresh: refresh expiring token.
-dispatchRefresh :
+||| Helper: dispatch refresh (no auth needed, just base URL).
+private dispatchRefresh' :
       HasIO io
-   => (refreshTok : String)
-   -> (base : Maybe String)
-   -> io Response
-dispatchRefresh _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchRefresh refreshTok (Just baseUrl)
-  = Prelude.map (wrapResult encode) (refreshToken baseUrl refreshTok)
+   => String -> Maybe String -> io Response
+dispatchRefresh' _ Nothing =
+  pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
+dispatchRefresh' refreshTok (Just baseUrl) =
+  Prelude.map (wrapResult encode) (refreshToken baseUrl refreshTok)
 
-||| Dispatch CmdMe: fetch current user profile.
-dispatchMe :
-      HasIO io
-   => (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchMe Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchMe _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchMe (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (me baseUrl token.auth_token)
+||| Helper: decode JSON string into type a, then construct Command.
+private parseCmdArgs : FromJSON a => (a -> Command) -> String -> Either String Command
+parseCmdArgs fn = Prelude.map fn . decodeEither
 
-||| Dispatch CmdWatchTask: fetch task details.
-dispatchWatchTask :
-      HasIO io
-   => (taskId : Nat64Id)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchWatchTask _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchWatchTask _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchWatchTask taskId (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (getTask @{env} taskId)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkRefreshCmd        : RefreshArgs -> Command
+mkRefreshCmd r              = CmdRefresh r.refresh
 
-||| Dispatch CmdChangeTaskStatus: change the status of a task.
-dispatchChangeTaskStatus :
-      HasIO io
-   => (taskId : Nat64Id)
-   -> (newStatus : Bits64)
-   -> (ver : Version)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchChangeTaskStatus _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchChangeTaskStatus _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchChangeTaskStatus taskId newSt ver (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (changeTaskStatus @{env} taskId newSt ver)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkListProjectsCmd   : ListProjectsArgs -> Command
+mkListProjectsCmd a         = CmdListProjects a.member
 
-||| Dispatch CmdTaskComment: add a comment to a task.
-dispatchTaskComment :
-      HasIO io
-   => (taskId : Nat64Id)
-   -> (text : String)
-   -> (ver : Version)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchTaskComment _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchTaskComment _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchTaskComment taskId txt ver (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult (JSON.ToJSON.encode)) (taskComment @{env} taskId txt ver)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkGetProjectCmd     : GetProjectArgs -> Command
+mkGetProjectCmd a           = CmdGetProject a.id a.slug
 
-||| Dispatch CmdListProjects: list projects the user can access.
-dispatchListProjects :
-      HasIO io
-   => (member : Maybe String)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchListProjects _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchListProjects _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchListProjects member (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (listProjects @{env} member Nothing Nothing)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkListEpicsCmd      : StringArgs -> Command
+mkListEpicsCmd a            = CmdListEpics a.project
 
-||| Dispatch CmdGetProject: get project by ID or slug.
-dispatchGetProject :
-      HasIO io
-   => (id : Maybe Nat64Id)
-   -> (slug : Maybe Slug)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchGetProject _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchGetProject _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchGetProject (Just id) _ (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (getProjectById @{env} id)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
-dispatchGetProject _ (Just slug) (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (getProjectBySlug @{env} slug)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
-dispatchGetProject _ _ _ _ = pure $ Err $ MkErrorResponse False "bad_request" "Must provide id or slug"
+private mkGetEpicCmd        : MaybeNat64Args -> Command
+mkGetEpicCmd a              = CmdGetEpic a.id
 
-||| Dispatch CmdListEpics: list epics in a project.
-dispatchListEpics :
-      HasIO io
-   => (project : String)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchListEpics _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchListEpics _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchListEpics project (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (listEpics @{env} project Nothing Nothing)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkListStoriesCmd    : StringArgs -> Command
+mkListStoriesCmd a          = CmdListStories a.project
 
-||| Dispatch CmdGetEpic: get epic by ID.
-dispatchGetEpic :
-      HasIO io
-   => (id : Maybe Nat64Id)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchGetEpic Nothing _ _ = pure $ Err $ MkErrorResponse False "bad_request" "No epic ID provided"
-dispatchGetEpic _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchGetEpic _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchGetEpic (Just id) (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (getEpic @{env} id)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkGetStoryCmd       : MaybeNat64Args -> Command
+mkGetStoryCmd a             = CmdGetStory a.id
 
-||| Dispatch CmdListStories: list user stories in a project.
-dispatchListStories :
-      HasIO io
-   => (project : String)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchListStories _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchListStories _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchListStories project (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (listStories @{env} project Nothing Nothing)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkListTasksCmd      : MaybeStringArgs -> Command
+mkListTasksCmd a            = CmdListTasks a.project
 
-||| Dispatch CmdGetStory: get user story by ID.
-dispatchGetStory :
-      HasIO io
-   => (id : Maybe Nat64Id)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchGetStory Nothing _ _ = pure $ Err $ MkErrorResponse False "bad_request" "No story ID provided"
-dispatchGetStory _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchGetStory _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchGetStory (Just id) (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (getStory @{env} id)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkGetTaskCmd        : MaybeNat64Args -> Command
+mkGetTaskCmd a              = CmdGetTask a.id
 
-||| Dispatch CmdListTasks: list tasks.
-dispatchListTasks :
-      HasIO io
-   => (project : Maybe String)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchListTasks _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchListTasks _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchListTasks project (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (listTasks @{env} project Nothing Nothing Nothing)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkListIssuesCmd     : StringArgs -> Command
+mkListIssuesCmd a           = CmdListIssues a.project
 
-||| Dispatch CmdGetTask: get task by ID.
-dispatchGetTask :
-      HasIO io
-   => (id : Maybe Nat64Id)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchGetTask Nothing _ _ = pure $ Err $ MkErrorResponse False "bad_request" "No task ID provided"
-dispatchGetTask _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchGetTask _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchGetTask (Just id) (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (getTask @{env} id)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkGetIssueCmd       : MaybeNat64Args -> Command
+mkGetIssueCmd a             = CmdGetIssue a.id
 
-||| Dispatch CmdListIssues: list issues in a project.
-dispatchListIssues :
-      HasIO io
-   => (project : String)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchListIssues _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchListIssues _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchListIssues project (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (listIssues @{env} project Nothing Nothing)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkListWikiCmd       : StringArgs -> Command
+mkListWikiCmd a             = CmdListWiki a.project
 
-||| Dispatch CmdGetIssue: get issue by ID.
-dispatchGetIssue :
-      HasIO io
-   => (id : Maybe Nat64Id)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchGetIssue Nothing _ _ = pure $ Err $ MkErrorResponse False "bad_request" "No issue ID provided"
-dispatchGetIssue _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchGetIssue _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchGetIssue (Just id) (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (getIssue @{env} id)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkGetWikiCmd        : MaybeNat64Args -> Command
+mkGetWikiCmd a              = CmdGetWiki a.id
 
-||| Dispatch CmdListWiki: list wiki pages in a project.
-dispatchListWiki :
-      HasIO io
-   => (project : String)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchListWiki _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchListWiki _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchListWiki project (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (listWiki @{env} project Nothing Nothing)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkListMilestonesCmd : StringArgs -> Command
+mkListMilestonesCmd a       = CmdListMilestones a.project
 
-||| Dispatch CmdGetWiki: get wiki page by ID.
-dispatchGetWiki :
-      HasIO io
-   => (id : Maybe Nat64Id)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchGetWiki Nothing _ _ = pure $ Err $ MkErrorResponse False "bad_request" "No wiki ID provided"
-dispatchGetWiki _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchGetWiki _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchGetWiki (Just id) (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (getWiki @{env} id)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkListUsersCmd      : StringArgs -> Command
+mkListUsersCmd a            = CmdListUsers a.project
 
-||| Dispatch CmdListMilestones: list milestones in a project.
-dispatchListMilestones :
-      HasIO io
-   => (project : String)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchListMilestones _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchListMilestones _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchListMilestones project (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (listMilestones @{env} project Nothing Nothing)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkListMembershipsCmd: StringArgs -> Command
+mkListMembershipsCmd a      = CmdListMemberships a.project
 
-||| Dispatch CmdListUsers: list project members.
-dispatchListUsers :
-      HasIO io
-   => (project : String)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchListUsers _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchListUsers _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchListUsers project (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (listUsers @{env} project)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkListRolesCmd      : StringArgs -> Command
+mkListRolesCmd a            = CmdListRoles a.project
 
-||| Dispatch CmdListMemberships: list project memberships.
-dispatchListMemberships :
-      HasIO io
-   => (project : String)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchListMemberships _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchListMemberships _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchListMemberships project (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (listMemberships @{env} project)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkSearchCmd         : SearchArgs -> Command
+mkSearchCmd a               = CmdSearch a.project a.text
 
-||| Dispatch CmdListRoles: list project roles.
-dispatchListRoles :
-      HasIO io
-   => (project : String)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchListRoles _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchListRoles _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchListRoles project (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (listRoles @{env} project)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkResolveCmd        : ResolveArgs -> Command
+mkResolveCmd a              = CmdResolve a.project a.ref
 
-||| Dispatch CmdSearch: search within a project.
-dispatchSearch :
-      HasIO io
-   => (project : String)
-   -> (text : String)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchSearch _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchSearch _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchSearch project text (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult id) (search @{env} project text)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkCreateEpicCmd     : CreateEpicArgs -> Command
+mkCreateEpicCmd a           = CmdCreateEpic a.project a.subject a.description a.status
 
-||| Dispatch CmdResolve: resolve an entity ref.
-dispatchResolve :
-      HasIO io
-   => (project : String)
-   -> (ref : String)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchResolve _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchResolve _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchResolve project ref (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult id) (resolve @{env} project ref)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkUpdateEpicCmd     : UpdateEpicArgs -> Command
+mkUpdateEpicCmd a           = CmdUpdateEpic a.id a.subject a.description a.status a.version
 
-||| Dispatch CmdListComments: list history entries for an entity.
-dispatchListComments :
-      HasIO io
-   => (entity : String)
-   -> (entityId : Nat64Id)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchListComments _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchListComments _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchListComments entity eid (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (listHistory @{env} entity eid)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkDeleteEpicCmd     : Nat64Args -> Command
+mkDeleteEpicCmd a           = CmdDeleteEpic a.id
 
-||| Dispatch CmdCreateEpic: create a new epic.
-dispatchCreateEpic :
-      HasIO io
-   => (project : String)
-   -> (subject : String)
-   -> (description : Maybe String)
-   -> (status : Maybe String)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchCreateEpic _ _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchCreateEpic _ _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchCreateEpic project subject desc stat (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (createEpic @{env} project subject desc stat)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkCreateStoryCmd    : CreateStoryArgs -> Command
+mkCreateStoryCmd a          = CmdCreateStory a.project a.subject a.description a.milestone
 
-||| Dispatch CmdUpdateEpic: update an existing epic.
-dispatchUpdateEpic :
-      HasIO io
-   => (id : Nat64Id)
-   -> (subject : Maybe String)
-   -> (description : Maybe String)
-   -> (status : Maybe String)
-   -> (ver : Version)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchUpdateEpic _ _ _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchUpdateEpic _ _ _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchUpdateEpic id subj desc stat ver (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (updateEpic @{env} id subj desc stat ver)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkUpdateStoryCmd    : UpdateStoryArgs -> Command
+mkUpdateStoryCmd a          = CmdUpdateStory a.id a.subject a.description a.milestone a.version
 
-||| Dispatch CmdDeleteEpic: delete an epic.
-dispatchDeleteEpic :
-      HasIO io
-   => (id : Nat64Id)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchDeleteEpic _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchDeleteEpic _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchDeleteEpic id (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult (const "deleted")) (deleteEpic @{env} id)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkDeleteStoryCmd    : Nat64Args -> Command
+mkDeleteStoryCmd a          = CmdDeleteStory a.id
 
-||| Dispatch CmdCreateStory: create a new user story.
-dispatchCreateStory :
-      HasIO io
-   => (project : String)
-   -> (subject : String)
-   -> (description : Maybe String)
-   -> (milestone : Maybe Nat64Id)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchCreateStory _ _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchCreateStory _ _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchCreateStory project subject desc mstone (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (createStory @{env} project subject desc mstone)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkCreateTaskCmd     : CreateTaskArgs -> Command
+mkCreateTaskCmd a           =
+  CmdCreateTask a.project a.subject a.story a.description a.status a.milestone
 
-||| Dispatch CmdUpdateStory: update an existing user story.
-dispatchUpdateStory :
-      HasIO io
-   => (id : Nat64Id)
-   -> (subject : Maybe String)
-   -> (description : Maybe String)
-   -> (milestone : Maybe String)
-   -> (ver : Version)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchUpdateStory _ _ _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchUpdateStory _ _ _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchUpdateStory id subj desc mstone ver (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (updateStory @{env} id subj desc mstone ver)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkUpdateTaskCmd     : UpdateTaskArgs -> Command
+mkUpdateTaskCmd a           = CmdUpdateTask a.id a.subject a.description a.status a.version
 
-||| Dispatch CmdDeleteStory: delete a user story.
-dispatchDeleteStory :
-      HasIO io
-   => (id : Nat64Id)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchDeleteStory _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchDeleteStory _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchDeleteStory id (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult (const "deleted")) (deleteStory @{env} id)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkDeleteTaskCmd     : Nat64Args -> Command
+mkDeleteTaskCmd a           = CmdDeleteTask a.id
 
-||| Dispatch CmdCreateTask: create a new task.
-dispatchCreateTask :
-      HasIO io
-   => (project : String)
-   -> (subject : String)
-   -> (story : Maybe Nat64Id)
-   -> (description : Maybe String)
-   -> (status : Maybe String)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchCreateTask _ _ _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchCreateTask _ _ _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchCreateTask project subject story desc stat (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (createTask @{env} project subject story desc stat)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkWatchTaskCmd      : Nat64Args -> Command
+mkWatchTaskCmd a            = CmdWatchTask a.id
 
-||| Dispatch CmdUpdateTask: update an existing task.
-dispatchUpdateTask :
-      HasIO io
-   => (id : Nat64Id)
-   -> (subject : Maybe String)
-   -> (description : Maybe String)
-   -> (status : Maybe String)
-   -> (ver : Version)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchUpdateTask _ _ _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchUpdateTask _ _ _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchUpdateTask id subj desc stat ver (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (updateTask @{env} id subj desc stat ver)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkChangeTaskStatusCmd : ChangeTaskStatusArgs -> Command
+mkChangeTaskStatusCmd a     = CmdChangeTaskStatus a.id a.status a.version
 
-||| Dispatch CmdDeleteTask: delete a task.
-dispatchDeleteTask :
-      HasIO io
-   => (id : Nat64Id)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchDeleteTask _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchDeleteTask _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchDeleteTask id (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult (const "deleted")) (deleteTask @{env} id)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkTaskCommentCmd    : TaskCommentArgs -> Command
+mkTaskCommentCmd a          = CmdTaskComment a.id a.text a.version
 
-||| Dispatch CmdCreateIssue: create a new issue.
-dispatchCreateIssue :
-      HasIO io
-   => (project : String)
-   -> (subject : String)
-   -> (description : Maybe String)
-   -> (priority : Maybe String)
-   -> (severity : Maybe String)
-   -> (issueType : Maybe String)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchCreateIssue _ _ _ _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchCreateIssue _ _ _ _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchCreateIssue project subject desc prio sev itype (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (createIssue @{env} project subject desc prio sev itype)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkCreateIssueCmd    : CreateIssueArgs -> Command
+mkCreateIssueCmd a          = CmdCreateIssue a.project a.subject a.description a.priority a.severity a.type
 
-||| Dispatch CmdUpdateIssue: update an existing issue.
-dispatchUpdateIssue :
-      HasIO io
-   => (id : Nat64Id)
-   -> (subject : Maybe String)
-   -> (description : Maybe String)
-   -> (issueType : Maybe String)
-   -> (ver : Version)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchUpdateIssue _ _ _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchUpdateIssue _ _ _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchUpdateIssue id subj desc itype ver (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (updateIssue @{env} id subj desc itype ver)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkUpdateIssueCmd    : UpdateIssueArgs -> Command
+mkUpdateIssueCmd a          = CmdUpdateIssue a.id a.subject a.description a.type a.version
 
-||| Dispatch CmdDeleteIssue: delete an issue.
-dispatchDeleteIssue :
-      HasIO io
-   => (id : Nat64Id)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchDeleteIssue _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchDeleteIssue _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchDeleteIssue id (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult (const "deleted")) (deleteIssue @{env} id)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkDeleteIssueCmd    : Nat64Args -> Command
+mkDeleteIssueCmd a          = CmdDeleteIssue a.id
 
-||| Dispatch CmdCreateWiki: create a new wiki page.
-dispatchCreateWiki :
-      HasIO io
-   => (project : String)
-   -> (slug : String)
-   -> (content : String)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchCreateWiki _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchCreateWiki _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchCreateWiki project slug content (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (createWiki @{env} project slug content)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkCreateWikiCmd     : CreateWikiArgs -> Command
+mkCreateWikiCmd a           = CmdCreateWiki a.project a.slug a.content
 
-||| Dispatch CmdUpdateWiki: update an existing wiki page.
-dispatchUpdateWiki :
-      HasIO io
-   => (id : Nat64Id)
-   -> (content : Maybe String)
-   -> (slug : Maybe String)
-   -> (ver : Version)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchUpdateWiki _ _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchUpdateWiki _ _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchUpdateWiki id content slug ver (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (updateWiki @{env} id content slug ver)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkUpdateWikiCmd     : UpdateWikiArgs -> Command
+mkUpdateWikiCmd a           = CmdUpdateWiki a.id a.content a.slug a.version
 
-||| Dispatch CmdDeleteWiki: delete a wiki page.
-dispatchDeleteWiki :
-      HasIO io
-   => (id : Nat64Id)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchDeleteWiki _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchDeleteWiki _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchDeleteWiki id (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult (const "deleted")) (deleteWiki @{env} id)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkDeleteWikiCmd     : Nat64Args -> Command
+mkDeleteWikiCmd a           = CmdDeleteWiki a.id
 
-||| Dispatch CmdCreateMilestone: create a new milestone.
-dispatchCreateMilestone :
-      HasIO io
-   => (project : String)
-   -> (name : String)
-   -> (estimatedStart : String)
-   -> (estimatedFinish : String)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchCreateMilestone _ _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchCreateMilestone _ _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchCreateMilestone project name estStart estFinish (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (createMilestone @{env} project name estStart estFinish)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkCommentCmd        : CommentArgs -> Command
+mkCommentCmd a              = CmdComment a.entity a.id a.text
 
-||| Dispatch CmdUpdateMilestone: update an existing milestone.
-dispatchUpdateMilestone :
-      HasIO io
-   => (id : Nat64Id)
-   -> (name : Maybe String)
-   -> (estimatedStart : Maybe String)
-   -> (estimatedFinish : Maybe String)
-   -> (ver : Version)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchUpdateMilestone _ _ _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchUpdateMilestone _ _ _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchUpdateMilestone id name estStart estFinish ver (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult encode) (updateMilestone @{env} id name estStart estFinish ver)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkEditCommentCmd    : EditCommentArgs -> Command
+mkEditCommentCmd a          = CmdEditComment a.entity a.id a.commentId a.text
 
-||| Dispatch CmdComment: add a comment to an entity.
-dispatchComment :
-      HasIO io
-   => (entity : String)
-   -> (entityId : Nat64Id)
-   -> (text : String)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchComment _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchComment _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchComment entity eid txt (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult id) (addComment @{env} entity eid txt 0)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkDeleteCommentCmd  : DeleteCommentArgs -> Command
+mkDeleteCommentCmd a        = CmdDeleteComment a.entity a.id a.commentId
 
-||| Dispatch CmdEditComment: edit an existing comment.
-dispatchEditComment :
-      HasIO io
-   => (entity : String)
-   -> (entityId : Nat64Id)
-   -> (commentId : Nat64Id)
-   -> (text : String)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchEditComment _ _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchEditComment _ _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchEditComment entity eid cid txt (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult id) (editComment @{env} entity eid (show cid.id) txt)
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkListCommentsCmd   : EntityIdArgs -> Command
+mkListCommentsCmd a         = CmdListComments a.entity a.id
 
-||| Dispatch CmdDeleteComment: delete a comment.
-dispatchDeleteComment :
-      HasIO io
-   => (entity : String)
-   -> (entityId : Nat64Id)
-   -> (commentId : Nat64Id)
-   -> (auth : Maybe Token)
-   -> (base : Maybe String)
-   -> io Response
-dispatchDeleteComment _ _ _ Nothing _ = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
-dispatchDeleteComment _ _ _ _ Nothing = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
-dispatchDeleteComment entity eid cid (Just token) (Just baseUrl)
-  = Prelude.map (wrapResult (const "deleted")) (deleteComment @{env} entity eid (show cid.id))
-  where
-    env : ApiEnv
-    env = MkApiEnv baseUrl token.auth_token
+private mkCreateMilestoneCmd : CreateMilestoneArgs -> Command
+mkCreateMilestoneCmd a      = CmdCreateMilestone a.project a.name a.estimated_start a.estimated_finish
+
+private mkUpdateMilestoneCmd : UpdateMilestoneArgs -> Command
+mkUpdateMilestoneCmd a      = CmdUpdateMilestone a.id a.name a.estimated_start a.estimated_finish a.version
 
 ||| Parse a command name and JSON arguments into a Command.
 public export
 parseCommand : (cmd : String) -> (args : String) -> Either String Command
-parseCommand "me"      _ = pure CmdMe
-parseCommand "login"   args = case decodeEither args of
-                                 Left  err  => Left err
-                                 Right c   => pure $ CmdLogin c
-parseCommand "refresh" args = case decodeEither args of
-                                 Left  err  => Left err
-                                 Right r    => pure $ CmdRefresh r.refresh
-parseCommand cmd _    = Left $ "Unknown command: " ++ cmd
+parseCommand "me"               _            = pure CmdMe
+parseCommand "login"            args        = parseCmdArgs CmdLogin args
+parseCommand "refresh"          args        = parseCmdArgs mkRefreshCmd args
+parseCommand "list-projects"    args        = parseCmdArgs mkListProjectsCmd args
+parseCommand "get-project"      args        = parseCmdArgs mkGetProjectCmd args
+parseCommand "list-epics"       args        = parseCmdArgs mkListEpicsCmd args
+parseCommand "get-epic"         args        = parseCmdArgs mkGetEpicCmd args
+parseCommand "list-stories"     args        = parseCmdArgs mkListStoriesCmd args
+parseCommand "get-story"        args        = parseCmdArgs mkGetStoryCmd args
+parseCommand "list-tasks"       args        = parseCmdArgs mkListTasksCmd args
+parseCommand "get-task"         args        = parseCmdArgs mkGetTaskCmd args
+parseCommand "list-issues"      args        = parseCmdArgs mkListIssuesCmd args
+parseCommand "get-issue"        args        = parseCmdArgs mkGetIssueCmd args
+parseCommand "list-wiki"        args        = parseCmdArgs mkListWikiCmd args
+parseCommand "get-wiki"         args        = parseCmdArgs mkGetWikiCmd args
+parseCommand "list-milestones"  args        = parseCmdArgs mkListMilestonesCmd args
+parseCommand "list-users"       args        = parseCmdArgs mkListUsersCmd args
+parseCommand "list-memberships" args        = parseCmdArgs mkListMembershipsCmd args
+parseCommand "list-roles"       args        = parseCmdArgs mkListRolesCmd args
+parseCommand "search"           args        = parseCmdArgs mkSearchCmd args
+parseCommand "resolve"          args        = parseCmdArgs mkResolveCmd args
+parseCommand "create-epic"      args        = parseCmdArgs mkCreateEpicCmd args
+parseCommand "update-epic"      args        = parseCmdArgs mkUpdateEpicCmd args
+parseCommand "delete-epic"      args        = parseCmdArgs mkDeleteEpicCmd args
+parseCommand "create-story"     args        = parseCmdArgs mkCreateStoryCmd args
+parseCommand "update-story"     args        = parseCmdArgs mkUpdateStoryCmd args
+parseCommand "delete-story"     args        = parseCmdArgs mkDeleteStoryCmd args
+parseCommand "create-task"      args        = parseCmdArgs mkCreateTaskCmd args
+parseCommand "update-task"      args        = parseCmdArgs mkUpdateTaskCmd args
+parseCommand "delete-task"      args        = parseCmdArgs mkDeleteTaskCmd args
+parseCommand "watch-task"       args        = parseCmdArgs mkWatchTaskCmd args
+parseCommand "change-task-status" args      = parseCmdArgs mkChangeTaskStatusCmd args
+parseCommand "task-comment"     args        = parseCmdArgs mkTaskCommentCmd args
+parseCommand "create-issue"     args        = parseCmdArgs mkCreateIssueCmd args
+parseCommand "update-issue"     args        = parseCmdArgs mkUpdateIssueCmd args
+parseCommand "delete-issue"     args        = parseCmdArgs mkDeleteIssueCmd args
+parseCommand "create-wiki"      args        = parseCmdArgs mkCreateWikiCmd args
+parseCommand "update-wiki"      args        = parseCmdArgs mkUpdateWikiCmd args
+parseCommand "delete-wiki"      args        = parseCmdArgs mkDeleteWikiCmd args
+parseCommand "comment"          args        = parseCmdArgs mkCommentCmd args
+parseCommand "edit-comment"     args        = parseCmdArgs mkEditCommentCmd args
+parseCommand "delete-comment"   args        = parseCmdArgs mkDeleteCommentCmd args
+parseCommand "list-comments"    args        = parseCmdArgs mkListCommentsCmd args
+parseCommand "create-milestone" args        = parseCmdArgs mkCreateMilestoneCmd args
+parseCommand "update-milestone" args        = parseCmdArgs mkUpdateMilestoneCmd args
+parseCommand cmd _              = Left $ "Unknown command: " ++ cmd
+
+||| Helper: wrap IO action result in a Response.
+private dispatchWithEnvHelper :
+      HasIO io
+   => io (Either String a)
+  -> (a -> String)
+  -> io Response
+dispatchWithEnvHelper action encFn = Prelude.map (wrapResult encFn) action
+
+private dispatchWithEnv' :
+      HasIO io
+   => (command : Command)
+  -> (env : ApiEnv)
+  -> io Response
+dispatchWithEnv' command env =
+  case command of
+        CmdMe                                              => dispatchWithEnvHelper (me env.base env.token) encode
+        CmdListProjects member                             => dispatchWithEnvHelper (listProjects @{env} member Nothing Nothing) encode
+        CmdGetProject (Just id) _                          => dispatchWithEnvHelper (getProjectById @{env} id) encode
+        CmdGetProject _ (Just slug)                        => dispatchWithEnvHelper (getProjectBySlug @{env} slug) encode
+        CmdGetProject Nothing Nothing                      => pure $ Err $ MkErrorResponse False "bad_request" "Must provide id or slug"
+        CmdListEpics project                               => dispatchWithEnvHelper (listEpics @{env} project Nothing Nothing) encode
+        CmdGetEpic (Just id)                              => dispatchWithEnvHelper (getEpic @{env} id) encode
+        CmdGetEpic Nothing                                => pure $ Err $ MkErrorResponse False "bad_request" "No epic ID provided"
+        CmdListStories project                             => dispatchWithEnvHelper (listStories @{env} project Nothing Nothing) encode
+        CmdGetStory (Just id)                             => dispatchWithEnvHelper (getStory @{env} id) encode
+        CmdGetStory Nothing                               => pure $ Err $ MkErrorResponse False "bad_request" "No story ID provided"
+        CmdListTasks project                              => dispatchWithEnvHelper (listTasks @{env} project Nothing Nothing Nothing) encode
+        CmdGetTask (Just id)                              => dispatchWithEnvHelper (getTask @{env} id) encode
+        CmdGetTask Nothing                                => pure $ Err $ MkErrorResponse False "bad_request" "No task ID provided"
+        CmdListIssues project                             => dispatchWithEnvHelper (listIssues @{env} project Nothing Nothing) encode
+        CmdGetIssue (Just id)                             => dispatchWithEnvHelper (getIssue @{env} id) encode
+        CmdGetIssue Nothing                               => pure $ Err $ MkErrorResponse False "bad_request" "No issue ID provided"
+        CmdListWiki project                               => dispatchWithEnvHelper (listWiki @{env} project Nothing Nothing) encode
+        CmdGetWiki (Just id)                              => dispatchWithEnvHelper (getWiki @{env} id) encode
+        CmdGetWiki Nothing                                => pure $ Err $ MkErrorResponse False "bad_request" "No wiki ID provided"
+        CmdListMilestones project                         => dispatchWithEnvHelper (listMilestones @{env} project Nothing Nothing) encode
+        CmdListUsers project                              => dispatchWithEnvHelper (listUsers @{env} project) encode
+        CmdListMemberships project                        => dispatchWithEnvHelper (listMemberships @{env} project) encode
+        CmdListRoles project                              => dispatchWithEnvHelper (listRoles @{env} project) encode
+        CmdSearch project text                            => dispatchWithEnvHelper (search @{env} project text) Prelude.id
+        CmdResolve project ref                            => dispatchWithEnvHelper (resolve @{env} project ref) Prelude.id
+        CmdCreateEpic p s d st                            => dispatchWithEnvHelper (createEpic @{env} p s d st) encode
+        CmdUpdateEpic id sj d st v                        => dispatchWithEnvHelper (updateEpic @{env} id sj d st v) encode
+        CmdDeleteEpic id                                  => dispatchWithEnvHelper (deleteEpic @{env} id) (const "deleted")
+        CmdCreateStory p s d m                            => dispatchWithEnvHelper (createStory @{env} p s d m) encode
+        CmdUpdateStory id sj d m v                        => dispatchWithEnvHelper (updateStory @{env} id sj d m v) encode
+        CmdDeleteStory id                                 => dispatchWithEnvHelper (deleteStory @{env} id) (const "deleted")
+        CmdCreateTask p s st d ss ms                      => dispatchWithEnvHelper (createTask @{env} p s st d ss ms) encode
+        CmdUpdateTask id sj d st v                        => dispatchWithEnvHelper (updateTask @{env} id sj d st v) encode
+        CmdDeleteTask id                                  => dispatchWithEnvHelper (deleteTask @{env} id) (const "deleted")
+        CmdWatchTask tid                                  => dispatchWithEnvHelper (getTask @{env} tid) encode
+        CmdChangeTaskStatus tid st v                      => dispatchWithEnvHelper (changeTaskStatus @{env} tid st v) encode
+        CmdTaskComment tid txt v                          => dispatchWithEnvHelper (taskComment @{env} tid txt v) Prelude.id
+        CmdCreateIssue p s d pr sv it                     => dispatchWithEnvHelper (createIssue @{env} p s d pr sv it) encode
+        CmdUpdateIssue id sj d it v                       => dispatchWithEnvHelper (updateIssue @{env} id sj d it v) encode
+        CmdDeleteIssue id                                 => dispatchWithEnvHelper (deleteIssue @{env} id) (const "deleted")
+        CmdCreateWiki p sl c                              => dispatchWithEnvHelper (createWiki @{env} p sl c) encode
+        CmdUpdateWiki id c sl v                           => dispatchWithEnvHelper (updateWiki @{env} id c sl v) encode
+        CmdDeleteWiki id                                  => dispatchWithEnvHelper (deleteWiki @{env} id) (const "deleted")
+        CmdCreateMilestone p n es ef                      => dispatchWithEnvHelper (createMilestone @{env} p n es ef) encode
+        CmdUpdateMilestone id n es ef v                   => dispatchWithEnvHelper (updateMilestone @{env} id n es ef v) encode
+        CmdComment e eid t                                => dispatchWithEnvHelper (addComment @{env} e eid t 0) Prelude.id
+        CmdEditComment e eid cid t                        => dispatchWithEnvHelper (editComment @{env} e eid (show cid.id) t) Prelude.id
+        CmdDeleteComment e eid cid                        => dispatchWithEnvHelper (deleteComment @{env} e eid (show cid.id)) (const "deleted")
+        CmdListComments e eid                             => dispatchWithEnvHelper (listHistory @{env} e eid) encode
+        _                                                 => pure $ Err $ MkErrorResponse False "internal" "Unreachable"
 
 ||| Dispatch a parsed Command together with auth and base URL,
 ||| returning a Response.
@@ -868,50 +587,12 @@ dispatchCommand :
    -> (auth  : Maybe Model.Auth.Token)
    -> (base  : Maybe String)
    -> io Response
-dispatchCommand command auth base
-   = case command of
-        CmdLogin creds                                   => dispatchLogin creds base
-        CmdRefresh rtok                                   => dispatchRefresh rtok base
-        CmdMe                                            => dispatchMe auth base
-        CmdListProjects member                            => dispatchListProjects member auth base
-        CmdGetProject mid mslug                           => dispatchGetProject mid mslug auth base
-        CmdListEpics project                              => dispatchListEpics project auth base
-        CmdGetEpic eid                                   => dispatchGetEpic eid auth base
-        CmdListStories project                            => dispatchListStories project auth base
-        CmdGetStory sid                                  => dispatchGetStory sid auth base
-        CmdListTasks project                              => dispatchListTasks project auth base
-        CmdGetTask tid                                   => dispatchGetTask tid auth base
-        CmdListIssues project                             => dispatchListIssues project auth base
-        CmdGetIssue iid                                  => dispatchGetIssue iid auth base
-        CmdListWiki project                               => dispatchListWiki project auth base
-        CmdGetWiki wid                                   => dispatchGetWiki wid auth base
-        CmdListMilestones project                         => dispatchListMilestones project auth base
-        CmdListUsers project                              => dispatchListUsers project auth base
-        CmdListMemberships project                        => dispatchListMemberships project auth base
-        CmdListRoles project                              => dispatchListRoles project auth base
-        CmdSearch project text                            => dispatchSearch project text auth base
-        CmdResolve project ref                            => dispatchResolve project ref auth base
-        CmdCreateEpic project subject desc stat           => dispatchCreateEpic project subject desc stat auth base
-        CmdUpdateEpic id subj desc stat ver               => dispatchUpdateEpic id subj desc stat ver auth base
-        CmdDeleteEpic id                                 => dispatchDeleteEpic id auth base
-        CmdCreateStory project subject desc mstone        => dispatchCreateStory project subject desc mstone auth base
-        CmdUpdateStory id subj desc mstone ver            => dispatchUpdateStory id subj desc mstone ver auth base
-        CmdDeleteStory id                                => dispatchDeleteStory id auth base
-        CmdCreateTask project subject story desc stat     => dispatchCreateTask project subject story desc stat auth base
-        CmdUpdateTask id subj desc stat ver               => dispatchUpdateTask id subj desc stat ver auth base
-        CmdDeleteTask id                                 => dispatchDeleteTask id auth base
-        CmdWatchTask tid                                 => dispatchWatchTask tid auth base
-        CmdChangeTaskStatus tid st ver                    => dispatchChangeTaskStatus tid st ver auth base
-        CmdTaskComment tid txt ver                        => dispatchTaskComment tid txt ver auth base
-        CmdCreateIssue project subject desc prio sev itype => dispatchCreateIssue project subject desc prio sev itype auth base
-        CmdUpdateIssue id subj desc itype ver             => dispatchUpdateIssue id subj desc itype ver auth base
-        CmdDeleteIssue id                                => dispatchDeleteIssue id auth base
-        CmdCreateWiki project slug content                => dispatchCreateWiki project slug content auth base
-        CmdUpdateWiki id content slug ver                 => dispatchUpdateWiki id content slug ver auth base
-        CmdDeleteWiki id                                 => dispatchDeleteWiki id auth base
-        CmdCreateMilestone project name es ef             => dispatchCreateMilestone project name es ef auth base
-        CmdUpdateMilestone id name es ef ver              => dispatchUpdateMilestone id name es ef ver auth base
-        CmdComment entity eid text                        => dispatchComment entity eid text auth base
-        CmdEditComment entity eid cid text                => dispatchEditComment entity eid cid text auth base
-        CmdDeleteComment entity eid cid                  => dispatchDeleteComment entity eid cid auth base
-        CmdListComments entity eid                        => dispatchListComments entity eid auth base
+dispatchCommand (CmdLogin creds) _ base         = dispatchLogin' creds base
+dispatchCommand (CmdRefresh rtok) _ base         = dispatchRefresh' rtok base
+dispatchCommand command Nothing _                 = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
+dispatchCommand _ _ Nothing                       = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
+dispatchCommand command (Just token) (Just baseUrl) =
+  dispatchWithEnv' command env
+  where
+    env : ApiEnv
+    env = MkApiEnv baseUrl token.auth_token
