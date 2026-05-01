@@ -219,7 +219,7 @@ Entity operations (on active project, id = ref-id or db-id):
   issue delete <id>                     Delete issue
 
   sprint list                           List sprints/milestones
-  sprint show                           Show current sprint state
+  sprint show                           Alias for sprint list (no active sprint state)
   sprint set <id>                       Set active sprint
   sprint create <name> [--start DATE] [--end DATE]
                                         Create sprint

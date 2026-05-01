@@ -4,6 +4,7 @@
 module CLI.Output
 
 import State.Config
+import JSON.Derive
 import JSON.ToJSON
 import JSON.FromJSON
 import JSON.Encoder
@@ -45,6 +46,11 @@ public export
 cmdOk : ToJSON a => String -> a -> CmdResult
 cmdOk msg val = MkCmdResult 0 msg (encode val)
 
+||| Convenience constructor for success with a raw (already-JSON) payload.
+public export
+cmdOkRaw : String -> String -> CmdResult
+cmdOkRaw msg raw = MkCmdResult 0 msg raw
+
 ||| Convenience constructor for error.
 public export
 cmdError : String -> CmdResult
@@ -54,6 +60,15 @@ cmdError err = MkCmdResult 1 err "null"
 public export
 cmdInfo : String -> CmdResult
 cmdInfo msg = MkCmdResult 2 msg "null"
+
+||| Structured result for delete operations.
+public export
+record DeleteResult where
+  constructor MkDeleteResult
+  entity : String
+  id     : Bits64
+
+%runElab derive "DeleteResult" [Show,ToJSON,FromJSON]
 
 ||| Pretty-print JSON payload for text mode.
 ||| If the payload is not "null", pretty-prints it indented below the status
@@ -70,7 +85,7 @@ renderPayload json  = "\n" ++ prettyPrintJSON json
     prettyPrintJSON s = go (unpack s) 0
       where
         indent : Nat -> String
-        indent n = concat $ replicate (n * 2) " "
+        indent n = concat $ Data.List.replicate (n * 2) " "
 
         go : List Char -> Nat -> String
         go []          _     = ""

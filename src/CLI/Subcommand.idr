@@ -437,7 +437,11 @@ handleTaskComment ident text = do
           result <- getTask @{env} tid
           case result of
             Left err    => pure $ Right $ cmdError err
-            Right task  => callToResult "Comment added" $ taskComment @{env} tid text task.version
+            Right task  => do
+              raw_e <- taskComment @{env} tid text task.version
+              pure $ case raw_e of
+                Left err  => Right $ cmdError err
+                Right raw => Right $ cmdOkRaw "Comment added" raw
 
 ||| Handler for ActTaskUpdate.
 public export
@@ -483,7 +487,7 @@ handleTaskDelete ident = do
               result <- deleteTask @{env} tid
               pure $ case result of
                 Left err  => Right $ cmdError err
-                Right _   => Right $ cmdOk "Task deleted" "deleted"
+                Right _   => Right $ cmdOk "Task deleted" $ MkDeleteResult "task" tid.id
 
 ||| Handler for ActEpicList.
 public export
@@ -577,7 +581,7 @@ handleEpicDelete ident = do
               result <- deleteEpic @{env} eid
               pure $ case result of
                 Left err  => Right $ cmdError err
-                Right _   => Right $ cmdOk "Epic deleted" "deleted"
+                Right _   => Right $ cmdOk "Epic deleted" $ MkDeleteResult "epic" eid.id
 
 ||| Handler for ActSprintList.
 public export
@@ -701,7 +705,7 @@ handleIssueDelete ident = do
               result <- deleteIssue @{env} iid
               pure $ case result of
                 Left err  => Right $ cmdError err
-                Right _   => Right $ cmdOk "Issue deleted" "deleted"
+                Right _   => Right $ cmdOk "Issue deleted" $ MkDeleteResult "issue" iid.id
 
 ||| Handler for ActStoryList.
 public export
@@ -810,7 +814,7 @@ handleStoryDelete ident = do
               result <- deleteStory @{env} sid
               pure $ case result of
                 Left err  => Right $ cmdError err
-                Right _   => Right $ cmdOk "Story deleted" "deleted"
+                Right _   => Right $ cmdOk "Story deleted" $ MkDeleteResult "story" sid.id
 
 ||| Handler for ActWikiList.
 public export
@@ -908,7 +912,7 @@ handleWikiDelete ident = do
               result <- deleteWiki @{env} wid
               pure $ case result of
                 Left err  => Right $ cmdError err
-                Right _   => Right $ cmdOk "Wiki page deleted" "deleted"
+                Right _   => Right $ cmdOk "Wiki page deleted" $ MkDeleteResult "wiki" wid.id
 
 ||| Handler for ActSprintCreate.
 public export
@@ -973,7 +977,7 @@ handleSprintDelete ident = do
               result <- deleteMilestone @{env} sid
               pure $ case result of
                 Left err  => Right $ cmdError err
-                Right _   => Right $ cmdOk "Sprint deleted" "deleted"
+                Right _   => Right $ cmdOk "Sprint deleted" $ MkDeleteResult "sprint" sid.id
 
 ||| Map user-friendly entity name to Taiga API entity name.
 private
@@ -1017,7 +1021,11 @@ handleCommentAdd entityName ident text = do
               ver_e <- fetchEntityVersion env entity eid
               case ver_e of
                 Left err    => pure $ Right $ cmdError err
-                Right ver   => callToResult "Comment added" $ addComment @{env} entity eid text ver
+                Right ver   => do
+                  raw_e <- addComment @{env} entity eid text ver
+                  pure $ case raw_e of
+                    Left err  => Right $ cmdError err
+                    Right raw => Right $ cmdOkRaw "Comment added" raw
 
 ||| Handler for ActCommentList.
 public export
