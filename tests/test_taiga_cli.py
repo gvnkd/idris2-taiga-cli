@@ -1,8 +1,10 @@
 import json
+import os
+import subprocess
 import time
 import pytest
 
-from conftest import _run, PROJECT_ID
+from conftest import BIN, _run, PROJECT_ID
 
 
 def _ts():
@@ -241,6 +243,123 @@ class TestSearchResolve:
     def test_resolve_slug(self, client):
         data = client.resolve("1")
         assert "project" in data
+
+
+class TestStateful:
+    """Test the stateful subcommand mode (init, login, project set, etc.)."""
+
+    BASE = "http://127.0.0.1:8000/api/v1"
+
+    @staticmethod
+    def _token_file():
+        """Path to the global token file for the test base URL."""
+        home = os.path.expanduser("~")
+        # instanceHash replaces non-alnum/-/. with underscores
+        return os.path.join(home, ".local", "share", "taiga-cli", "tokens",
+                            "http___127.0.0.1_8000_api_v1.json")
+
+    @pytest.fixture
+    def workspace(self, tmp_path):
+        """Create a fresh workspace, init, and clean up tokens afterwards."""
+        tf = self._token_file()
+        if os.path.exists(tf):
+            os.remove(tf)
+
+        proc = subprocess.run(
+            [BIN, "init", self.BASE],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(tmp_path),
+        )
+        assert proc.returncode == 0, f"init failed: {proc.stdout}{proc.stderr}"
+
+        yield tmp_path
+
+        if os.path.exists(tf):
+            os.remove(tf)
+
+    def test_init_creates_taiga_dir(self, workspace):
+        state_file = workspace / ".taiga" / "state.json"
+        assert state_file.exists()
+        data = json.loads(state_file.read_text())
+        assert data["base_url"] == self.BASE
+
+    def test_login_piped_password(self, workspace):
+        proc = subprocess.run(
+            [BIN, "login", "--user", "rune"],
+            input="rune-secret-42\n",
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0, f"login failed: {proc.stdout}{proc.stderr}"
+        assert "Authenticated successfully" in proc.stdout
+        assert os.path.exists(self._token_file())
+
+    def test_login_password_shows_warning(self, workspace):
+        proc = subprocess.run(
+            [BIN, "login", "--user", "rune", "--password", "rune-secret-42"],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0
+        assert "WARNING" in proc.stdout
+        assert "insecure" in proc.stdout
+
+    def test_show_after_init(self, workspace):
+        proc = subprocess.run(
+            [BIN, "show"],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0
+        assert self.BASE in proc.stdout
+        assert "(none)" in proc.stdout
+
+    def test_full_workflow(self, workspace):
+        # Login with piped password
+        proc = subprocess.run(
+            [BIN, "login", "--user", "rune"],
+            input="rune-secret-42\n",
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0
+
+        # Set active project by ID
+        proc = subprocess.run(
+            [BIN, "project", "set", PROJECT_ID],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0
+        assert "Active project set to" in proc.stdout
+
+        # Show reflects active project
+        proc = subprocess.run(
+            [BIN, "show"],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0
+        assert "Active project:" in proc.stdout
+        assert "13" in proc.stdout
+
+        # List tasks in active project
+        proc = subprocess.run(
+            [BIN, "task", "list"],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0
+        assert "[OK]" in proc.stdout
+
+        # List sprints in active project
+        proc = subprocess.run(
+            [BIN, "sprint", "list"],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0
+        assert "[OK]" in proc.stdout
 
 
 class TestUsersMembershipsRoles:
