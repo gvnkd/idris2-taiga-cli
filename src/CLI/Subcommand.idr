@@ -3,6 +3,7 @@
 ||| Parses subcommand structure and dispatches to action handlers.
 module CLI.Subcommand
 
+import Control.AppM
 import Model.Auth
 import Model.Common
 import Model.Project
@@ -129,7 +130,7 @@ data Action : Type where
 
 ||| Resolve auth and state, returning ApiEnv for use in handlers.
 public export
-resolveApiEnv : IO (Either String ApiEnv)
+resolveApiEnv : AppM ApiEnv
 resolveApiEnv = resolveAuth
 
 ||| Get active project or fail.
@@ -140,34 +141,8 @@ getActiveProject st =
     Just pid => Right pid
 
 ------------------------------------------------------------------------------
--- AppM Monad - eliminates nested Either boilerplate in handlers
+-- Project Environment Helpers (AppM from Control.AppM)
 ------------------------------------------------------------------------------
-
-||| Monadic wrapper around IO (Either String a) using EitherT from base.
-AppM : Type -> Type
-AppM a = EitherT String IO a
-
-public export
-runAppM : AppM a -> IO (Either String a)
-runAppM = runEitherT
-
-public export
-liftIOEither : IO (Either String a) -> AppM a
-liftIOEither = MkEitherT
-
-||| Lift any raw IO action into AppM, returning the result directly.
-public export
-liftRawIO : IO a -> AppM a
-liftRawIO = lift
-
-||| Lift a pure Either into the monad.
-private
-liftEither : Either String a -> AppM a
-liftEither = MkEitherT . pure
-
-public export
-appFail : String -> AppM a
-appFail err = MkEitherT $ pure $ Left err
 
 ||| Extract project-scoped environment: load state, resolve active project,
 ||| and authenticate. Returns (ApiEnv, Nat64Id).
@@ -176,7 +151,7 @@ getProjectEnv : AppM (ApiEnv, Nat64Id)
 getProjectEnv = do
   st   <- liftIOEither loadState
   pid  <- liftEither $ getActiveProject st
-  env  <- liftIOEither resolveApiEnv
+  env  <- resolveApiEnv
   pure (env, pid)
 
 ||| Get the slug for the active project, using cache if available.
@@ -197,7 +172,7 @@ public export
 resolveRef : String -> AppM (String, Nat64Id)
 resolveRef ref = do
   st   <- liftIOEither loadState
-  env  <- liftIOEither resolveApiEnv
+  env  <- resolveApiEnv
   slug <- getProjectSlug env st
   jsonStr <- liftIOEither $ resolve @{env} slug ref
   case extractIdFromResolve jsonStr of
@@ -407,7 +382,7 @@ loginIO user mpass = do
   case st_e of
     Left err  => pure $ Left err
     Right st  => do
-      result <- authenticate st.base_url creds
+      result <- authenticateIO st.base_url creds
       case result of
         Left err  => pure $ Right $ cmdError ("Login failed: " ++ err)
         Right _   => pure $ Right $ cmdInfo "Authenticated successfully"
@@ -447,7 +422,7 @@ handleProjectList : IO (Either String CmdResult)
 
 projectListAux : AppM CmdResult
 projectListAux = do
-  env <- liftIOEither resolveApiEnv
+  env  <- resolveApiEnv
   val <- liftIOEither $ listProjects @{env} Nothing Nothing Nothing
   pure $ cmdOk "Projects" val
 
@@ -492,7 +467,7 @@ projectSetById env pid = do
   case res of
     Left err'  => pure $ Right $ cmdError ("Failed to get project: " ++ err')
     Right proj => do
-      _ <- setActiveProjectCached proj
+      _ <- runAppM $ setActiveProjectCached proj
       pure $ Right $ cmdOk ("Active project set to: " ++ proj.name) proj
 
 private
@@ -512,13 +487,13 @@ projectSetIO ident env = do
   slugRes <- getProjectBySlug @{env} (MkSlug ident)
   case slugRes of
     Right proj => do
-      _ <- setActiveProjectCached proj
+      _ <- runAppM $ setActiveProjectCached proj
       pure $ Right $ cmdOk ("Active project set to: " ++ proj.name) proj
     Left _ => projectSetFallbackChain ident env
 
 projectSetAux : String -> AppM CmdResult
 projectSetAux ident = do
-  env <- liftIOEither resolveApiEnv
+  env  <- resolveApiEnv
   res <- liftIOEither $ projectSetIO ident env
   pure res
 
@@ -567,7 +542,7 @@ handleTaskGet : String -> IO (Either String CmdResult)
 taskGetAux : String -> AppM CmdResult
 taskGetAux ident = do
   tid <- resolveTaskId ident
-  env <- liftIOEither resolveApiEnv
+  env  <- resolveApiEnv
   val <- liftIOEither $ getTask @{env} tid
   pure $ cmdOk "Task" val
 
@@ -580,7 +555,7 @@ handleTaskStatus : String -> Bits64 -> IO (Either String CmdResult)
 taskStatusAux : String -> Bits64 -> AppM CmdResult
 taskStatusAux ident statusId = do
   tid <- resolveTaskId ident
-  env <- liftIOEither resolveApiEnv
+  env  <- resolveApiEnv
   task <- liftIOEither $ getTask @{env} tid
   val <- liftIOEither $ changeTaskStatus @{env} tid statusId task.version
   pure $ cmdOk "Status changed" val
@@ -594,7 +569,7 @@ handleTaskComment : String -> String -> IO (Either String CmdResult)
 taskCommentAux : String -> String -> AppM CmdResult
 taskCommentAux ident text = do
   tid <- resolveTaskId ident
-  env <- liftIOEither resolveApiEnv
+  env  <- resolveApiEnv
   task <- liftIOEither $ getTask @{env} tid
   raw <- liftIOEither $ taskComment @{env} tid text task.version
   pure $ cmdOkRaw "Comment added" raw
@@ -609,7 +584,7 @@ taskAssignStoryAux : String -> String -> AppM CmdResult
 taskAssignStoryAux taskIdent storyIdent = do
   tid <- resolveTaskId taskIdent
   sid <- resolveStoryId storyIdent
-  env <- liftIOEither resolveApiEnv
+  env  <- resolveApiEnv
   task <- liftIOEither $ getTask @{env} tid
   val <- liftIOEither $ assignTaskToStory @{env} tid (Just sid) task.version
   pure $ cmdOk "Task assigned to story" val
@@ -642,7 +617,7 @@ handleTaskUpdate : String -> Maybe String -> Maybe String -> Maybe String -> May
 taskUpdateAux : String -> Maybe String -> Maybe String -> Maybe String -> Maybe Bits64 -> AppM CmdResult
 taskUpdateAux ident mSubject mDesc mStatusText mStatusId = do
   tid <- resolveTaskId ident
-  env <- liftIOEither resolveApiEnv
+  env  <- resolveApiEnv
   current <- liftIOEither $ getTask @{env} tid
   let subj := case mSubject of Nothing => current.subject ; Just s => s
       desc := case mDesc     of Nothing => current.description ; Just d => d
@@ -659,7 +634,7 @@ handleTaskDelete : String -> IO (Either String CmdResult)
 taskDeleteAux : String -> AppM CmdResult
 taskDeleteAux ident = do
   tid <- resolveTaskId ident
-  env <- liftIOEither resolveApiEnv
+  env  <- resolveApiEnv
   confirmed <- liftRawIO (confirmDelete ("task " ++ ident))
   if not confirmed
     then pure $ cmdInfo "Delete cancelled"
@@ -688,7 +663,7 @@ handleEpicGet : String -> IO (Either String CmdResult)
 epicGetAux : String -> AppM CmdResult
 epicGetAux ident = do
   eid <- resolveEpicId ident
-  env <- liftIOEither resolveApiEnv
+  env  <- resolveApiEnv
   val <- liftIOEither $ getEpic @{env} eid
   pure $ cmdOk "Epic" val
 
@@ -713,7 +688,7 @@ handleEpicUpdate : String -> Maybe String -> Maybe String -> Maybe String -> May
 epicUpdateAux : String -> Maybe String -> Maybe String -> Maybe String -> Maybe Bits64 -> AppM CmdResult
 epicUpdateAux ident mSubject mDesc mStatusText mStatusId = do
   eid <- resolveEpicId ident
-  env <- liftIOEither resolveApiEnv
+  env  <- resolveApiEnv
   current <- liftIOEither $ getEpic @{env} eid
   case current.version of
     Nothing => appFail "Cannot update epic: no version available"
@@ -733,7 +708,7 @@ handleEpicDelete : String -> IO (Either String CmdResult)
 epicDeleteAux : String -> AppM CmdResult
 epicDeleteAux ident = do
   eid <- resolveEpicId ident
-  env <- liftIOEither resolveApiEnv
+  env  <- resolveApiEnv
   confirmed <- liftRawIO $ confirmDelete ("epic " ++ ident)
   if not confirmed
     then pure $ cmdInfo "Delete cancelled"
@@ -767,7 +742,7 @@ handleSprintSet : String -> IO (Either String CmdResult)
 sprintSetAux : String -> AppM CmdResult
 sprintSetAux ident = do
   sid <- resolveMilestoneId ident
-  env <- liftIOEither resolveApiEnv
+  env  <- resolveApiEnv
   val <- liftIOEither $ getMilestone @{env} sid
   pure $ cmdOk "Sprint" val
 
@@ -792,7 +767,7 @@ handleIssueGet : String -> IO (Either String CmdResult)
 issueGetAux : String -> AppM CmdResult
 issueGetAux ident = do
   iid <- resolveIssueId ident
-  env <- liftIOEither resolveApiEnv
+  env  <- resolveApiEnv
   val <- liftIOEither $ getIssue @{env} iid
   pure $ cmdOk "Issue" val
 
@@ -817,7 +792,7 @@ handleIssueUpdate : String -> Maybe String -> Maybe String -> Maybe String -> Ma
 issueUpdateAux : String -> Maybe String -> Maybe String -> Maybe String -> Maybe String -> Maybe Bits64 -> AppM CmdResult
 issueUpdateAux ident mSubject mDesc mType mStatusText mStatusId = do
   iid <- resolveIssueId ident
-  env <- liftIOEither resolveApiEnv
+  env  <- resolveApiEnv
   current <- liftIOEither $ getIssue @{env} iid
   let subj := case mSubject of Nothing => current.subject ; Just s => s
       desc := case mDesc     of Nothing => current.description ; Just d => d
@@ -834,7 +809,7 @@ handleIssueDelete : String -> IO (Either String CmdResult)
 issueDeleteAux : String -> AppM CmdResult
 issueDeleteAux ident = do
   iid <- resolveIssueId ident
-  env <- liftIOEither resolveApiEnv
+  env  <- resolveApiEnv
   confirmed <- liftRawIO (confirmDelete ("issue " ++ ident))
   if not confirmed
     then pure $ cmdInfo "Delete cancelled"
@@ -863,7 +838,7 @@ handleStoryGet : String -> IO (Either String CmdResult)
 storyGetAux : String -> AppM CmdResult
 storyGetAux ident = do
   sid <- resolveStoryId ident
-  env <- liftIOEither resolveApiEnv
+  env  <- resolveApiEnv
   val <- liftIOEither $ getStory @{env} sid
   pure $ cmdOk "Story" val
 
@@ -888,7 +863,7 @@ handleWikiGet : String -> IO (Either String CmdResult)
 wikiGetAux : String -> AppM CmdResult
 wikiGetAux ident = do
   wid <- resolveWikiId ident
-  env <- liftIOEither resolveApiEnv
+  env  <- resolveApiEnv
   val <- liftIOEither $ getWiki @{env} wid
   pure $ cmdOk "Wiki page" val
 
@@ -925,7 +900,7 @@ handleStoryUpdate : String -> Maybe String -> Maybe String -> Maybe String -> Ma
 storyUpdateAux : String -> Maybe String -> Maybe String -> Maybe String -> Maybe String -> Maybe Bits64 -> AppM CmdResult
 storyUpdateAux ident mSubject mDesc mMilestone _ _ = do
   sid <- resolveStoryId ident
-  env <- liftIOEither resolveApiEnv
+  env  <- resolveApiEnv
   current <- liftIOEither $ getStory @{env} sid
   let subj := case mSubject of Nothing => current.subject ; Just s => s
       desc := case mDesc     of Nothing => current.description ; Just d => d
@@ -942,7 +917,7 @@ handleStoryDelete : String -> IO (Either String CmdResult)
 storyDeleteAux : String -> AppM CmdResult
 storyDeleteAux ident = do
   sid <- resolveStoryId ident
-  env <- liftIOEither resolveApiEnv
+  env  <- resolveApiEnv
   confirmed <- liftRawIO (confirmDelete ("story " ++ ident))
   if not confirmed
     then pure $ cmdInfo "Delete cancelled"
@@ -959,7 +934,7 @@ handleWikiUpdate : String -> Maybe String -> Maybe String -> IO (Either String C
 wikiUpdateAux : String -> Maybe String -> Maybe String -> AppM CmdResult
 wikiUpdateAux ident mContent mSlug = do
   wid <- resolveWikiId ident
-  env <- liftIOEither resolveApiEnv
+  env  <- resolveApiEnv
   current <- liftIOEither $ getWiki @{env} wid
   let content := case mContent of Nothing => current.content ; Just c => c
       slug    := case mSlug     of Nothing => current.slug.slug ; Just s => s
@@ -975,7 +950,7 @@ handleWikiDelete : String -> IO (Either String CmdResult)
 wikiDeleteAux : String -> AppM CmdResult
 wikiDeleteAux ident = do
   wid <- resolveWikiId ident
-  env <- liftIOEither resolveApiEnv
+  env  <- resolveApiEnv
   confirmed <- liftRawIO (confirmDelete ("wiki page " ++ ident))
   if not confirmed
     then pure $ cmdInfo "Delete cancelled"
@@ -1005,7 +980,7 @@ handleSprintUpdate : String -> Maybe String -> Maybe String -> Maybe String -> B
 sprintUpdateAux : String -> Maybe String -> Maybe String -> Maybe String -> Bits64 -> AppM CmdResult
 sprintUpdateAux ident mName mStart mEnd ver = do
   sid <- resolveMilestoneId ident
-  env <- liftIOEither resolveApiEnv
+  env  <- resolveApiEnv
   current <- liftIOEither $ getMilestone @{env} sid
   let name := case mName of Nothing => current.name ; Just n => n
       start := mStart
@@ -1022,7 +997,7 @@ handleSprintDelete : String -> IO (Either String CmdResult)
 sprintDeleteAux : String -> AppM CmdResult
 sprintDeleteAux ident = do
   sid <- resolveMilestoneId ident
-  env <- liftIOEither resolveApiEnv
+  env  <- resolveApiEnv
   confirmed <- liftRawIO (confirmDelete ("sprint " ++ ident))
   if not confirmed
     then pure $ cmdInfo "Delete cancelled"
@@ -1067,7 +1042,7 @@ commentAddAux entityName ident text = do
     (_, Nothing)       => appFail $ "Unknown entity type: " ++ entityName ++ ". Use: task, issue, story, wiki"
     (Just rKey, Just entity) => do
       eid <- resolveToIdForType rKey ident
-      env <- liftIOEither resolveApiEnv
+      env  <- resolveApiEnv
       ver <- liftIOEither $ fetchEntityVersion env entity eid
       raw <- liftIOEither $ addComment @{env} entity eid text ver
       pure $ cmdOkRaw "Comment added" raw
@@ -1085,7 +1060,7 @@ commentListAux entityName ident = do
     (_, Nothing)       => appFail $ "Unknown entity type: " ++ entityName ++ ". Use: task, issue, story, wiki"
     (Just rKey, Just entity) => do
       eid <- resolveToIdForType rKey ident
-      env <- liftIOEither resolveApiEnv
+      env  <- resolveApiEnv
       val <- liftIOEither $ listHistory @{env} entity eid
       pure $ cmdOk "Comments" val
 
@@ -1105,7 +1080,7 @@ statusListAux : String -> AppM CmdResult
 statusListAux entityType = do
   st   <- liftIOEither loadState
   pid  <- liftEither $ getActiveProject st
-  env  <- liftIOEither resolveApiEnv
+  env  <- resolveApiEnv
   proj <- getProjectForStatus env st
   let statuses := case entityType of
                      "task"   => proj.task_statuses
@@ -1141,7 +1116,7 @@ handleResolve ref = runAppM (resolveAndLookup ref)
     resolveAndLookup : String -> AppM CmdResult
     resolveAndLookup ref = do
       (_, nid) <- resolveRef ref
-      env      <- liftIOEither resolveApiEnv
+      env  <- resolveApiEnv
       let getters =
             [ ("task",   liftIOEither $ map (map encode) $ getTask @{env} nid)
             , ("issue",  liftIOEither $ map (map encode) $ getIssue @{env} nid)

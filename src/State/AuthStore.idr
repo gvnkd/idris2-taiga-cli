@@ -13,6 +13,8 @@ import Taiga.Auth
 import Taiga.Env
 import State.File
 import State.State
+import Control.AppM
+import Control.Monad.Error.Either
 
 %language ElabReflection
 
@@ -53,8 +55,8 @@ removeToken baseUrl = do
 
 ||| Authenticate with credentials and persist the token globally.
 public export
-authenticate : String -> Credentials -> IO (Either String Token)
-authenticate baseUrl creds = do
+authenticateIO : String -> Credentials -> IO (Either String Token)
+authenticateIO baseUrl creds = do
   result <- login baseUrl creds
   case result of
     Left err  => pure $ Left err
@@ -65,17 +67,13 @@ authenticate baseUrl creds = do
 ||| Resolve auth for a workspace: load state, look up token, build
 ||| ApiEnv.  Returns the ApiEnv ready for API calls.
 public export
-resolveAuth : IO (Either String ApiEnv)
+resolveAuth : AppM ApiEnv
 resolveAuth = do
-  st_e <- loadState
-  case st_e of
-    Left err  => pure $ Left err
-    Right st  => do
-      tok_m <- loadToken st.base_url
-      case tok_m of
-        Nothing   => pure $ Left "Not authenticated. Run 'taiga-cli login'."
-        Just tok  =>
-          pure $ Right $ buildApiEnvWithToken st.base_url tok.auth_token
+  st <- liftIOEither loadState
+  tok_m <- liftRawIO $ loadToken st.base_url
+  case tok_m of
+    Nothing   => appFail "Not authenticated. Run 'taiga-cli login'."
+    Just tok  => pure $ buildApiEnvWithToken st.base_url tok.auth_token
 
 ||| Attempt to refresh a token using the stored refresh token.
 ||| Returns new token on success, original on failure.

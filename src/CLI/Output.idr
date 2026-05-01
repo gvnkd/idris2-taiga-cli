@@ -34,11 +34,14 @@ ToJSON CmdResult where
 encodeCmdResult : CmdResult -> String
 encodeCmdResult cr =
   let header := encode cr
-   in "{" ++ dropLastBrace header ++ ",\"payload\":" ++ cr.payload ++ "}"
+      stripped := go (unpack header) ""
+   in "{" ++ stripped ++ ",\"payload\":" ++ cr.payload ++ "}"
 
   where
-    dropLastBrace : String -> String
-    dropLastBrace s = pack $ init (unpack s)
+    go : List Char -> String -> String
+    go []        acc = acc
+    go ('}' :: _) acc = acc
+    go (c   :: _) acc = go [] (acc ++ pack [c])
 
 ||| Convenience constructor for success.
 public export
