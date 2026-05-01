@@ -310,48 +310,29 @@ parseAction ("task" :: "list" :: rest) =
     ("--status" :: s :: _) => Right $ ActTaskList (Just s)
     _                => Left "usage: task list [--status STATUS]"
 parseAction ("task" :: "create" :: subj :: _) = Right $ ActTaskCreate subj
-parseAction ("task" :: "get" :: idStr :: _) =
-  case readNat64 idStr of
-    Right nid => Right $ ActTaskGet (MkNat64Id nid)
-    Left _    => Left $ "invalid task id: " ++ idStr
-parseAction ("task" :: "status" :: idStr :: stStr :: _) =
-  case (readNat64 idStr, readNat64 stStr) of
-    (Right nid, Right st) => Right $ ActTaskStatus (MkNat64Id nid) st
-    _                     => Left "usage: task status <id> <status-id>"
-parseAction ("task" :: "comment" :: idStr :: text :: _) =
-  case readNat64 idStr of
-    Right nid => Right $ ActTaskComment (MkNat64Id nid) text
-    Left _    => Left $ "invalid task id: " ++ idStr
-parseAction ("task" :: _)              = Left "usage: task {list|create <subject>|get <id>|status <id> <status>|comment <id> <text>}"
+parseAction ("task" :: "get" :: ident :: _) = Right $ ActTaskGet ident
+parseAction ("task" :: "status" :: ident :: stStr :: _) =
+  case readNat64 stStr of
+    Right st  => Right $ ActTaskStatus ident st
+    Left _    => Left "usage: task status <id-or-ref> <status-id>"
+parseAction ("task" :: "comment" :: ident :: text :: _) = Right $ ActTaskComment ident text
+parseAction ("task" :: _)              = Left "usage: task {list|create <subject>|get <id-or-ref>|status <id-or-ref> <status>|comment <id-or-ref> <text>}"
 parseAction ("epic" :: "list" :: _)    = Right ActEpicList
-parseAction ("epic" :: "get" :: idStr :: _) =
-  case readNat64 idStr of
-    Right nid => Right $ ActEpicGet (MkNat64Id nid)
-    Left _    => Left $ "invalid epic id: " ++ idStr
-parseAction ("epic" :: _)              = Left "usage: epic {list|get <id>}"
+parseAction ("epic" :: "get" :: ident :: _) = Right $ ActEpicGet ident
+parseAction ("epic" :: _)              = Left "usage: epic {list|get <id-or-ref>}"
 parseAction ("sprint" :: "list" :: _)  = Right ActSprintList
 parseAction ("sprint" :: "show" :: _)  = Right ActSprintShow
-parseAction ("sprint" :: "set" :: idStr :: _) =
-  case readNat64 idStr of
-    Right nid => Right $ ActSprintSet (MkNat64Id nid)
-    Left _    => Left $ "invalid sprint id: " ++ idStr
-parseAction ("sprint" :: _)            = Left "usage: sprint {list|show|set <id>}"
+parseAction ("sprint" :: "set" :: ident :: _) = Right $ ActSprintSet ident
+parseAction ("sprint" :: _)            = Left "usage: sprint {list|show|set <id-or-ref>}"
 parseAction ("issue" :: "list" :: _)   = Right ActIssueList
-parseAction ("issue" :: "get" :: idStr :: _) =
-  case readNat64 idStr of
-    Right nid => Right $ ActIssueGet (MkNat64Id nid)
-    Left _    => Left $ "invalid issue id: " ++ idStr
-parseAction ("issue" :: _)             = Left "usage: issue {list|get <id>}"
+parseAction ("issue" :: "get" :: ident :: _) = Right $ ActIssueGet ident
+parseAction ("issue" :: _)             = Left "usage: issue {list|get <id-or-ref>}"
 parseAction ("story" :: "list" :: _)   = Right ActStoryList
-parseAction ("story" :: "get" :: idStr :: _) =
-  case readNat64 idStr of
-    Right nid => Right $ ActStoryGet (MkNat64Id nid)
-    Left _    => Left $ "invalid story id: " ++ idStr
-parseAction ("story" :: _)             = Left "usage: story {list|get <id>}"
+parseAction ("story" :: "get" :: ident :: _) = Right $ ActStoryGet ident
+parseAction ("story" :: _)             = Left "usage: story {list|get <id-or-ref>}"
 parseAction ("wiki" :: "list" :: _)    = Right ActWikiList
-parseAction ("wiki" :: "get" :: idStr :: _) =
-  case readNat64 idStr of
-    Right nid => Right $ ActWikiGet (MkNat64Id nid)
-    Left _    => Left $ "invalid wiki id: " ++ idStr
-parseAction ("wiki" :: _)              = Left "usage: wiki {list|get <id>}"
+parseAction ("wiki" :: "get" :: ident :: _) = Right $ ActWikiGet ident
+parseAction ("wiki" :: _)              = Left "usage: wiki {list|get <id-or-ref>}"
+parseAction ("resolve" :: ref :: _)    = Right $ ActResolve ref
+parseAction ("resolve" :: _)           = Left "usage: resolve <ref>"
 parseAction (cmd :: _)                 = Left $ "unknown command: " ++ cmd

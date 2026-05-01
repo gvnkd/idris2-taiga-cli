@@ -67,6 +67,19 @@ setActiveProject pid = do
       let st' := { active_project := Just pid } st
       saveState st'
 
+||| Set the active project with cached project details and persist.
+public export
+setActiveProjectCached : Project -> IO (Either String ())
+setActiveProjectCached proj = do
+  st_e <- loadState
+  case st_e of
+    Left err  => pure $ Left err
+    Right st  => do
+      let st' := { active_project := Just proj.id
+                 , project_cache  := Just proj
+                 } st
+      saveState st'
+
 ||| Invalidate project cache (e.g. after project-level mutation).
 public export
 invalidateCache : IO (Either String ())

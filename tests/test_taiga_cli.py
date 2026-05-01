@@ -362,6 +362,119 @@ class TestStateful:
         assert "[OK]" in proc.stdout
 
 
+class TestRefResolution:
+    """Test ref-based resolution in subcommand CLI mode (issue 330)."""
+
+    BASE = "http://127.0.0.1:8000/api/v1"
+
+    @staticmethod
+    def _token_file():
+        home = os.path.expanduser("~")
+        return os.path.join(home, ".local", "share", "taiga-cli", "tokens",
+                            "http___127.0.0.1_8000_api_v1.json")
+
+    @pytest.fixture
+    def workspace(self, tmp_path):
+        tf = self._token_file()
+        if os.path.exists(tf):
+            os.remove(tf)
+
+        proc = subprocess.run(
+            [BIN, "init", self.BASE],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(tmp_path),
+        )
+        assert proc.returncode == 0, f"init failed: {proc.stdout}{proc.stderr}"
+
+        yield tmp_path
+
+        if os.path.exists(tf):
+            os.remove(tf)
+
+    def _login(self, workspace):
+        proc = subprocess.run(
+            [BIN, "login", "--user", "rune"],
+            input="rune-secret-42\n",
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0
+
+    def _set_project(self, workspace):
+        proc = subprocess.run(
+            [BIN, "project", "set", PROJECT_ID],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0
+
+    def test_issue_get_by_ref(self, workspace, client):
+        """issue get <ref> should resolve and return the issue."""
+        self._login(workspace)
+        self._set_project(workspace)
+
+        ts = _ts()
+        created = client.create_issue(f"ref test issue {ts}")
+        iid, ref = created["id"], created["ref"]
+        try:
+            proc = subprocess.run(
+                [BIN, "issue", "get", str(ref)],
+                capture_output=True, text=True, timeout=30,
+                cwd=str(workspace),
+            )
+            assert proc.returncode == 0, f"issue get by ref failed: {proc.stdout}{proc.stderr}"
+            assert "[OK]" in proc.stdout
+            data = json.loads(proc.stdout.split("\n", 1)[1])
+            assert data["id"] == iid
+            assert data["ref"] == ref
+        finally:
+            client.delete_issue(iid)
+
+    def test_issue_get_by_db_id_backward_compat(self, workspace, client):
+        """issue get <db_id> should still work for backward compatibility."""
+        self._login(workspace)
+        self._set_project(workspace)
+
+        ts = _ts()
+        created = client.create_issue(f"db id test issue {ts}")
+        iid, ref = created["id"], created["ref"]
+        try:
+            proc = subprocess.run(
+                [BIN, "issue", "get", str(iid)],
+                capture_output=True, text=True, timeout=30,
+                cwd=str(workspace),
+            )
+            assert proc.returncode == 0, f"issue get by db id failed: {proc.stdout}{proc.stderr}"
+            assert "[OK]" in proc.stdout
+            data = json.loads(proc.stdout.split("\n", 1)[1])
+            assert data["id"] == iid
+            assert data["ref"] == ref
+        finally:
+            client.delete_issue(iid)
+
+    def test_task_get_by_ref(self, workspace, client):
+        """task get <ref> should resolve and return the task."""
+        self._login(workspace)
+        self._set_project(workspace)
+
+        ts = _ts()
+        created = client.create_task(f"ref test task {ts}")
+        tid, ref = created["id"], created["ref"]
+        try:
+            proc = subprocess.run(
+                [BIN, "task", "get", str(ref)],
+                capture_output=True, text=True, timeout=30,
+                cwd=str(workspace),
+            )
+            assert proc.returncode == 0, f"task get by ref failed: {proc.stdout}{proc.stderr}"
+            assert "[OK]" in proc.stdout
+            data = json.loads(proc.stdout.split("\n", 1)[1])
+            assert data["id"] == tid
+            assert data["ref"] == ref
+        finally:
+            client.delete_task(tid)
+
+
 class TestUsersMembershipsRoles:
     def test_list_users(self, client):
         users = client.list_users()
