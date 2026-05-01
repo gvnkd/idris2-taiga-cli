@@ -128,6 +128,9 @@
               (writeShellScriptBin "run" ''
                 idris2 --build taiga-cli.ipkg && exec ./build/exec/taiga-cli "$@"
               '')
+              (writeShellScriptBin "tcli" ''
+                exec ./build/exec/taiga-cli "$@"
+              '')
             ]);
         };
       }
