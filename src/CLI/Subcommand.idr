@@ -359,6 +359,11 @@ public export
 liftIOEither : IO (Either String a) -> AppM a
 liftIOEither io = MkAppM io
 
+||| Lift any raw IO action into AppM, returning the result directly.
+public export
+liftRawIO : IO a -> AppM a
+liftRawIO act = MkAppM $ map Right act
+
 public export
 appFail : String -> AppM a
 appFail err = MkAppM $ pure $ Left err
@@ -490,11 +495,14 @@ handleShow = do
 ||| Handler for ActProjectList.
 public export
 handleProjectList : IO (Either String CmdResult)
-handleProjectList = do
-  env_e <- resolveApiEnv
-  case env_e of
-    Left err  => pure $ Left err
-    Right env => callToResult "Projects" $ listProjects @{env} Nothing Nothing Nothing
+
+projectListAux : AppM CmdResult
+projectListAux = do
+  env <- liftIOEither resolveApiEnv
+  val <- liftIOEither $ listProjects @{env} Nothing Nothing Nothing
+  pure $ cmdOk "Projects" val
+
+handleProjectList = runAppM projectListAux
 
 ||| Helper: find a project by slug in the project list.
 ||| Returns the project ID if found.
@@ -613,65 +621,45 @@ handleTaskGet ident = runAppM (taskGetAux ident)
 ||| Handler for ActTaskStatus.
 public export
 handleTaskStatus : String -> Bits64 -> IO (Either String CmdResult)
-handleTaskStatus ident statusId = do
-  id_e <- resolveTaskId ident
-  case id_e of
-    Left err   => pure $ Left err
-    Right tid  => do
-      env_e <- resolveApiEnv
-      case env_e of
-        Left err   => pure $ Left err
-        Right env  => do
-          result <- getTask @{env} tid
-          case result of
-            Left err    => pure $ Right $ cmdError err
-            Right task  => callToResult "Status changed" $ changeTaskStatus @{env} tid statusId task.version
+
+taskStatusAux : String -> Bits64 -> AppM CmdResult
+taskStatusAux ident statusId = do
+  tid <- liftIOEither (resolveTaskId ident)
+  env <- liftIOEither resolveApiEnv
+  task <- liftIOEither $ getTask @{env} tid
+  val <- liftIOEither $ changeTaskStatus @{env} tid statusId task.version
+  pure $ cmdOk "Status changed" val
+
+handleTaskStatus ident statusId = runAppM (taskStatusAux ident statusId)
 
 ||| Handler for ActTaskComment.
 public export
 handleTaskComment : String -> String -> IO (Either String CmdResult)
-handleTaskComment ident text = do
-  id_e <- resolveTaskId ident
-  case id_e of
-    Left err   => pure $ Left err
-    Right tid  => do
-      env_e <- resolveApiEnv
-      case env_e of
-        Left err   => pure $ Left err
-        Right env  => do
-          result <- getTask @{env} tid
-          case result of
-            Left err    => pure $ Right $ cmdError err
-            Right task  => do
-              raw_e <- taskComment @{env} tid text task.version
-              pure $ case raw_e of
-                Left err  => Right $ cmdError err
-                Right raw => Right $ cmdOkRaw "Comment added" raw
+
+taskCommentAux : String -> String -> AppM CmdResult
+taskCommentAux ident text = do
+  tid <- liftIOEither (resolveTaskId ident)
+  env <- liftIOEither resolveApiEnv
+  task <- liftIOEither $ getTask @{env} tid
+  raw <- liftIOEither $ taskComment @{env} tid text task.version
+  pure $ cmdOkRaw "Comment added" raw
+
+handleTaskComment ident text = runAppM (taskCommentAux ident text)
 
 ||| Handler for ActTaskAssignStory - assigns a task to a user story.
 public export
 handleTaskAssignStory : String -> String -> IO (Either String CmdResult)
-handleTaskAssignStory taskIdent storyIdent = do
-  taskId_e <- resolveTaskId taskIdent
-  case taskId_e of
-    Left err   => pure $ Left err
-    Right tid  => do
-      storyId_e <- resolveStoryId storyIdent
-      case storyId_e of
-        Left err   => pure $ Left err
-        Right sid  => do
-          env_e <- resolveApiEnv
-          case env_e of
-            Left err   => pure $ Left err
-            Right env  => do
-              task_e <- getTask @{env} tid
-              case task_e of
-                Left err    => pure $ Right $ cmdError err
-                Right task  => do
-                  result <- assignTaskToStory @{env} tid (Just sid) task.version
-                  pure $ case result of
-                    Left err   => Right $ cmdError err
-                    Right t    => Right $ cmdOk "Task assigned to story" t
+
+taskAssignStoryAux : String -> String -> AppM CmdResult
+taskAssignStoryAux taskIdent storyIdent = do
+  tid <- liftIOEither (resolveTaskId taskIdent)
+  sid <- liftIOEither (resolveStoryId storyIdent)
+  env <- liftIOEither resolveApiEnv
+  task <- liftIOEither $ getTask @{env} tid
+  val <- liftIOEither $ assignTaskToStory @{env} tid (Just sid) task.version
+  pure $ cmdOk "Task assigned to story" val
+
+handleTaskAssignStory taskIdent storyIdent = runAppM (taskAssignStoryAux taskIdent storyIdent)
 
 ||| Resolve a status parameter for an entity update.
 ||| Prefers explicit statusId, falls back to text resolution.
@@ -701,50 +689,36 @@ resolveUpdateStatus env entityType mStatusText mStatusId =
 ||| Handler for ActTaskUpdate.
 public export
 handleTaskUpdate : String -> Maybe String -> Maybe String -> Maybe String -> Maybe Bits64 -> IO (Either String CmdResult)
-handleTaskUpdate ident mSubject mDesc mStatusText mStatusId = do
-  id_e <- resolveTaskId ident
-  case id_e of
-    Left err   => pure $ Left err
-    Right tid  => do
-      env_e <- resolveApiEnv
-      case env_e of
-        Left err   => pure $ Left err
-        Right env  => do
-          current_e <- getTask @{env} tid
-          case current_e of
-            Left err     => pure $ Right $ cmdError err
-            Right current => do
-              let subj := case mSubject of
-                            Nothing => current.subject
-                            Just s  => s
-                  desc := case mDesc of
-                            Nothing => current.description
-                            Just d  => d
-              stat_e <- resolveUpdateStatus env "task" mStatusText mStatusId
-              case stat_e of
-                Left err   => pure $ Right $ cmdError err
-                Right stat => callToResult "Task updated" $ updateTask @{env} tid (Just subj) (Just desc) (map show stat) current.version
+
+taskUpdateAux : String -> Maybe String -> Maybe String -> Maybe String -> Maybe Bits64 -> AppM CmdResult
+taskUpdateAux ident mSubject mDesc mStatusText mStatusId = do
+  tid <- liftIOEither (resolveTaskId ident)
+  env <- liftIOEither resolveApiEnv
+  current <- liftIOEither $ getTask @{env} tid
+  let subj := case mSubject of Nothing => current.subject ; Just s => s
+      desc := case mDesc     of Nothing => current.description ; Just d => d
+  stat <- liftIOEither $ resolveUpdateStatus env "task" mStatusText mStatusId
+  val <- liftIOEither $ updateTask @{env} tid (Just subj) (Just desc) (map show stat) current.version
+  pure $ cmdOk "Task updated" val
+
+handleTaskUpdate ident mSubject mDesc mStatusText mStatusId = runAppM (taskUpdateAux ident mSubject mDesc mStatusText mStatusId)
 
 ||| Handler for ActTaskDelete.
 public export
 handleTaskDelete : String -> IO (Either String CmdResult)
-handleTaskDelete ident = do
-  id_e <- resolveTaskId ident
-  case id_e of
-    Left err   => pure $ Left err
-    Right tid  => do
-      env_e <- resolveApiEnv
-      case env_e of
-        Left err   => pure $ Left err
-        Right env  => do
-          confirmed <- confirmDelete ("task " ++ ident)
-          if not confirmed
-            then pure $ Right $ cmdInfo "Delete cancelled"
-            else do
-              result <- deleteTask @{env} tid
-              pure $ case result of
-                Left err  => Right $ cmdError err
-                Right _   => Right $ cmdOk "Task deleted" $ MkDeleteResult "task" tid.id
+
+taskDeleteAux : String -> AppM CmdResult
+taskDeleteAux ident = do
+  tid <- liftIOEither (resolveTaskId ident)
+  env <- liftIOEither resolveApiEnv
+  confirmed <- liftRawIO (confirmDelete ("task " ++ ident))
+  if not confirmed
+    then pure $ cmdInfo "Delete cancelled"
+    else do
+      liftIOEither $ deleteTask @{env} tid
+      pure $ cmdOk "Task deleted" $ MkDeleteResult "task" tid.id
+
+handleTaskDelete ident = runAppM (taskDeleteAux ident)
 
 ||| Handler for ActEpicList.
 public export
@@ -898,50 +872,36 @@ handleIssueCreate subject mDesc mPriority mSeverity mType = runAppM (issueCreate
 ||| Handler for ActIssueUpdate.
 public export
 handleIssueUpdate : String -> Maybe String -> Maybe String -> Maybe String -> Maybe String -> Maybe Bits64 -> IO (Either String CmdResult)
-handleIssueUpdate ident mSubject mDesc mType mStatusText mStatusId = do
-  id_e <- resolveIssueId ident
-  case id_e of
-    Left err   => pure $ Left err
-    Right iid  => do
-      env_e <- resolveApiEnv
-      case env_e of
-        Left err   => pure $ Left err
-        Right env  => do
-          current_e <- getIssue @{env} iid
-          case current_e of
-            Left err     => pure $ Right $ cmdError err
-            Right current => do
-              let subj := case mSubject of
-                            Nothing => current.subject
-                            Just s  => s
-                  desc := case mDesc of
-                            Nothing => current.description
-                            Just d  => d
-              stat_e <- resolveUpdateStatus env "issue" mStatusText mStatusId
-              case stat_e of
-                Left err   => pure $ Right $ cmdError err
-                Right stat => callToResult "Issue updated" $ updateIssue @{env} iid (Just subj) (Just desc) mType (map show stat) current.version
+
+issueUpdateAux : String -> Maybe String -> Maybe String -> Maybe String -> Maybe String -> Maybe Bits64 -> AppM CmdResult
+issueUpdateAux ident mSubject mDesc mType mStatusText mStatusId = do
+  iid <- liftIOEither (resolveIssueId ident)
+  env <- liftIOEither resolveApiEnv
+  current <- liftIOEither $ getIssue @{env} iid
+  let subj := case mSubject of Nothing => current.subject ; Just s => s
+      desc := case mDesc     of Nothing => current.description ; Just d => d
+  stat <- liftIOEither $ resolveUpdateStatus env "issue" mStatusText mStatusId
+  val <- liftIOEither $ updateIssue @{env} iid (Just subj) (Just desc) mType (map show stat) current.version
+  pure $ cmdOk "Issue updated" val
+
+handleIssueUpdate ident mSubject mDesc mType mStatusText mStatusId = runAppM (issueUpdateAux ident mSubject mDesc mType mStatusText mStatusId)
 
 ||| Handler for ActIssueDelete.
 public export
 handleIssueDelete : String -> IO (Either String CmdResult)
-handleIssueDelete ident = do
-  id_e <- resolveIssueId ident
-  case id_e of
-    Left err   => pure $ Left err
-    Right iid  => do
-      env_e <- resolveApiEnv
-      case env_e of
-        Left err   => pure $ Left err
-        Right env  => do
-          confirmed <- confirmDelete ("issue " ++ ident)
-          if not confirmed
-            then pure $ Right $ cmdInfo "Delete cancelled"
-            else do
-              result <- deleteIssue @{env} iid
-              pure $ case result of
-                Left err  => Right $ cmdError err
-                Right _   => Right $ cmdOk "Issue deleted" $ MkDeleteResult "issue" iid.id
+
+issueDeleteAux : String -> AppM CmdResult
+issueDeleteAux ident = do
+  iid <- liftIOEither (resolveIssueId ident)
+  env <- liftIOEither resolveApiEnv
+  confirmed <- liftRawIO (confirmDelete ("issue " ++ ident))
+  if not confirmed
+    then pure $ cmdInfo "Delete cancelled"
+    else do
+      liftIOEither $ deleteIssue @{env} iid
+      pure $ cmdOk "Issue deleted" $ MkDeleteResult "issue" iid.id
+
+handleIssueDelete ident = runAppM (issueDeleteAux ident)
 
 ||| Handler for ActStoryList.
 public export
@@ -1020,149 +980,116 @@ handleStoryCreate subject mDesc mMilestone = runAppM (storyCreateAux subject mDe
 ||| Handler for ActStoryUpdate.
 public export
 handleStoryUpdate : String -> Maybe String -> Maybe String -> Maybe String -> Maybe String -> Maybe Bits64 -> IO (Either String CmdResult)
-handleStoryUpdate ident mSubject mDesc mMilestone mStatusText mStatusId = do
-  id_e <- resolveStoryId ident
-  case id_e of
-    Left err   => pure $ Left err
-    Right sid  => do
-      env_e <- resolveApiEnv
-      case env_e of
-        Left err   => pure $ Left err
-        Right env  => do
-          current_e <- getStory @{env} sid
-          case current_e of
-            Left err     => pure $ Right $ cmdError err
-            Right current => do
-              let subj := case mSubject of Nothing => current.subject ; Just s => s
-                  desc := case mDesc     of Nothing => current.description ; Just d => d
-                  mMs  := case mMilestone of Nothing => Nothing ; Just ms => Just ms
-              callToResult "Story updated" $ updateStory @{env} sid (Just subj) (Just desc) mMs current.version
+
+storyUpdateAux : String -> Maybe String -> Maybe String -> Maybe String -> Maybe String -> Maybe Bits64 -> AppM CmdResult
+storyUpdateAux ident mSubject mDesc mMilestone _ _ = do
+  sid <- liftIOEither (resolveStoryId ident)
+  env <- liftIOEither resolveApiEnv
+  current <- liftIOEither $ getStory @{env} sid
+  let subj := case mSubject of Nothing => current.subject ; Just s => s
+      desc := case mDesc     of Nothing => current.description ; Just d => d
+      mMs  := case mMilestone of Nothing => Nothing ; Just ms => Just ms
+  val <- liftIOEither $ updateStory @{env} sid (Just subj) (Just desc) mMs current.version
+  pure $ cmdOk "Story updated" val
+
+handleStoryUpdate ident mSubject mDesc mMilestone mStatusText mStatusId = runAppM (storyUpdateAux ident mSubject mDesc mMilestone mStatusText mStatusId)
 
 ||| Handler for ActStoryDelete.
 public export
 handleStoryDelete : String -> IO (Either String CmdResult)
-handleStoryDelete ident = do
-  id_e <- resolveStoryId ident
-  case id_e of
-    Left err   => pure $ Left err
-    Right sid  => do
-      env_e <- resolveApiEnv
-      case env_e of
-        Left err   => pure $ Left err
-        Right env  => do
-          confirmed <- confirmDelete ("story " ++ ident)
-          if not confirmed
-            then pure $ Right $ cmdInfo "Delete cancelled"
-            else do
-              result <- deleteStory @{env} sid
-              pure $ case result of
-                Left err  => Right $ cmdError err
-                Right _   => Right $ cmdOk "Story deleted" $ MkDeleteResult "story" sid.id
+
+storyDeleteAux : String -> AppM CmdResult
+storyDeleteAux ident = do
+  sid <- liftIOEither (resolveStoryId ident)
+  env <- liftIOEither resolveApiEnv
+  confirmed <- liftRawIO (confirmDelete ("story " ++ ident))
+  if not confirmed
+    then pure $ cmdInfo "Delete cancelled"
+    else do
+      liftIOEither $ deleteStory @{env} sid
+      pure $ cmdOk "Story deleted" $ MkDeleteResult "story" sid.id
+
+handleStoryDelete ident = runAppM (storyDeleteAux ident)
 
 ||| Handler for ActWikiUpdate.
 public export
 handleWikiUpdate : String -> Maybe String -> Maybe String -> IO (Either String CmdResult)
-handleWikiUpdate ident mContent mSlug = do
-  id_e <- resolveWikiId ident
-  case id_e of
-    Left err   => pure $ Left err
-    Right wid  => do
-      env_e <- resolveApiEnv
-      case env_e of
-        Left err   => pure $ Left err
-        Right env  => do
-          current_e <- getWiki @{env} wid
-          case current_e of
-            Left err     => pure $ Right $ cmdError err
-            Right current =>
-              let content := case mContent of
-                               Nothing => current.content
-                               Just c  => c
-                  slug    := case mSlug of
-                               Nothing => current.slug.slug
-                               Just s  => s
-               in callToResult "Wiki page updated" $ updateWiki @{env} wid (Just content) (Just slug) current.version
+
+wikiUpdateAux : String -> Maybe String -> Maybe String -> AppM CmdResult
+wikiUpdateAux ident mContent mSlug = do
+  wid <- liftIOEither (resolveWikiId ident)
+  env <- liftIOEither resolveApiEnv
+  current <- liftIOEither $ getWiki @{env} wid
+  let content := case mContent of Nothing => current.content ; Just c => c
+      slug    := case mSlug     of Nothing => current.slug.slug ; Just s => s
+  val <- liftIOEither $ updateWiki @{env} wid (Just content) (Just slug) current.version
+  pure $ cmdOk "Wiki page updated" val
+
+handleWikiUpdate ident mContent mSlug = runAppM (wikiUpdateAux ident mContent mSlug)
 
 ||| Handler for ActWikiDelete.
 public export
 handleWikiDelete : String -> IO (Either String CmdResult)
-handleWikiDelete ident = do
-  id_e <- resolveWikiId ident
-  case id_e of
-    Left err   => pure $ Left err
-    Right wid  => do
-      env_e <- resolveApiEnv
-      case env_e of
-        Left err   => pure $ Left err
-        Right env  => do
-          confirmed <- confirmDelete ("wiki page " ++ ident)
-          if not confirmed
-            then pure $ Right $ cmdInfo "Delete cancelled"
-            else do
-              result <- deleteWiki @{env} wid
-              pure $ case result of
-                Left err  => Right $ cmdError err
-                Right _   => Right $ cmdOk "Wiki page deleted" $ MkDeleteResult "wiki" wid.id
+
+wikiDeleteAux : String -> AppM CmdResult
+wikiDeleteAux ident = do
+  wid <- liftIOEither (resolveWikiId ident)
+  env <- liftIOEither resolveApiEnv
+  confirmed <- liftRawIO (confirmDelete ("wiki page " ++ ident))
+  if not confirmed
+    then pure $ cmdInfo "Delete cancelled"
+    else do
+      liftIOEither $ deleteWiki @{env} wid
+      pure $ cmdOk "Wiki page deleted" $ MkDeleteResult "wiki" wid.id
+
+handleWikiDelete ident = runAppM (wikiDeleteAux ident)
 
 ||| Handler for ActSprintCreate.
 public export
 handleSprintCreate : String -> Maybe String -> Maybe String -> IO (Either String CmdResult)
-handleSprintCreate name mStart mEnd = do
-  st_e <- loadState
-  case st_e of
-    Left err  => pure $ Left err
-    Right st  => do
-      case getActiveProject st of
-        Left err   => pure $ Left err
-        Right pid  => do
-          env_e <- resolveApiEnv
-          case env_e of
-            Left err   => pure $ Left err
-            Right env  => callToResult "Sprint created" $ createMilestone @{env} (show pid.id) name mStart mEnd
 
-|||| Handler for ActSprintUpdate.
+sprintCreateAux : String -> Maybe String -> Maybe String -> AppM CmdResult
+sprintCreateAux name mStart mEnd = do
+  (env, pid) <- getProjectEnv
+  val <- liftIOEither $ createMilestone @{env} (show pid.id) name mStart mEnd
+  pure $ cmdOk "Sprint created" val
+
+handleSprintCreate name mStart mEnd = runAppM (sprintCreateAux name mStart mEnd)
+
+
+||| Handler for ActSprintUpdate.
 public export
 handleSprintUpdate : String -> Maybe String -> Maybe String -> Maybe String -> Bits64 -> IO (Either String CmdResult)
-handleSprintUpdate ident mName mStart mEnd ver = do
-  id_e <- resolveMilestoneId ident
-  case id_e of
-    Left err   => pure $ Left err
-    Right sid  => do
-      env_e <- resolveApiEnv
-      case env_e of
-        Left err   => pure $ Left err
-        Right env  => do
-          current_e <- getMilestone @{env} sid
-          case current_e of
-            Left err     => pure $ Right $ cmdError err
-            Right current =>
-              let name := case mName of
-                            Nothing => current.name
-                            Just n  => n
-                  start := mStart
-                  end   := mEnd
-               in callToResult "Sprint updated" $ updateMilestone @{env} sid (Just name) start end (MkVersion $ cast ver)
+
+sprintUpdateAux : String -> Maybe String -> Maybe String -> Maybe String -> Bits64 -> AppM CmdResult
+sprintUpdateAux ident mName mStart mEnd ver = do
+  sid <- liftIOEither (resolveMilestoneId ident)
+  env <- liftIOEither resolveApiEnv
+  current <- liftIOEither $ getMilestone @{env} sid
+  let name := case mName of Nothing => current.name ; Just n => n
+      start := mStart
+      end   := mEnd
+  val <- liftIOEither $ updateMilestone @{env} sid (Just name) start end (MkVersion $ cast ver)
+  pure $ cmdOk "Sprint updated" val
+
+handleSprintUpdate ident mName mStart mEnd ver = runAppM (sprintUpdateAux ident mName mStart mEnd ver)
 
 ||| Handler for ActSprintDelete.
 public export
 handleSprintDelete : String -> IO (Either String CmdResult)
-handleSprintDelete ident = do
-  id_e <- resolveMilestoneId ident
-  case id_e of
-    Left err   => pure $ Left err
-    Right sid  => do
-      env_e <- resolveApiEnv
-      case env_e of
-        Left err   => pure $ Left err
-        Right env  => do
-          confirmed <- confirmDelete ("sprint " ++ ident)
-          if not confirmed
-            then pure $ Right $ cmdInfo "Delete cancelled"
-            else do
-              result <- deleteMilestone @{env} sid
-              pure $ case result of
-                Left err  => Right $ cmdError err
-                Right _   => Right $ cmdOk "Sprint deleted" $ MkDeleteResult "sprint" sid.id
+
+sprintDeleteAux : String -> AppM CmdResult
+sprintDeleteAux ident = do
+  sid <- liftIOEither (resolveMilestoneId ident)
+  env <- liftIOEither resolveApiEnv
+  confirmed <- liftRawIO (confirmDelete ("sprint " ++ ident))
+  if not confirmed
+    then pure $ cmdInfo "Delete cancelled"
+    else do
+      liftIOEither $ deleteMilestone @{env} sid
+      pure $ cmdOk "Sprint deleted" $ MkDeleteResult "sprint" sid.id
+
+handleSprintDelete ident = runAppM (sprintDeleteAux ident)
 
 ||| Map user-friendly entity name to Taiga API entity name.
 private
@@ -1191,44 +1118,37 @@ fetchEntityVersion env entity eid =
 ||| Handler for ActCommentAdd.
 public export
 handleCommentAdd : String -> String -> String -> IO (Either String CmdResult)
-handleCommentAdd entityName ident text = do
+
+commentAddAux : String -> String -> String -> AppM CmdResult
+commentAddAux entityName ident text = do
   case (resolverEntityKey entityName, apiEntityName entityName) of
-    (Nothing, _)       => pure $ Left $ "Unknown entity type: " ++ entityName ++ ". Use: task, issue, story, wiki"
-    (_, Nothing)       => pure $ Left $ "Unknown entity type: " ++ entityName ++ ". Use: task, issue, story, wiki"
+    (Nothing, _)       => appFail $ "Unknown entity type: " ++ entityName ++ ". Use: task, issue, story, wiki"
+    (_, Nothing)       => appFail $ "Unknown entity type: " ++ entityName ++ ". Use: task, issue, story, wiki"
     (Just rKey, Just entity) => do
-      id_e <- resolveToIdForType rKey ident
-      case id_e of
-        Left err   => pure $ Left err
-        Right eid  => do
-          env_e <- resolveApiEnv
-          case env_e of
-            Left err   => pure $ Left err
-            Right env  => do
-              ver_e <- fetchEntityVersion env entity eid
-              case ver_e of
-                Left err    => pure $ Right $ cmdError err
-                Right ver   => do
-                  raw_e <- addComment @{env} entity eid text ver
-                  pure $ case raw_e of
-                    Left err  => Right $ cmdError err
-                    Right raw => Right $ cmdOkRaw "Comment added" raw
+      eid <- liftIOEither (resolveToIdForType rKey ident)
+      env <- liftIOEither resolveApiEnv
+      ver <- liftIOEither $ fetchEntityVersion env entity eid
+      raw <- liftIOEither $ addComment @{env} entity eid text ver
+      pure $ cmdOkRaw "Comment added" raw
+
+handleCommentAdd entityName ident text = runAppM (commentAddAux entityName ident text)
 
 ||| Handler for ActCommentList.
 public export
 handleCommentList : String -> String -> IO (Either String CmdResult)
-handleCommentList entityName ident = do
+
+commentListAux : String -> String -> AppM CmdResult
+commentListAux entityName ident = do
   case (resolverEntityKey entityName, apiEntityName entityName) of
-    (Nothing, _)       => pure $ Left $ "Unknown entity type: " ++ entityName ++ ". Use: task, issue, story, wiki"
-    (_, Nothing)       => pure $ Left $ "Unknown entity type: " ++ entityName ++ ". Use: task, issue, story, wiki"
+    (Nothing, _)       => appFail $ "Unknown entity type: " ++ entityName ++ ". Use: task, issue, story, wiki"
+    (_, Nothing)       => appFail $ "Unknown entity type: " ++ entityName ++ ". Use: task, issue, story, wiki"
     (Just rKey, Just entity) => do
-      id_e <- resolveToIdForType rKey ident
-      case id_e of
-        Left err   => pure $ Left err
-        Right eid  => do
-          env_e <- resolveApiEnv
-          case env_e of
-            Left err   => pure $ Left err
-            Right env  => callToResult "Comments" $ listHistory @{env} entity eid
+      eid <- liftIOEither (resolveToIdForType rKey ident)
+      env <- liftIOEither resolveApiEnv
+      val <- liftIOEither $ listHistory @{env} entity eid
+      pure $ cmdOk "Comments" val
+
+handleCommentList entityName ident = runAppM (commentListAux entityName ident)
 
 ||| Format a status list for display.
 private
