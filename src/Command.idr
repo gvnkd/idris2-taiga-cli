@@ -238,23 +238,6 @@ record CommentArgs where
   text : String
 %runElab derive "CommentArgs" [Show,FromJSON]
 
-||| Arguments for editing an existing comment.
-record EditCommentArgs where
-  constructor MkEditCommentArgs
-  entity : String
-  id : Bits64
-  commentId : Bits64
-  text : String
-%runElab derive "EditCommentArgs" [Show,FromJSON]
-
-||| Arguments for deleting a comment.
-record DeleteCommentArgs where
-  constructor MkDeleteCommentArgs
-  entity : String
-  id : Bits64
-  commentId : Bits64
-%runElab derive "DeleteCommentArgs" [Show,FromJSON]
-
 ||| Arguments for creating a new milestone.
 record CreateMilestoneArgs where
   constructor MkCreateMilestoneArgs
@@ -331,10 +314,8 @@ data Command : Type where
   CmdDeleteWiki : Nat64Id -> Command
 
   -- Comments (via history API)
-  CmdComment       : String -> Nat64Id -> String -> Command
-  CmdEditComment   : String -> Nat64Id -> Nat64Id -> String -> Command
-  CmdDeleteComment : String -> Nat64Id -> Nat64Id -> Command
-  CmdListComments  : String -> Nat64Id -> Command
+  CmdComment      : String -> Nat64Id -> String -> Command
+  CmdListComments : String -> Nat64Id -> Command
 
   -- Milestones
   CmdCreateMilestone : String -> String -> Maybe String -> Maybe String -> Command
@@ -486,12 +467,6 @@ mkDeleteWikiCmd a           = CmdDeleteWiki (MkNat64Id a.id)
 private mkCommentCmd        : CommentArgs -> Command
 mkCommentCmd a              = CmdComment a.entity (MkNat64Id a.id) a.text
 
-private mkEditCommentCmd    : EditCommentArgs -> Command
-mkEditCommentCmd a          = CmdEditComment a.entity (MkNat64Id a.id) (MkNat64Id a.commentId) a.text
-
-private mkDeleteCommentCmd  : DeleteCommentArgs -> Command
-mkDeleteCommentCmd a        = CmdDeleteComment a.entity (MkNat64Id a.id) (MkNat64Id a.commentId)
-
 private mkListCommentsCmd   : EntityIdArgs -> Command
 mkListCommentsCmd a         = CmdListComments a.entity (MkNat64Id a.id)
 private mkCreateMilestoneCmd : CreateMilestoneArgs -> Command
@@ -551,8 +526,6 @@ parseCommand "create-wiki"      args        = parseCmdArgs mkCreateWikiCmd args
 parseCommand "update-wiki"      args        = parseCmdArgs mkUpdateWikiCmd args
 parseCommand "delete-wiki"      args        = parseCmdArgs mkDeleteWikiCmd args
 parseCommand "comment"          args        = parseCmdArgs mkCommentCmd args
-parseCommand "edit-comment"     args        = parseCmdArgs mkEditCommentCmd args
-parseCommand "delete-comment"   args        = parseCmdArgs mkDeleteCommentCmd args
 parseCommand "list-comments"    args        = parseCmdArgs mkListCommentsCmd args
 parseCommand "create-milestone" args        = parseCmdArgs mkCreateMilestoneCmd args
 parseCommand "update-milestone" args        = parseCmdArgs mkUpdateMilestoneCmd args
@@ -622,8 +595,6 @@ dispatchWithEnv' command env =
         CmdUpdateMilestone id n es ef v                   => dispatchWithEnvHelper (updateMilestone @{env} id n es ef v) encode
         CmdDeleteMilestone id                             => dispatchWithEnvHelper (deleteMilestone @{env} id) (const "deleted")
         CmdComment e eid t                                => dispatchWithEnvHelper (addComment @{env} e eid t 0) Prelude.id
-        CmdEditComment e eid cid t                        => dispatchWithEnvHelper (editComment @{env} e eid (show cid.id) t) Prelude.id
-        CmdDeleteComment e eid cid                        => dispatchWithEnvHelper (deleteComment @{env} e eid (show cid.id)) (const "deleted")
         CmdListComments e eid                             => dispatchWithEnvHelper (listHistory @{env} e eid) encode
         _                                                 => pure $ Err $ MkErrorResponse False "internal" "Unreachable"
 

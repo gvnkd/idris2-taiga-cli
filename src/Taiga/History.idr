@@ -85,25 +85,3 @@ parameters {auto env : ApiEnv}
     resp <- authPatch env url body
     expectRaw resp 200 "add comment"
 
-  ||| Edit an existing comment is not supported by Taiga's API.
-  ||| Returns a descriptive error.
-  public export
-  editComment :
-       (entity : String)
-    -> (entityId : Nat64Id)
-    -> (commentId : String)
-    -> (text : String)
-    -> {auto _ : HasIO io}
-    -> io (Either String String)
-  editComment _ _ _ _ = pure $ Left "Taiga does not support editing comments"
-
-  ||| Delete a comment is not supported by Taiga's API.
-  ||| Returns a descriptive error.
-  public export
-  deleteComment :
-       (entity : String)
-    -> (entityId : Nat64Id)
-    -> (commentId : String)
-    -> {auto _ : HasIO io}
-    -> io (Either String ())
-  deleteComment _ _ _ = pure $ Left "Taiga does not support deleting comments"
