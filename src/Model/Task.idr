@@ -18,6 +18,7 @@ record Task where
   description : String
   status : Maybe Bits64
   user_story : Maybe Nat64Id
+  is_closed : Bool
   version : Version
 
 %runElab derive "Task" [Show,Eq,ToJSON,FromJSON]
@@ -31,5 +32,6 @@ record TaskSummary where
   subject : String
   status : Maybe Bits64
   user_story : Maybe Nat64Id
+  is_closed : Bool
 
 %runElab derive "TaskSummary" [Show,Eq,ToJSON,FromJSON]

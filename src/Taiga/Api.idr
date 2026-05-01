@@ -41,13 +41,15 @@ parseHttpResponse text =
           code := cast statusLine
        in MkHttpResponse (MkStatusCode code) body
 
+||| Build the Authorization header flag for curl.
+private buildAuthFlag : Maybe String -> String
+buildAuthFlag Nothing    = ""
+buildAuthFlag (Just tok) = "--header \"Authorization: Bearer " ++ tok ++ "\""
+
 ||| Build curl command string for a GET request.
 buildCurlGet : (url : String) -> (auth : Maybe String) -> String
 buildCurlGet url auth =
-  let authFlag := case auth of
-                     Nothing    => ""
-                     Just token => "--header \"Authorization: Bearer " ++ token ++ "\""
-   in "curl -s -w \"\\n%{http_code}\" " ++ authFlag ++ " \"" ++ url ++ "\""
+  "curl -s -w \"\\n%{http_code}\" " ++ buildAuthFlag auth ++ " \"" ++ url ++ "\""
 
 ||| Run curl via popen, read all output, close pipe, return HttpResponse.
 runCurlCmdIO : HasIO io => String -> io HttpResponse
@@ -73,10 +75,7 @@ httpGet url auth = runCurlCmdIO (buildCurlGet url auth)
 ||| Build curl command for a POST request (body passed separately).
 buildCurlPost : (url : String) -> (auth : Maybe String) -> String
 buildCurlPost url auth =
-  let authFlag := case auth of
-                      Nothing    => ""
-                      Just token => "--header \"Authorization: Bearer " ++ token ++ "\""
-   in "curl -s -w \"\\n%{http_code}\" -X POST " ++ authFlag ++ " \"" ++ url ++ "\""
+  "curl -s -w \"\\n%{http_code}\" -X POST " ++ buildAuthFlag auth ++ " \"" ++ url ++ "\""
 
 ||| Run curl with a request body passed via temporary file.
 ||| Avoids shell injection of backticks, single quotes, etc.
@@ -107,10 +106,7 @@ buildCurlMethod :
   -> (auth : Maybe String)
   -> String
 buildCurlMethod method url auth =
-  let authFlag := case auth of
-                      Nothing    => ""
-                      Just token => "--header \"Authorization: Bearer " ++ token ++ "\""
-   in "curl -s -w \"\\n%{http_code}\" -X " ++ method ++ " " ++ authFlag ++ " \"" ++ url ++ "\""
+  "curl -s -w \"\\n%{http_code}\" -X " ++ method ++ " " ++ buildAuthFlag auth ++ " \"" ++ url ++ "\""
 
 ||| Perform a PUT request with a JSON body.
 public export

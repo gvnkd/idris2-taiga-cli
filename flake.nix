@@ -134,6 +134,24 @@
               (writeShellScriptBin "tcli" ''
                 exec ./build/exec/taiga-cli "$@"
               '')
+#              (pkgs.writeShellScriptBin "curl" ''
+#                # Wrapper: block raw curl against the Taiga instance.
+#                # Raw curl is strictly prohibited - use tcli / taiga-cli instead.
+#                for arg in "$@"; do
+#                  case "$arg" in
+#                    *http://taiga.bigdesk/*|*http://127.0.0.1*) 
+#                      echo "ERROR: Using raw curl with the Taiga instance is strictly prohibited." >&2
+#                      echo "This is the canonical, tested, and type-safe way to interact with Taiga." >&2
+#                      echo "Use 'tcli' or 'taiga-cli' instead:" >&2
+#                      echo "  tcli task list" >&2
+#                      echo "  tcli story get <id>" >&2
+#                      echo "  tcli sprint create \"<name>\"" >&2
+#                      exit 1
+#                      ;;
+#                  esac
+#                done
+#                exec ${pkgs.curl}/bin/curl "$@"
+#              '')
             ]);
         };
       }

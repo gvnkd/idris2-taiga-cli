@@ -54,6 +54,21 @@ ToJSON UpdateTaskBody where
       , Just $ jpair "version" b.version
       ]
 
+||| Request body for assigning a task to a user story.
+public export
+record UpdateTaskStoryBody where
+  constructor MkUpdateTaskStoryBody
+  userStory : Maybe Nat64Id
+  version   : Version
+
+public export
+ToJSON UpdateTaskStoryBody where
+  toJSON b =
+    object $ catMaybes
+      [ omitNothing "user_story" b.userStory
+      , Just $ jpair "version" b.version
+      ]
+
 ||| Request body for changing task status.
 public export
 record ChangeTaskStatusBody where
@@ -190,3 +205,17 @@ parameters {auto env : ApiEnv}
         body := encode $ MkTaskCommentBody txt ver
     resp <- authPatch env url body
     expectRaw resp 200 "add task comment"
+
+  ||| Assign a task to a user story (or unassign with Nothing).
+  public export
+  assignTaskToStory :
+       (id : Nat64Id)
+    -> (story : Maybe Nat64Id)
+    -> (version : Version)
+    -> {auto _ : HasIO io}
+    -> io (Either String Task)
+  assignTaskToStory id story ver = do
+    let body := encode $ MkUpdateTaskStoryBody story ver
+        url  := buildUrl ["tasks", showId id] [] env.base
+    resp <- authPatch env url body
+    expectJson resp 200 "assign task to story"

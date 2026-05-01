@@ -34,25 +34,30 @@ record Parser a where
   constructor MkParser
   run : State -> Either String (a, State)
 
-||| Attempt to read a non-negative integer from a string argument.
-public export
-readNat64 : String -> Either String Bits64
-readNat64 s =
+||| Polymorphic helper to parse a non-negative integer from String.
+private
+readNat' : 
+     {auto _ : Cast Integer a}
+  -> {auto _ : Ord a}
+  -> (zero : a)
+  -> String
+  -> Either String a
+readNat' zero s =
   let n := cast {to = Integer} s in
-  if s == "0" then Right 0
+  if s == "0" then Right zero
   else if n == 0 then Left "not a number"
   else if n < 0 then Left "negative number"
   else Right $ cast n
 
-||| Attempt to read a non-negative integer (version / id helper).
+||| Attempt to read a non-negative integer as Bits64.
+public export
+readNat64 : String -> Either String Bits64
+readNat64 = readNat' 0
+
+||| Attempt to read a non-negative integer as Bits32.
 public export
 readNat32 : String -> Either String Bits32
-readNat32 s =
-  let n := cast {to = Integer} s in
-  if s == "0" then Right 0
-  else if n == 0 then Left "not a number"
-  else if n < 0 then Left "negative number"
-  else Right $ cast n
+readNat32 = readNat' 0
 
 ||| Check whether a flag string starts with "--".
 public export

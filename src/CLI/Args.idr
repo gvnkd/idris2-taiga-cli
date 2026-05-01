@@ -71,9 +71,7 @@ data CLIArgs : Type where
 
   -- Comments / history
   ArgComment       : String -> Nat64Id -> String -> CLIArgs
-  ArgEditComment   : String -> Nat64Id -> Nat64Id -> String -> CLIArgs
-  ArgDeleteComment : String -> Nat64Id -> Nat64Id -> CLIArgs
-  ArgListComments  : String -> Nat64Id -> CLIArgs
+   ArgListComments  : String -> Nat64Id -> CLIArgs
 
   -- Task management
   ArgWatchTask     : Nat64Id -> CLIArgs
@@ -129,8 +127,6 @@ toCommand (ArgCreateWiki p sl c)  = CmdCreateWiki p sl c
 toCommand (ArgUpdateWiki id c sl v) = CmdUpdateWiki id c sl v
 toCommand (ArgDeleteWiki id)       = CmdDeleteWiki id
 toCommand (ArgComment e id t)      = CmdComment e id t
-toCommand (ArgEditComment e id cid t) = CmdEditComment e id cid t
-toCommand (ArgDeleteComment e id cid) = CmdDeleteComment e id cid
 toCommand (ArgListComments e id)   = CmdListComments e id
 toCommand (ArgWatchTask id)        = CmdWatchTask id
 toCommand (ArgChangeTaskStatus id st v) = CmdChangeTaskStatus id st v

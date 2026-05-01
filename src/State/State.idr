@@ -12,6 +12,8 @@ import Model.Common
 import Model.Project
 import State.File
 import Taiga.Env
+import Control.AppM
+import Control.Monad.Error.Either
 
 %language ElabReflection
 
@@ -58,47 +60,49 @@ saveState st = do
 
 ||| Set the active project and persist.
 public export
-setActiveProject : Nat64Id -> IO (Either String ())
+setActiveProject : Nat64Id -> AppM ()
 setActiveProject pid = do
-  st_e <- loadState
-  case st_e of
-    Left err  => pure $ Left err
-    Right st  => do
-      let st' := { active_project := Just pid } st
-      saveState st'
+  st <- liftIOEither loadState
+  liftIOEither $ saveState (setActive st pid)
+
+  where
+    setActive : AppSt -> Nat64Id -> AppSt
+    setActive st pid = MkAppSt { base_url       = st.base_url
+                               , active_project = Just pid
+                               , project_cache  = st.project_cache }
 
 ||| Set the active project with cached project details and persist.
 public export
-setActiveProjectCached : Project -> IO (Either String ())
+setActiveProjectCached : Project -> AppM ()
 setActiveProjectCached proj = do
-  st_e <- loadState
-  case st_e of
-    Left err  => pure $ Left err
-    Right st  => do
-      let st' := { active_project := Just proj.id
-                 , project_cache  := Just proj
-                 } st
-      saveState st'
+  st <- liftIOEither loadState
+  liftIOEither $ saveState (setCached st proj)
+
+  where
+    setCached : AppSt -> Project -> AppSt
+    setCached st proj = MkAppSt { base_url       = st.base_url
+                                , active_project = Just proj.id
+                                , project_cache  = Just proj }
 
 ||| Invalidate project cache (e.g. after project-level mutation).
 public export
-invalidateCache : IO (Either String ())
+invalidateCache : AppM ()
 invalidateCache = do
-  st_e <- loadState
-  case st_e of
-    Left err  => pure $ Left err
-    Right st  => do
-      let st' := { project_cache := Nothing } st
-      saveState st'
+  st <- liftIOEither loadState
+  liftIOEither $ saveState (noCache st)
+
+  where
+    noCache : AppSt -> AppSt
+    noCache st = MkAppSt { base_url       = st.base_url
+                         , active_project = st.active_project
+                         , project_cache  = Nothing }
 
 ||| Get current base URL from state.
 public export
-getBaseUrl : IO (Either String String)
+getBaseUrl : AppM String
 getBaseUrl = do
-  st_e <- loadState
-  pure $ case st_e of
-    Left err  => Left err
-    Right st  => Right st.base_url
+  st <- liftIOEither loadState
+  pure st.base_url
 
 ||| Build an ApiEnv from workspace state + a resolved token.
 public export

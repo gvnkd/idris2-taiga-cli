@@ -18,17 +18,17 @@ record CreateMilestoneBody where
   constructor MkCreateMilestoneBody
   project         : Bits64
   name            : String
-  estimatedStart  : String
-  estimatedFinish : String
+  estimatedStart  : Maybe String
+  estimatedFinish : Maybe String
 
 public export
 ToJSON CreateMilestoneBody where
   toJSON b =
-    object
-      [ jpair "project" b.project
-      , jpair "name" b.name
-      , jpair "estimated_start" b.estimatedStart
-      , jpair "estimated_finish" b.estimatedFinish
+    object $ catMaybes
+      [ Just $ jpair "project" b.project
+      , Just $ jpair "name" b.name
+      , omitNothing "estimated_start" b.estimatedStart
+      , omitNothing "estimated_finish" b.estimatedFinish
       ]
 
 ||| Request body for updating a milestone.
@@ -74,8 +74,8 @@ parameters {auto env : ApiEnv}
   createMilestone :
        (project : String)
     -> (name : String)
-    -> (estimatedStart : String)
-    -> (estimatedFinish : String)
+    -> (estimatedStart : Maybe String)
+    -> (estimatedFinish : Maybe String)
     -> {auto _ : HasIO io}
     -> io (Either String Milestone)
   createMilestone project name estStart estFinish = do
