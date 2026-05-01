@@ -59,8 +59,14 @@ The new subcommand mode maintains workspace state in `./.taiga/` and authenticat
 # Initialize workspace state
 taiga-cli init http://127.0.0.1:8000/api/v1
 
-# Authenticate (token stored in global auth dir, NOT in ./.taiga/)
-taiga-cli login --user admin --pass secretpassword
+# Authenticate interactively (password read from prompt, token stored in global auth dir)
+taiga-cli login --user admin
+
+# Authenticate with piped password
+echo "secretpassword" | taiga-cli login --user admin
+
+# Authenticate with command-line password (WARNING: insecure, visible in shell history)
+taiga-cli login --user admin --password secretpassword
 
 # Switch project context
 taiga-cli project set my-project
@@ -173,7 +179,7 @@ taiga-cli <verb> [<action>] [args...] [--json]
 
 Core:
   init [URL]                    Create state directory and default config
-  login --user U --pass P       Authenticate, persist token globally
+  login --user U [--password P] Authenticate, persist token globally
   logout                        Clear persisted token
   show                          Display current state
 

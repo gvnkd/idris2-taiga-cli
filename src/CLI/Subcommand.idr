@@ -49,7 +49,7 @@ readNat s =
 public export
 data Action : Type where
   ActInit        : Maybe String -> Action
-  ActLogin       : Credentials -> Action
+  ActLogin       : String -> Maybe String -> Action
   ActLogout      : Action
   ActShow        : Action
   ActProjectList : Action
@@ -115,10 +115,28 @@ handleInit maybeBaseUrl = do
   _ <- saveState (defaultState baseUrl)
   pure $ Right $ cmdInfo ("Initialized taiga state in ./.taiga/ (base: " ++ baseUrl ++ ")")
 
+||| Read password from stdin (with prompt if interactive).
+public export
+readPassword : IO String
+readPassword = do
+  putStr "Password: "
+  getLine
+
 ||| Handler for ActLogin.
 public export
-handleLogin : Credentials -> IO (Either String CmdResult)
-handleLogin creds = do
+handleLogin : String -> Maybe String -> IO (Either String CmdResult)
+handleLogin user mpass = do
+  password <- case mpass of
+    Just p  => do
+      putStrLn ""
+      putStrLn "WARNING: Passing passwords via command line arguments is insecure."
+      putStrLn "         The password may be visible in shell history and process listings."
+      putStrLn "         Consider using: taiga-cli login --user USER"
+      putStrLn "         and typing or piping the password when prompted."
+      putStrLn ""
+      pure p
+    Nothing => readPassword
+  let creds := MkCredentials user password
   st_e <- loadState
   case st_e of
     Left err  => pure $ Left err
@@ -423,7 +441,7 @@ handleWikiGet wid = do
 public export
 executeAction : Action -> IO (Either String CmdResult)
 executeAction (ActInit mbase)       = handleInit mbase
-executeAction (ActLogin creds)      = handleLogin creds
+executeAction (ActLogin user mpass) = handleLogin user mpass
 executeAction ActLogout             = handleLogout
 executeAction ActShow               = handleShow
 executeAction ActProjectList        = handleProjectList

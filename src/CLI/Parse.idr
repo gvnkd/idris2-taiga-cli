@@ -291,9 +291,13 @@ parseAction ("init" :: rest)           =
   case rest of
     []        => Right $ ActInit Nothing
     (url ::_) => Right $ ActInit (Just url)
+parseAction ("login" :: "--user" :: u :: "--password" :: p :: _) =
+  Right $ ActLogin u (Just p)
 parseAction ("login" :: "--user" :: u :: "--pass" :: p :: _) =
-  Right $ ActLogin (MkCredentials u p)
-parseAction ("login" :: _)             = Left "usage: login --user USER --pass PASS"
+  Right $ ActLogin u (Just p)
+parseAction ("login" :: "--user" :: u :: _) =
+  Right $ ActLogin u Nothing
+parseAction ("login" :: _)             = Left "usage: login --user USER [--password PASS | --pass PASS]"
 parseAction ("logout" :: _)            = Right ActLogout
 parseAction ("show" :: _)              = Right ActShow
 parseAction ("project" :: "list" :: _) = Right ActProjectList

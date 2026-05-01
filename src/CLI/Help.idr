@@ -20,7 +20,7 @@ usage =
   ++ "\n"
   ++ "Core:\n"
   ++ "  init [URL]                    Create state directory and default config\n"
-  ++ "  login --user U --pass P       Authenticate, persist token\n"
+  ++ "  login --user U [--password P] Authenticate, persist token\n"
   ++ "  logout                        Clear persisted token\n"
   ++ "  show                          Display current state (project, auth status)\n"
   ++ "\n"
@@ -72,8 +72,10 @@ public export
 commandHelp : String -> Maybe String
 commandHelp "init"       = Just $ "init [BASE_URL]\n" ++
                                 "    Initialize workspace state in ./.taiga/"
-commandHelp "login"      = Just $ "login --user USERNAME --pass PASSWORD\n" ++
-                                "    Authenticate with Taiga and persist token."
+commandHelp "login"      = Just $ "login --user USERNAME [--password PASSWORD]\n" ++
+                                "    Authenticate with Taiga and persist token.\n" ++
+                                "    If --password is omitted, the password is read interactively.\n" ++
+                                "    WARNING: Passing --password on the command line is insecure."
 commandHelp "logout"     = Just $ "logout\n" ++
                                 "    Clear persisted authentication token."
 commandHelp "show"       = Just $ "show\n" ++
