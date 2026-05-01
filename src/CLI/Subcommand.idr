@@ -105,6 +105,12 @@ data Action : Type where
   ActStoryDelete : String -> Action
   ActWikiList    : Action
   ActWikiGet     : String -> Action
+  ActWikiCreate  : String -> String -> Action
+  ActWikiUpdate  : String -> Maybe String -> Maybe String -> Action
+  ActWikiDelete  : String -> Action
+  ActSprintCreate : String -> Maybe String -> Maybe String -> Action
+  ActSprintUpdate : String -> Maybe String -> Maybe String -> Maybe String -> Bits64 -> Action
+  ActSprintDelete : String -> Action
   ActResolve     : String -> Action
 
 %runElab derive "Action" [Show]
@@ -839,6 +845,132 @@ handleWikiGet ident = do
             Left err   => Right $ cmdError err
             Right val  => Right $ cmdOk "Wiki page" val
 
+||| Handler for ActWikiCreate.
+public export
+handleWikiCreate : String -> String -> IO (Either String CmdResult)
+handleWikiCreate slug content = do
+  st_e <- loadState
+  case st_e of
+    Left err  => pure $ Left err
+    Right st  => do
+      case getActiveProject st of
+        Left err   => pure $ Left err
+        Right pid  => do
+          env_e <- resolveApiEnv
+          case env_e of
+            Left err   => pure $ Left err
+            Right env  => callToResult "Wiki page created" $ createWiki @{env} (show pid.id) slug content
+
+||| Handler for ActWikiUpdate.
+public export
+handleWikiUpdate : String -> Maybe String -> Maybe String -> IO (Either String CmdResult)
+handleWikiUpdate ident mContent mSlug = do
+  id_e <- resolveToId ident
+  case id_e of
+    Left err   => pure $ Left err
+    Right wid  => do
+      env_e <- resolveApiEnv
+      case env_e of
+        Left err   => pure $ Left err
+        Right env  => do
+          current_e <- getWiki @{env} wid
+          case current_e of
+            Left err     => pure $ Right $ cmdError err
+            Right current =>
+              let content := case mContent of
+                               Nothing => current.content
+                               Just c  => c
+                  slug    := case mSlug of
+                               Nothing => current.slug.slug
+                               Just s  => s
+               in callToResult "Wiki page updated" $ updateWiki @{env} wid (Just content) (Just slug) current.version
+
+||| Handler for ActWikiDelete.
+public export
+handleWikiDelete : String -> IO (Either String CmdResult)
+handleWikiDelete ident = do
+  id_e <- resolveToId ident
+  case id_e of
+    Left err   => pure $ Left err
+    Right wid  => do
+      env_e <- resolveApiEnv
+      case env_e of
+        Left err   => pure $ Left err
+        Right env  => do
+          confirmed <- confirmDelete ("wiki page " ++ ident)
+          if not confirmed
+            then pure $ Right $ cmdInfo "Delete cancelled"
+            else do
+              result <- deleteWiki @{env} wid
+              pure $ case result of
+                Left err  => Right $ cmdError err
+                Right _   => Right $ cmdOk "Wiki page deleted" "deleted"
+
+||| Handler for ActSprintCreate.
+public export
+handleSprintCreate : String -> Maybe String -> Maybe String -> IO (Either String CmdResult)
+handleSprintCreate name mStart mEnd = do
+  st_e <- loadState
+  case st_e of
+    Left err  => pure $ Left err
+    Right st  => do
+      case getActiveProject st of
+        Left err   => pure $ Left err
+        Right pid  => do
+          env_e <- resolveApiEnv
+          case env_e of
+            Left err   => pure $ Left err
+            Right env  => callToResult "Sprint created" $ createMilestone @{env} (show pid.id) name start end
+              where
+                start : String
+                start = case mStart of Nothing => "" ; Just s => s
+                end : String
+                end   = case mEnd of Nothing => "" ; Just s => s
+
+||| Handler for ActSprintUpdate.
+public export
+handleSprintUpdate : String -> Maybe String -> Maybe String -> Maybe String -> Bits64 -> IO (Either String CmdResult)
+handleSprintUpdate ident mName mStart mEnd ver = do
+  id_e <- resolveToId ident
+  case id_e of
+    Left err   => pure $ Left err
+    Right sid  => do
+      env_e <- resolveApiEnv
+      case env_e of
+        Left err   => pure $ Left err
+        Right env  => do
+          current_e <- getMilestone @{env} sid
+          case current_e of
+            Left err     => pure $ Right $ cmdError err
+            Right current =>
+              let name := case mName of
+                            Nothing => current.name
+                            Just n  => n
+                  start := mStart
+                  end   := mEnd
+               in callToResult "Sprint updated" $ updateMilestone @{env} sid (Just name) start end (MkVersion $ cast ver)
+
+||| Handler for ActSprintDelete.
+public export
+handleSprintDelete : String -> IO (Either String CmdResult)
+handleSprintDelete ident = do
+  id_e <- resolveToId ident
+  case id_e of
+    Left err   => pure $ Left err
+    Right sid  => do
+      env_e <- resolveApiEnv
+      case env_e of
+        Left err   => pure $ Left err
+        Right env  => do
+          confirmed <- confirmDelete ("sprint " ++ ident)
+          if not confirmed
+            then pure $ Right $ cmdInfo "Delete cancelled"
+            else do
+              result <- deleteMilestone @{env} sid
+              pure $ case result of
+                Left err  => Right $ cmdError err
+                Right _   => Right $ cmdOk "Sprint deleted" "deleted"
+
 ||| Handler for ActResolve.
 public export
 handleResolve : String -> IO (Either String CmdResult)
@@ -902,6 +1034,9 @@ executeAction (ActEpicDelete eid)   = handleEpicDelete eid
 executeAction ActSprintList         = handleSprintList
 executeAction ActSprintShow         = handleSprintShow
 executeAction (ActSprintSet sid)    = handleSprintSet sid
+executeAction (ActSprintCreate name start end) = handleSprintCreate name start end
+executeAction (ActSprintUpdate sid name start end ver) = handleSprintUpdate sid name start end ver
+executeAction (ActSprintDelete sid) = handleSprintDelete sid
 executeAction ActIssueList          = handleIssueList
 executeAction (ActIssueGet iid)     = handleIssueGet iid
 executeAction (ActIssueCreate subj d p s t) = handleIssueCreate subj d p s t
@@ -914,4 +1049,7 @@ executeAction (ActStoryUpdate sid subj d m) = handleStoryUpdate sid subj d m
 executeAction (ActStoryDelete sid)  = handleStoryDelete sid
 executeAction ActWikiList           = handleWikiList
 executeAction (ActWikiGet wid)      = handleWikiGet wid
+executeAction (ActWikiCreate slug content) = handleWikiCreate slug content
+executeAction (ActWikiUpdate wid content slug) = handleWikiUpdate wid content slug
+executeAction (ActWikiDelete wid)   = handleWikiDelete wid
 executeAction (ActResolve ref)      = handleResolve ref

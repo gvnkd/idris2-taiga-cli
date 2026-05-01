@@ -345,10 +345,6 @@ parseAction ("epic" :: "update" :: ident :: rest) =
    in Right $ ActEpicUpdate ident mSubj mDesc mStat
 parseAction ("epic" :: "delete" :: ident :: _) = Right $ ActEpicDelete ident
 parseAction ("epic" :: _)              = Left "usage: epic {list|get <id-or-ref>|create <subject> [--description D] [--status ST]|update <id-or-ref> [--subject S] [--description D] [--status ST]|delete <id-or-ref>}"
-parseAction ("sprint" :: "list" :: _)  = Right ActSprintList
-parseAction ("sprint" :: "show" :: _)  = Right ActSprintShow
-parseAction ("sprint" :: "set" :: ident :: _) = Right $ ActSprintSet ident
-parseAction ("sprint" :: _)            = Left "usage: sprint {list|show|set <id-or-ref>}"
 parseAction ("story" :: "list" :: _)   = Right ActStoryList
 parseAction ("story" :: "get" :: ident :: _) = Right $ ActStoryGet ident
 parseAction ("story" :: "create" :: subj :: rest) =
@@ -379,7 +375,32 @@ parseAction ("issue" :: "delete" :: ident :: _) = Right $ ActIssueDelete ident
 parseAction ("issue" :: _)             = Left "usage: issue {list|get <id-or-ref>|create <subject> [--description D] [--priority P] [--severity S] [--type T]|update <id-or-ref> [--subject S] [--description D] [--type T]|delete <id-or-ref>}"
 parseAction ("wiki" :: "list" :: _)    = Right ActWikiList
 parseAction ("wiki" :: "get" :: ident :: _) = Right $ ActWikiGet ident
-parseAction ("wiki" :: _)              = Left "usage: wiki {list|get <id-or-ref>}"
+parseAction ("wiki" :: "create" :: slug :: content :: _) = Right $ ActWikiCreate slug content
+parseAction ("wiki" :: "update" :: ident :: rest) =
+  let mContent := findFlag "--content" rest
+      mSlug    := findFlag "--slug" rest
+   in Right $ ActWikiUpdate ident mContent mSlug
+parseAction ("wiki" :: "delete" :: ident :: _) = Right $ ActWikiDelete ident
+parseAction ("wiki" :: _)              = Left "usage: wiki {list|get <id-or-ref>|create <slug> <content>|update <id-or-ref> [--content C] [--slug S]|delete <id-or-ref>}"
+parseAction ("sprint" :: "list" :: _)  = Right ActSprintList
+parseAction ("sprint" :: "show" :: _)  = Right ActSprintShow
+parseAction ("sprint" :: "set" :: ident :: _) = Right $ ActSprintSet ident
+parseAction ("sprint" :: "create" :: name :: rest) =
+  let mStart := findFlag "--start" rest
+      mEnd   := findFlag "--end" rest
+   in Right $ ActSprintCreate name mStart mEnd
+parseAction ("sprint" :: "update" :: ident :: rest) =
+  let mName  := findFlag "--name" rest
+      mStart := findFlag "--start" rest
+      mEnd   := findFlag "--end" rest
+      mVer   := findFlag "--version" rest
+   in case mVer of
+        Nothing   => Left "usage: sprint update <id-or-ref> --version VER [--name N] [--start DATE] [--end DATE]"
+        Just ver  => case readNat64 ver of
+                         Right v   => Right $ ActSprintUpdate ident mName mStart mEnd v
+                         Left _    => Left "usage: sprint update <id-or-ref> --version VER [--name N] [--start DATE] [--end DATE]"
+parseAction ("sprint" :: "delete" :: ident :: _) = Right $ ActSprintDelete ident
+parseAction ("sprint" :: _)            = Left "usage: sprint {list|show|set <id-or-ref>|create <name> [--start DATE] [--end DATE]|update <id-or-ref> [--name N] [--start DATE] [--end DATE]|delete <id-or-ref>}"
 parseAction ("resolve" :: ref :: _)    = Right $ ActResolve ref
 parseAction ("resolve" :: _)           = Left "usage: resolve <ref>"
 parseAction (cmd :: _)                 = Left $ "unknown command: " ++ cmd
