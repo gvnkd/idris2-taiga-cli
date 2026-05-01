@@ -376,47 +376,38 @@ mkRefreshCmd r              = CmdRefresh r.refresh
 private mkListProjectsCmd   : ListProjectsArgs -> Command
 mkListProjectsCmd a         = CmdListProjects a.member
 
-private mkNat64Id : Bits64 -> Nat64Id
-mkNat64Id = MkNat64Id
-
-private mkVersion : Bits32 -> Version
-mkVersion = MkVersion
-
-private toMaybeNat64Id : Maybe Bits64 -> Maybe Nat64Id
-toMaybeNat64Id = map MkNat64Id
-
 private mkGetProjectCmd     : GetProjectArgs -> Command
-mkGetProjectCmd a           = CmdGetProject (toMaybeNat64Id a.id) (map MkSlug a.slug)
+mkGetProjectCmd a           = CmdGetProject (map MkNat64Id a.id) (map MkSlug a.slug)
 
 private mkListEpicsCmd      : StringArgs -> Command
 mkListEpicsCmd a            = CmdListEpics a.project
 
 private mkGetEpicCmd        : MaybeNat64Args -> Command
-mkGetEpicCmd a              = CmdGetEpic (toMaybeNat64Id a.id)
+mkGetEpicCmd a              = CmdGetEpic (map MkNat64Id a.id)
 
 private mkListStoriesCmd    : StringArgs -> Command
 mkListStoriesCmd a          = CmdListStories a.project
 
 private mkGetStoryCmd       : MaybeNat64Args -> Command
-mkGetStoryCmd a             = CmdGetStory (toMaybeNat64Id a.id)
+mkGetStoryCmd a             = CmdGetStory (map MkNat64Id a.id)
 
 private mkListTasksCmd      : MaybeStringArgs -> Command
 mkListTasksCmd a            = CmdListTasks a.project
 
 private mkGetTaskCmd        : MaybeNat64Args -> Command
-mkGetTaskCmd a              = CmdGetTask (toMaybeNat64Id a.id)
+mkGetTaskCmd a              = CmdGetTask (map MkNat64Id a.id)
 
 private mkListIssuesCmd     : StringArgs -> Command
 mkListIssuesCmd a           = CmdListIssues a.project
 
 private mkGetIssueCmd       : MaybeNat64Args -> Command
-mkGetIssueCmd a             = CmdGetIssue (toMaybeNat64Id a.id)
+mkGetIssueCmd a             = CmdGetIssue (map MkNat64Id a.id)
 
 private mkListWikiCmd       : StringArgs -> Command
 mkListWikiCmd a             = CmdListWiki a.project
 
 private mkGetWikiCmd        : MaybeNat64Args -> Command
-mkGetWikiCmd a              = CmdGetWiki (toMaybeNat64Id a.id)
+mkGetWikiCmd a              = CmdGetWiki (map MkNat64Id a.id)
 
 private mkListMilestonesCmd : StringArgs -> Command
 mkListMilestonesCmd a       = CmdListMilestones a.project
@@ -440,68 +431,69 @@ private mkCreateEpicCmd     : CreateEpicArgs -> Command
 mkCreateEpicCmd a           = CmdCreateEpic a.project a.subject a.description a.status
 
 private mkUpdateEpicCmd     : UpdateEpicArgs -> Command
-mkUpdateEpicCmd a           = CmdUpdateEpic (mkNat64Id a.id) a.subject a.description a.status (mkVersion a.version)
+mkUpdateEpicCmd a           = CmdUpdateEpic (MkNat64Id a.id) a.subject a.description a.status (MkVersion a.version)
 
 private mkDeleteEpicCmd     : Nat64Args -> Command
-mkDeleteEpicCmd a           = CmdDeleteEpic (mkNat64Id a.id)
+mkDeleteEpicCmd a           = CmdDeleteEpic (MkNat64Id a.id)
 
 private mkCreateStoryCmd    : CreateStoryArgs -> Command
-mkCreateStoryCmd a          = CmdCreateStory a.project a.subject a.description (toMaybeNat64Id a.milestone)
+mkCreateStoryCmd a          = CmdCreateStory a.project a.subject a.description (map MkNat64Id a.milestone)
+
 
 private mkUpdateStoryCmd    : UpdateStoryArgs -> Command
-mkUpdateStoryCmd a          = CmdUpdateStory (mkNat64Id a.id) a.subject a.description a.milestone (mkVersion a.version)
+mkUpdateStoryCmd a          = CmdUpdateStory (MkNat64Id a.id) a.subject a.description a.milestone (MkVersion a.version)
 
 private mkDeleteStoryCmd    : Nat64Args -> Command
-mkDeleteStoryCmd a          = CmdDeleteStory (mkNat64Id a.id)
+mkDeleteStoryCmd a          = CmdDeleteStory (MkNat64Id a.id)
 
 private mkCreateTaskCmd     : CreateTaskArgs -> Command
 mkCreateTaskCmd a           =
-  CmdCreateTask a.project a.subject (toMaybeNat64Id a.story) a.description a.status a.milestone
+  CmdCreateTask a.project a.subject (map MkNat64Id a.story) a.description a.status a.milestone
 
 private mkUpdateTaskCmd     : UpdateTaskArgs -> Command
-mkUpdateTaskCmd a           = CmdUpdateTask (mkNat64Id a.id) a.subject a.description a.status (mkVersion a.version)
+mkUpdateTaskCmd a           = CmdUpdateTask (MkNat64Id a.id) a.subject a.description a.status (MkVersion a.version)
 
 private mkDeleteTaskCmd     : Nat64Args -> Command
-mkDeleteTaskCmd a           = CmdDeleteTask (mkNat64Id a.id)
+mkDeleteTaskCmd a           = CmdDeleteTask (MkNat64Id a.id)
 
 private mkWatchTaskCmd      : Nat64Args -> Command
-mkWatchTaskCmd a            = CmdWatchTask (mkNat64Id a.id)
+mkWatchTaskCmd a            = CmdWatchTask (MkNat64Id a.id)
 
 private mkChangeTaskStatusCmd : ChangeTaskStatusArgs -> Command
-mkChangeTaskStatusCmd a     = CmdChangeTaskStatus (mkNat64Id a.id) a.status (mkVersion a.version)
+mkChangeTaskStatusCmd a     = CmdChangeTaskStatus (MkNat64Id a.id) a.status (MkVersion a.version)
 
 private mkTaskCommentCmd    : TaskCommentArgs -> Command
-mkTaskCommentCmd a          = CmdTaskComment (mkNat64Id a.id) a.text (mkVersion a.version)
+mkTaskCommentCmd a          = CmdTaskComment (MkNat64Id a.id) a.text (MkVersion a.version)
 
 private mkCreateIssueCmd    : CreateIssueArgs -> Command
 mkCreateIssueCmd a          = CmdCreateIssue a.project a.subject a.description a.priority a.severity a.type
 
 private mkUpdateIssueCmd    : UpdateIssueArgs -> Command
-mkUpdateIssueCmd a          = CmdUpdateIssue (mkNat64Id a.id) a.subject a.description a.type a.status (mkVersion a.version)
+mkUpdateIssueCmd a          = CmdUpdateIssue (MkNat64Id a.id) a.subject a.description a.type a.status (MkVersion a.version)
 
 private mkDeleteIssueCmd    : Nat64Args -> Command
-mkDeleteIssueCmd a          = CmdDeleteIssue (mkNat64Id a.id)
+mkDeleteIssueCmd a          = CmdDeleteIssue (MkNat64Id a.id)
 
 private mkCreateWikiCmd     : CreateWikiArgs -> Command
 mkCreateWikiCmd a           = CmdCreateWiki a.project a.slug a.content
 
 private mkUpdateWikiCmd     : UpdateWikiArgs -> Command
-mkUpdateWikiCmd a           = CmdUpdateWiki (mkNat64Id a.id) a.content a.slug (mkVersion a.version)
+mkUpdateWikiCmd a           = CmdUpdateWiki (MkNat64Id a.id) a.content a.slug (MkVersion a.version)
 
 private mkDeleteWikiCmd     : Nat64Args -> Command
-mkDeleteWikiCmd a           = CmdDeleteWiki (mkNat64Id a.id)
+mkDeleteWikiCmd a           = CmdDeleteWiki (MkNat64Id a.id)
 
 private mkCommentCmd        : CommentArgs -> Command
-mkCommentCmd a              = CmdComment a.entity (mkNat64Id a.id) a.text
+mkCommentCmd a              = CmdComment a.entity (MkNat64Id a.id) a.text
 
 private mkEditCommentCmd    : EditCommentArgs -> Command
-mkEditCommentCmd a          = CmdEditComment a.entity (mkNat64Id a.id) (mkNat64Id a.commentId) a.text
+mkEditCommentCmd a          = CmdEditComment a.entity (MkNat64Id a.id) (MkNat64Id a.commentId) a.text
 
 private mkDeleteCommentCmd  : DeleteCommentArgs -> Command
-mkDeleteCommentCmd a        = CmdDeleteComment a.entity (mkNat64Id a.id) (mkNat64Id a.commentId)
+mkDeleteCommentCmd a        = CmdDeleteComment a.entity (MkNat64Id a.id) (MkNat64Id a.commentId)
 
 private mkListCommentsCmd   : EntityIdArgs -> Command
-mkListCommentsCmd a         = CmdListComments a.entity (mkNat64Id a.id)
+mkListCommentsCmd a         = CmdListComments a.entity (MkNat64Id a.id)
 private mkCreateMilestoneCmd : CreateMilestoneArgs -> Command
 
 mkCreateMilestoneCmd a      = CmdCreateMilestone a.project a.name (toMaybe a.estimated_start) (toMaybe a.estimated_finish)
@@ -511,10 +503,10 @@ mkCreateMilestoneCmd a      = CmdCreateMilestone a.project a.name (toMaybe a.est
     toMaybe str     = Just str
 
 private mkUpdateMilestoneCmd : UpdateMilestoneArgs -> Command
-mkUpdateMilestoneCmd a      = CmdUpdateMilestone (mkNat64Id a.id) a.name a.estimated_start a.estimated_finish (mkVersion a.version)
+mkUpdateMilestoneCmd a      = CmdUpdateMilestone (MkNat64Id a.id) a.name a.estimated_start a.estimated_finish (MkVersion a.version)
 
 private mkDeleteMilestoneCmd : Nat64Args -> Command
-mkDeleteMilestoneCmd a      = CmdDeleteMilestone (mkNat64Id a.id)
+mkDeleteMilestoneCmd a      = CmdDeleteMilestone (MkNat64Id a.id)
 
 ||| Parse a command name and JSON arguments into a Command.
 public export
