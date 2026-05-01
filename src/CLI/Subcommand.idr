@@ -31,6 +31,16 @@ import Taiga.Wiki
 import Taiga.Search
 import Data.List
 import Data.String
+import System
+
+%foreign "C:isatty,libc"
+prim__isatty : Int -> PrimIO Int
+
+||| Check if stdin (file descriptor 0) is a terminal.
+isStdinTTY : IO Bool
+isStdinTTY = do
+  res <- primIO (prim__isatty 0)
+  pure (res /= 0)
 
 %language ElabReflection
 
@@ -115,12 +125,24 @@ handleInit maybeBaseUrl = do
   _ <- saveState (defaultState baseUrl)
   pure $ Right $ cmdInfo ("Initialized taiga state in ./.taiga/ (base: " ++ baseUrl ++ ")")
 
-||| Read password from stdin (with prompt if interactive).
+||| Read password securely.  If stdin is a TTY, disables terminal echo
+||| before reading and restores it after.  If piped, reads normally.
+||| Always strips the trailing newline.
 public export
 readPassword : IO String
 readPassword = do
-  putStr "Password: "
-  getLine
+  tty <- isStdinTTY
+  if tty
+    then do
+      _ <- system "stty -echo 2>/dev/null"
+      putStr "Password: "
+      s <- getLine
+      _ <- system "stty echo 2>/dev/null"
+      putStrLn ""
+      pure $ trim s
+    else do
+      s <- getLine
+      pure $ trim s
 
 ||| Handler for ActLogin.
 public export
