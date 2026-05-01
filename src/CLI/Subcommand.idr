@@ -362,7 +362,7 @@ handleSprintSet sid = do
   env_e <- resolveApiEnv
   case env_e of
     Left err   => pure $ Left err
-    Right env  => callToResult "Sprint" $ getTask @{env} sid
+    Right env  => callToResult "Sprint" $ getMilestone @{env} sid
 
 ||| Handler for ActIssueList.
 public export

@@ -55,13 +55,40 @@ public export
 cmdInfo : String -> CmdResult
 cmdInfo msg = MkCmdResult 2 msg "null"
 
+||| Pretty-print JSON payload for text mode.
+||| If the payload is not "null", pretty-prints it indented below the status
+||| line.  Otherwise returns just the status line.
+public export
+renderPayload : String -> String
+renderPayload "null" = ""
+renderPayload json  = "\n" ++ prettyPrintJSON json
+
+  where
+    ||| Simple JSON pretty-printer: add newlines after each comma and
+    ||| brace to make the output readable.
+    prettyPrintJSON : String -> String
+    prettyPrintJSON s = go (unpack s) 0
+      where
+        indent : Nat -> String
+        indent n = concat $ replicate (n * 2) " "
+
+        go : List Char -> Nat -> String
+        go []          _     = ""
+        go ('{' :: cs) depth = "{\n" ++ indent (S depth) ++ go cs (S depth)
+        go ('[' :: cs) depth = "[\n" ++ indent (S depth) ++ go cs (S depth)
+        go (',' :: cs) depth = ",\n" ++ indent depth ++ go cs depth
+        go ('}' :: cs) depth = "\n" ++ indent (minus depth 1) ++ "}" ++ go cs (minus depth 1)
+        go (']' :: cs) depth = "\n" ++ indent (minus depth 1) ++ "]" ++ go cs (minus depth 1)
+        go (c   :: cs) depth = pack [c] ++ go cs depth
+
 ||| Format a CmdResult for display.
 public export
 renderCmdResult : OutputFormat -> CmdResult -> String
 renderCmdResult JsonFmt cr = encodeCmdResult cr
 renderCmdResult TextFmt cr =
-  case cr.status of
-    0 => "[OK]   " ++ cr.message
-    1 => "[ERR]  " ++ cr.message
-    2 => "[INFO] " ++ cr.message
-    _ => cr.message
+  let header := case cr.status of
+                   0 => "[OK]   " ++ cr.message
+                   1 => "[ERR]  " ++ cr.message
+                   2 => "[INFO] " ++ cr.message
+                   _ => cr.message
+   in header ++ renderPayload cr.payload

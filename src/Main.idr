@@ -95,10 +95,22 @@ runCLI rawArgs =
               resp <- dispatchCommand command Nothing base
               cliPrintResponse resp
 
+||| Strip `--json` from args and return (remaining args, wants JSON).
+stripJsonFlag : List String -> (List String, Bool)
+stripJsonFlag args = go args False
+  where
+    go : List String -> Bool -> (List String, Bool)
+    go []        acc = ([], acc)
+    go ("--json" :: xs) acc = go xs True
+    go (x :: xs) acc =
+      let (rest, flag) = go xs acc
+       in (x :: rest, flag)
+
 ||| Run the new subcommand path.
 runSubcommand : List String -> IO ()
-runSubcommand args = do
-  fmt <- resolveOutputFormat
+runSubcommand rawArgs = do
+  let (args, wantJson) := stripJsonFlag rawArgs
+  fmt <- if wantJson then pure JsonFmt else resolveOutputFormat
   case parseAction args of
     Left err => do
       putStrLn $ "error: " ++ err
