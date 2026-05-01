@@ -139,208 +139,6 @@ getActiveProject st =
     Nothing => Left "No active project set. Run 'taiga-cli project set <slug>' first."
     Just pid => Right pid
 
-||| Get the slug for the active project, using cache if available.
-||| Falls back to fetching the project by ID if not cached.
-getProjectSlug : ApiEnv -> AppSt -> IO (Either String String)
-getProjectSlug env st =
-  case st.project_cache of
-    Just proj => pure $ Right proj.slug.slug
-    Nothing   =>
-      case getActiveProject st of
-        Left err  => pure $ Left err
-        Right pid => do
-          result <- getProjectById @{env} pid
-          pure $ case result of
-            Left err   => Left err
-            Right proj => Right proj.slug.slug
-
-||| Resolve a project-scoped ref to a database ID and entity type.
-||| Uses the Taiga resolver API: GET /resolver?project=<slug>&ref=<ref>
-||| Returns (entityType, id) where entityType is the JSON key from the
-||| resolver response (e.g. "task", "issue", "userstory").
-public export
-resolveRef : String -> IO (Either String (String, Nat64Id))
-resolveRef ref = do
-  st_e <- loadState
-  case st_e of
-    Left err => pure $ Left err
-    Right st => do
-      env_e <- resolveApiEnv
-      case env_e of
-        Left err => pure $ Left err
-        Right env => do
-          slug_e <- getProjectSlug env st
-          case slug_e of
-            Left err => pure $ Left err
-            Right slug => do
-              result <- resolve @{env} slug ref
-              case result of
-                Left err => pure $ Left err
-                Right jsonStr =>
-                  case extractIdFromResolve jsonStr of
-                    Nothing => pure $ Left $ "Ref " ++ ref ++ " not found in project"
-                    Just pair => pure $ Right pair
-
-  where
-    ||| Extract entity type and numeric ID from a raw resolve JSON response.
-    ||| Ignores the "project" key and returns the first other key-value pair.
-    extractIdFromResolve : String -> Maybe (String, Nat64Id)
-    extractIdFromResolve s =
-      let pairs := forget $ split (== ',') s
-          cleanPairs := map cleanPair pairs
-       in findId cleanPairs
-      where
-        cleanPair : String -> String
-        cleanPair p = trim (pack (filter (\c => c /= '"') (unpack p)))
-
-        findId : List String -> Maybe (String, Nat64Id)
-        findId [] = Nothing
-        findId (p :: ps) =
-          case break (== ':') (unpack p) of
-            (keyChars, ':' :: valChars) =>
-              let key := trim (pack (filter (\c => c /= '{' && c /= '"') keyChars))
-                  val := trim (pack (filter (\c => c /= '}' && c /= '"' && c /= ' ') valChars))
-               in if key == "project"
-                    then findId ps
-                    else case readNat val of
-                           Just n  => Just (key, MkNat64Id n)
-                           Nothing => findId ps
-            _ => findId ps
-
-||| Fallback: parse a string as a raw database ID.
-private
-fallbackToRawId : String -> IO (Either String Nat64Id)
-fallbackToRawId s =
-  case readNat s of
-    Nothing => pure $ Left $ "Invalid identifier: " ++ s
-    Just n  => pure $ Right $ MkNat64Id n
-
-||| Convert a user-provided identifier string to a database Nat64Id.
-||| First tries to resolve as a project ref (any entity type).
-||| If ref resolution fails, falls back to treating the input as a raw
-||| database ID for backward compatibility with scripts.
-public export
-resolveToId : String -> IO (Either String Nat64Id)
-resolveToId s = do
-  refResult <- resolveRef s
-  case refResult of
-    Right (_, nid) => pure $ Right nid
-    Left _         => fallbackToRawId s
-
-||| Resolve an identifier constrained to a specific entity type.
-||| If the ref resolves to a different entity type, falls back to raw ID.
-public export
-resolveToIdForType : String -> String -> IO (Either String Nat64Id)
-resolveToIdForType expectedType s = do
-  refResult <- resolveRef s
-  case refResult of
-    Right (entityType, nid) =>
-      if entityType == expectedType
-        then pure $ Right nid
-        else fallbackToRawId s
-    Left _ => fallbackToRawId s
-
-||| Map user-friendly entity name to the key used by the Taiga resolver API.
-private
-resolverEntityKey : String -> Maybe String
-resolverEntityKey "task"   = Just "task"
-resolverEntityKey "issue"  = Just "issue"
-resolverEntityKey "story"  = Just "us"
-resolverEntityKey "wiki"   = Just "wiki"
-resolverEntityKey _        = Nothing
-
-||| Entity-specific resolvers.
-||| Note: the Taiga resolver API uses "us" (not "userstory") for user stories.
-public export
-resolveTaskId      : String -> IO (Either String Nat64Id)
-resolveTaskId      = resolveToIdForType "task"
-
-public export
-resolveEpicId      : String -> IO (Either String Nat64Id)
-resolveEpicId      = resolveToIdForType "epic"
-
-public export
-resolveStoryId     : String -> IO (Either String Nat64Id)
-resolveStoryId     = resolveToIdForType "us"
-
-public export
-resolveIssueId     : String -> IO (Either String Nat64Id)
-resolveIssueId     = resolveToIdForType "issue"
-
-public export
-resolveWikiId      : String -> IO (Either String Nat64Id)
-resolveWikiId      = resolveToIdForType "wiki"
-
-public export
-resolveMilestoneId : String -> IO (Either String Nat64Id)
-resolveMilestoneId = resolveToIdForType "milestone"
-
-||| Fetch project details for status resolution.
-||| Uses the cached project if available, otherwise fetches from API.
-public export
-getProjectForStatus :
-     ApiEnv
-  -> AppSt
-  -> IO (Either String Project)
-getProjectForStatus env st =
-  case st.project_cache of
-    Just proj => pure $ Right proj
-    Nothing   =>
-      case st.active_project of
-        Nothing   => pure $ Left "No active project set"
-        Just pid  => do
-          result <- getProjectById @{env} pid
-          case result of
-            Left err   => pure $ Left err
-            Right proj => pure $ Right proj
-
-||| Resolve a status text to a numeric ID using project metadata.
-||| Falls back to numeric parsing if the text is a number.
-public export
-resolveStatus :
-     ApiEnv
-  -> AppSt
-  -> String
-  -> String
-  -> IO (Either String Bits64)
-resolveStatus env st entityType statusText = do
-  proj_e <- getProjectForStatus env st
-  case proj_e of
-    Left err => pure $ Left err
-    Right proj => pure $ resolveStatusText env proj entityType statusText
-
-||| Helper: resolve optional status text to optional numeric ID.
-||| Returns Nothing if no status provided.
-public export
-resolveOptionalStatus :
-     ApiEnv
-  -> AppSt
-  -> String
-  -> Maybe String
-  -> IO (Either String (Maybe Bits64))
-resolveOptionalStatus env st entityType mStatus =
-  case mStatus of
-    Nothing => pure $ Right Nothing
-    Just s  => do
-      result <- resolveStatus env st entityType s
-      case result of
-        Left err => pure $ Left err
-        Right id => pure $ Right $ Just id
-
-||| Helper: run a Taiga API call and wrap result in CmdResult.
-public export
-callToResult :
-     {auto _ : HasIO io}
-  -> ToJSON a
-  => String
-  -> io (Either String a)
-  -> io (Either String CmdResult)
-callToResult msg action = do
-  result <- action
-  pure $ case result of
-    Left err  => Right $ cmdError err
-    Right val => Right $ cmdOk msg val
-
 ------------------------------------------------------------------------------
 -- AppM Monad - eliminates nested Either boilerplate in handlers
 ------------------------------------------------------------------------------
@@ -380,6 +178,174 @@ getProjectEnv = do
   pid  <- liftEither $ getActiveProject st
   env  <- liftIOEither resolveApiEnv
   pure (env, pid)
+
+||| Get the slug for the active project, using cache if available.
+||| Falls back to fetching the project by ID if not cached.
+getProjectSlug : ApiEnv -> AppSt -> AppM String
+getProjectSlug env st =
+  case st.project_cache of
+    Just proj => pure proj.slug.slug
+    Nothing   => do
+      pid <- liftEither $ getActiveProject st
+      liftIOEither $ map (map (.slug.slug)) $ getProjectById @{env} pid
+
+||| Resolve a project-scoped ref to a database ID and entity type.
+||| Uses the Taiga resolver API: GET /resolver?project=<slug>&ref=<ref>
+||| Returns (entityType, id) where entityType is the JSON key from the
+||| resolver response (e.g. "task", "issue", "userstory").
+public export
+resolveRef : String -> AppM (String, Nat64Id)
+resolveRef ref = do
+  st   <- liftIOEither loadState
+  env  <- liftIOEither resolveApiEnv
+  slug <- getProjectSlug env st
+  jsonStr <- liftIOEither $ resolve @{env} slug ref
+  case extractIdFromResolve jsonStr of
+    Nothing   => appFail $ "Ref " ++ ref ++ " not found in project"
+    Just pair => pure pair
+
+  where
+    ||| Extract entity type and numeric ID from a raw resolve JSON response.
+    ||| Ignores the "project" key and returns the first other key-value pair.
+    extractIdFromResolve : String -> Maybe (String, Nat64Id)
+    extractIdFromResolve s =
+      let pairs := forget $ split (== ',') s
+          cleanPairs := map cleanPair pairs
+       in findId cleanPairs
+      where
+        cleanPair : String -> String
+        cleanPair p = trim (pack (filter (\c => c /= '"') (unpack p)))
+
+        findId : List String -> Maybe (String, Nat64Id)
+        findId [] = Nothing
+        findId (p :: ps) =
+          case break (== ':') (unpack p) of
+            (keyChars, ':' :: valChars) =>
+              let key := trim (pack (filter (\c => c /= '{' && c /= '"') keyChars))
+                  val := trim (pack (filter (\c => c /= '}' && c /= '"' && c /= ' ') valChars))
+               in if key == "project"
+                    then findId ps
+                    else case readNat val of
+                           Just n  => Just (key, MkNat64Id n)
+                           Nothing => findId ps
+            _ => findId ps
+
+||| Fallback: parse a string as a raw database ID.
+private
+fallbackToRawId : String -> AppM Nat64Id
+fallbackToRawId s =
+  case readNat s of
+    Nothing => appFail $ "Invalid identifier: " ++ s
+    Just n  => pure $ MkNat64Id n
+
+||| Convert a user-provided identifier string to a database Nat64Id.
+||| First tries to resolve as a project ref (any entity type).
+||| If ref resolution fails, falls back to treating the input as a raw
+||| database ID for backward compatibility with scripts.
+public export
+resolveToId : String -> AppM Nat64Id
+resolveToId s =
+  catchE (snd <$> resolveRef s) (\_ => fallbackToRawId s)
+
+||| Resolve an identifier constrained to a specific entity type.
+||| If the ref resolves to a different entity type, falls back to raw ID.
+public export
+resolveToIdForType : String -> String -> AppM Nat64Id
+resolveToIdForType expectedType s =
+  catchE
+    (do (entityType, nid) <- resolveRef s
+        if entityType == expectedType
+          then pure nid
+          else fallbackToRawId s)
+    (\_ => fallbackToRawId s)
+
+||| Map user-friendly entity name to the key used by the Taiga resolver API.
+private
+resolverEntityKey : String -> Maybe String
+resolverEntityKey "task"   = Just "task"
+resolverEntityKey "issue"  = Just "issue"
+resolverEntityKey "story"  = Just "us"
+resolverEntityKey "wiki"   = Just "wiki"
+resolverEntityKey _        = Nothing
+
+||| Entity-specific resolvers.
+||| Note: the Taiga resolver API uses "us" (not "userstory") for user stories.
+public export
+resolveTaskId      : String -> AppM Nat64Id
+resolveTaskId      = resolveToIdForType "task"
+
+public export
+resolveEpicId      : String -> AppM Nat64Id
+resolveEpicId      = resolveToIdForType "epic"
+
+public export
+resolveStoryId     : String -> AppM Nat64Id
+resolveStoryId     = resolveToIdForType "us"
+
+public export
+resolveIssueId     : String -> AppM Nat64Id
+resolveIssueId     = resolveToIdForType "issue"
+
+public export
+resolveWikiId      : String -> AppM Nat64Id
+resolveWikiId      = resolveToIdForType "wiki"
+
+public export
+resolveMilestoneId : String -> AppM Nat64Id
+resolveMilestoneId = resolveToIdForType "milestone"
+
+||| Fetch project details for status resolution.
+||| Uses the cached project if available, otherwise fetches from API.
+public export
+getProjectForStatus :
+     ApiEnv
+  -> AppSt
+  -> AppM Project
+getProjectForStatus env st =
+  case st.project_cache of
+    Just proj => pure proj
+    Nothing   =>
+      case st.active_project of
+        Nothing   => appFail "No active project set"
+        Just pid  => liftIOEither $ getProjectById @{env} pid
+
+||| Resolve a status text to a numeric ID using project metadata.
+||| Falls back to numeric parsing if the text is a number.
+public export
+resolveStatus :
+     ApiEnv
+  -> AppSt
+  -> String
+  -> String
+  -> AppM Bits64
+resolveStatus env st entityType statusText = do
+  proj <- getProjectForStatus env st
+  liftEither $ resolveStatusText env proj entityType statusText
+
+||| Helper: resolve optional status text to optional numeric ID.
+||| Returns Nothing if no status provided.
+public export
+resolveOptionalStatus :
+     ApiEnv
+  -> AppSt
+  -> String
+  -> Maybe String
+  -> AppM (Maybe Bits64)
+resolveOptionalStatus env st entityType mStatus =
+  case mStatus of
+    Nothing => pure Nothing
+    Just s  => map Just $ resolveStatus env st entityType s
+
+||| Helper: run a Taiga API call and wrap result in CmdResult.
+public export
+callToResult :
+     ToJSON a
+  => String
+  -> AppM a
+  -> AppM CmdResult
+callToResult msg action =
+  map (cmdOk msg) action
+    `catchE` \err => pure (cmdError err)
 
 ------------------------------------------------------------------------------
 -- Action Handlers
@@ -600,7 +566,7 @@ handleTaskGet : String -> IO (Either String CmdResult)
 
 taskGetAux : String -> AppM CmdResult
 taskGetAux ident = do
-  tid <- liftIOEither (resolveTaskId ident)
+  tid <- resolveTaskId ident
   env <- liftIOEither resolveApiEnv
   val <- liftIOEither $ getTask @{env} tid
   pure $ cmdOk "Task" val
@@ -613,7 +579,7 @@ handleTaskStatus : String -> Bits64 -> IO (Either String CmdResult)
 
 taskStatusAux : String -> Bits64 -> AppM CmdResult
 taskStatusAux ident statusId = do
-  tid <- liftIOEither (resolveTaskId ident)
+  tid <- resolveTaskId ident
   env <- liftIOEither resolveApiEnv
   task <- liftIOEither $ getTask @{env} tid
   val <- liftIOEither $ changeTaskStatus @{env} tid statusId task.version
@@ -627,7 +593,7 @@ handleTaskComment : String -> String -> IO (Either String CmdResult)
 
 taskCommentAux : String -> String -> AppM CmdResult
 taskCommentAux ident text = do
-  tid <- liftIOEither (resolveTaskId ident)
+  tid <- resolveTaskId ident
   env <- liftIOEither resolveApiEnv
   task <- liftIOEither $ getTask @{env} tid
   raw <- liftIOEither $ taskComment @{env} tid text task.version
@@ -641,8 +607,8 @@ handleTaskAssignStory : String -> String -> IO (Either String CmdResult)
 
 taskAssignStoryAux : String -> String -> AppM CmdResult
 taskAssignStoryAux taskIdent storyIdent = do
-  tid <- liftIOEither (resolveTaskId taskIdent)
-  sid <- liftIOEither (resolveStoryId storyIdent)
+  tid <- resolveTaskId taskIdent
+  sid <- resolveStoryId storyIdent
   env <- liftIOEither resolveApiEnv
   task <- liftIOEither $ getTask @{env} tid
   val <- liftIOEither $ assignTaskToStory @{env} tid (Just sid) task.version
@@ -658,22 +624,16 @@ resolveUpdateStatus :
   -> String
   -> Maybe String
   -> Maybe Bits64
-  -> IO (Either String (Maybe Bits64))
+  -> AppM (Maybe Bits64)
 resolveUpdateStatus env entityType mStatusText mStatusId =
   case mStatusId of
-    Just id => pure $ Right $ Just id
+    Just id => pure $ Just id
     Nothing =>
       case mStatusText of
-        Nothing => pure $ Right Nothing
+        Nothing => pure Nothing
         Just statusTxt => do
-          state_e <- loadState
-          case state_e of
-            Left err    => pure $ Left err
-            Right state => do
-              res <- resolveStatus env state entityType statusTxt
-              pure $ case res of
-                Left err => Left err
-                Right id => Right $ Just id
+          state <- liftIOEither loadState
+          map Just $ resolveStatus env state entityType statusTxt
 
 ||| Handler for ActTaskUpdate.
 public export
@@ -681,12 +641,12 @@ handleTaskUpdate : String -> Maybe String -> Maybe String -> Maybe String -> May
 
 taskUpdateAux : String -> Maybe String -> Maybe String -> Maybe String -> Maybe Bits64 -> AppM CmdResult
 taskUpdateAux ident mSubject mDesc mStatusText mStatusId = do
-  tid <- liftIOEither (resolveTaskId ident)
+  tid <- resolveTaskId ident
   env <- liftIOEither resolveApiEnv
   current <- liftIOEither $ getTask @{env} tid
   let subj := case mSubject of Nothing => current.subject ; Just s => s
       desc := case mDesc     of Nothing => current.description ; Just d => d
-  stat <- liftIOEither $ resolveUpdateStatus env "task" mStatusText mStatusId
+  stat <- resolveUpdateStatus env "task" mStatusText mStatusId
   val <- liftIOEither $ updateTask @{env} tid (Just subj) (Just desc) (map show stat) current.version
   pure $ cmdOk "Task updated" val
 
@@ -698,7 +658,7 @@ handleTaskDelete : String -> IO (Either String CmdResult)
 
 taskDeleteAux : String -> AppM CmdResult
 taskDeleteAux ident = do
-  tid <- liftIOEither (resolveTaskId ident)
+  tid <- resolveTaskId ident
   env <- liftIOEither resolveApiEnv
   confirmed <- liftRawIO (confirmDelete ("task " ++ ident))
   if not confirmed
@@ -727,7 +687,7 @@ handleEpicGet : String -> IO (Either String CmdResult)
 
 epicGetAux : String -> AppM CmdResult
 epicGetAux ident = do
-  eid <- liftIOEither (resolveEpicId ident)
+  eid <- resolveEpicId ident
   env <- liftIOEither resolveApiEnv
   val <- liftIOEither $ getEpic @{env} eid
   pure $ cmdOk "Epic" val
@@ -752,7 +712,7 @@ handleEpicUpdate : String -> Maybe String -> Maybe String -> Maybe String -> May
 
 epicUpdateAux : String -> Maybe String -> Maybe String -> Maybe String -> Maybe Bits64 -> AppM CmdResult
 epicUpdateAux ident mSubject mDesc mStatusText mStatusId = do
-  eid <- liftIOEither (resolveEpicId ident)
+  eid <- resolveEpicId ident
   env <- liftIOEither resolveApiEnv
   current <- liftIOEither $ getEpic @{env} eid
   case current.version of
@@ -760,7 +720,7 @@ epicUpdateAux ident mSubject mDesc mStatusText mStatusId = do
     Just ver => do
       let subj := case mSubject of Nothing => current.subject ; Just s => s
           desc := case mDesc     of Nothing => current.description ; Just d => d
-      stat <- liftIOEither $ resolveUpdateStatus env "epic" mStatusText mStatusId
+      stat <- resolveUpdateStatus env "epic" mStatusText mStatusId
       val <- liftIOEither $ updateEpic @{env} eid (Just subj) (Just desc) (map show stat) ver
       pure $ cmdOk "Epic updated" val
 
@@ -772,7 +732,7 @@ handleEpicDelete : String -> IO (Either String CmdResult)
 
 epicDeleteAux : String -> AppM CmdResult
 epicDeleteAux ident = do
-  eid <- liftIOEither $ resolveEpicId ident
+  eid <- resolveEpicId ident
   env <- liftIOEither resolveApiEnv
   confirmed <- liftRawIO $ confirmDelete ("epic " ++ ident)
   if not confirmed
@@ -806,7 +766,7 @@ handleSprintSet : String -> IO (Either String CmdResult)
 
 sprintSetAux : String -> AppM CmdResult
 sprintSetAux ident = do
-  sid <- liftIOEither $ resolveMilestoneId ident
+  sid <- resolveMilestoneId ident
   env <- liftIOEither resolveApiEnv
   val <- liftIOEither $ getMilestone @{env} sid
   pure $ cmdOk "Sprint" val
@@ -831,7 +791,7 @@ handleIssueGet : String -> IO (Either String CmdResult)
 
 issueGetAux : String -> AppM CmdResult
 issueGetAux ident = do
-  iid <- liftIOEither (resolveIssueId ident)
+  iid <- resolveIssueId ident
   env <- liftIOEither resolveApiEnv
   val <- liftIOEither $ getIssue @{env} iid
   pure $ cmdOk "Issue" val
@@ -856,12 +816,12 @@ handleIssueUpdate : String -> Maybe String -> Maybe String -> Maybe String -> Ma
 
 issueUpdateAux : String -> Maybe String -> Maybe String -> Maybe String -> Maybe String -> Maybe Bits64 -> AppM CmdResult
 issueUpdateAux ident mSubject mDesc mType mStatusText mStatusId = do
-  iid <- liftIOEither (resolveIssueId ident)
+  iid <- resolveIssueId ident
   env <- liftIOEither resolveApiEnv
   current <- liftIOEither $ getIssue @{env} iid
   let subj := case mSubject of Nothing => current.subject ; Just s => s
       desc := case mDesc     of Nothing => current.description ; Just d => d
-  stat <- liftIOEither $ resolveUpdateStatus env "issue" mStatusText mStatusId
+  stat <- resolveUpdateStatus env "issue" mStatusText mStatusId
   val <- liftIOEither $ updateIssue @{env} iid (Just subj) (Just desc) mType (map show stat) current.version
   pure $ cmdOk "Issue updated" val
 
@@ -873,7 +833,7 @@ handleIssueDelete : String -> IO (Either String CmdResult)
 
 issueDeleteAux : String -> AppM CmdResult
 issueDeleteAux ident = do
-  iid <- liftIOEither (resolveIssueId ident)
+  iid <- resolveIssueId ident
   env <- liftIOEither resolveApiEnv
   confirmed <- liftRawIO (confirmDelete ("issue " ++ ident))
   if not confirmed
@@ -902,7 +862,7 @@ handleStoryGet : String -> IO (Either String CmdResult)
 
 storyGetAux : String -> AppM CmdResult
 storyGetAux ident = do
-  sid <- liftIOEither (resolveStoryId ident)
+  sid <- resolveStoryId ident
   env <- liftIOEither resolveApiEnv
   val <- liftIOEither $ getStory @{env} sid
   pure $ cmdOk "Story" val
@@ -927,7 +887,7 @@ handleWikiGet : String -> IO (Either String CmdResult)
 
 wikiGetAux : String -> AppM CmdResult
 wikiGetAux ident = do
-  wid <- liftIOEither (resolveWikiId ident)
+  wid <- resolveWikiId ident
   env <- liftIOEither resolveApiEnv
   val <- liftIOEither $ getWiki @{env} wid
   pure $ cmdOk "Wiki page" val
@@ -964,7 +924,7 @@ handleStoryUpdate : String -> Maybe String -> Maybe String -> Maybe String -> Ma
 
 storyUpdateAux : String -> Maybe String -> Maybe String -> Maybe String -> Maybe String -> Maybe Bits64 -> AppM CmdResult
 storyUpdateAux ident mSubject mDesc mMilestone _ _ = do
-  sid <- liftIOEither (resolveStoryId ident)
+  sid <- resolveStoryId ident
   env <- liftIOEither resolveApiEnv
   current <- liftIOEither $ getStory @{env} sid
   let subj := case mSubject of Nothing => current.subject ; Just s => s
@@ -981,7 +941,7 @@ handleStoryDelete : String -> IO (Either String CmdResult)
 
 storyDeleteAux : String -> AppM CmdResult
 storyDeleteAux ident = do
-  sid <- liftIOEither (resolveStoryId ident)
+  sid <- resolveStoryId ident
   env <- liftIOEither resolveApiEnv
   confirmed <- liftRawIO (confirmDelete ("story " ++ ident))
   if not confirmed
@@ -998,7 +958,7 @@ handleWikiUpdate : String -> Maybe String -> Maybe String -> IO (Either String C
 
 wikiUpdateAux : String -> Maybe String -> Maybe String -> AppM CmdResult
 wikiUpdateAux ident mContent mSlug = do
-  wid <- liftIOEither (resolveWikiId ident)
+  wid <- resolveWikiId ident
   env <- liftIOEither resolveApiEnv
   current <- liftIOEither $ getWiki @{env} wid
   let content := case mContent of Nothing => current.content ; Just c => c
@@ -1014,7 +974,7 @@ handleWikiDelete : String -> IO (Either String CmdResult)
 
 wikiDeleteAux : String -> AppM CmdResult
 wikiDeleteAux ident = do
-  wid <- liftIOEither (resolveWikiId ident)
+  wid <- resolveWikiId ident
   env <- liftIOEither resolveApiEnv
   confirmed <- liftRawIO (confirmDelete ("wiki page " ++ ident))
   if not confirmed
@@ -1044,7 +1004,7 @@ handleSprintUpdate : String -> Maybe String -> Maybe String -> Maybe String -> B
 
 sprintUpdateAux : String -> Maybe String -> Maybe String -> Maybe String -> Bits64 -> AppM CmdResult
 sprintUpdateAux ident mName mStart mEnd ver = do
-  sid <- liftIOEither (resolveMilestoneId ident)
+  sid <- resolveMilestoneId ident
   env <- liftIOEither resolveApiEnv
   current <- liftIOEither $ getMilestone @{env} sid
   let name := case mName of Nothing => current.name ; Just n => n
@@ -1061,7 +1021,7 @@ handleSprintDelete : String -> IO (Either String CmdResult)
 
 sprintDeleteAux : String -> AppM CmdResult
 sprintDeleteAux ident = do
-  sid <- liftIOEither (resolveMilestoneId ident)
+  sid <- resolveMilestoneId ident
   env <- liftIOEither resolveApiEnv
   confirmed <- liftRawIO (confirmDelete ("sprint " ++ ident))
   if not confirmed
@@ -1106,7 +1066,7 @@ commentAddAux entityName ident text = do
     (Nothing, _)       => appFail $ "Unknown entity type: " ++ entityName ++ ". Use: task, issue, story, wiki"
     (_, Nothing)       => appFail $ "Unknown entity type: " ++ entityName ++ ". Use: task, issue, story, wiki"
     (Just rKey, Just entity) => do
-      eid <- liftIOEither (resolveToIdForType rKey ident)
+      eid <- resolveToIdForType rKey ident
       env <- liftIOEither resolveApiEnv
       ver <- liftIOEither $ fetchEntityVersion env entity eid
       raw <- liftIOEither $ addComment @{env} entity eid text ver
@@ -1124,7 +1084,7 @@ commentListAux entityName ident = do
     (Nothing, _)       => appFail $ "Unknown entity type: " ++ entityName ++ ". Use: task, issue, story, wiki"
     (_, Nothing)       => appFail $ "Unknown entity type: " ++ entityName ++ ". Use: task, issue, story, wiki"
     (Just rKey, Just entity) => do
-      eid <- liftIOEither (resolveToIdForType rKey ident)
+      eid <- resolveToIdForType rKey ident
       env <- liftIOEither resolveApiEnv
       val <- liftIOEither $ listHistory @{env} entity eid
       pure $ cmdOk "Comments" val
@@ -1146,7 +1106,7 @@ statusListAux entityType = do
   st   <- liftIOEither loadState
   pid  <- liftEither $ getActiveProject st
   env  <- liftIOEither resolveApiEnv
-  proj <- liftIOEither $ getProjectForStatus env st
+  proj <- getProjectForStatus env st
   let statuses := case entityType of
                      "task"   => proj.task_statuses
                      "issue"  => proj.issue_statuses
@@ -1163,39 +1123,37 @@ statusListAux entityType = do
 
 handleStatusList entityType = runAppM (statusListAux entityType)
 
+||| Try a list of named AppM actions, returning the first success.
+||| If all fail, the last error is propagated.
+private
+firstSuccessNamed : List (String, AppM String) -> AppM (String, String)
+firstSuccessNamed [] = appFail "All entity getters failed"
+firstSuccessNamed ((name, m) :: rest) =
+  catchE (do json <- m; pure (name, json))
+         (\_ => firstSuccessNamed rest)
+
 ||| Handler for ActResolve.
 public export
 handleResolve : String -> IO (Either String CmdResult)
-handleResolve ref = do
-  id_e <- resolveRef ref
-  case id_e of
-    Left err  => pure $ Left err
-    Right (_, nid) => do
-      env_e <- resolveApiEnv
-      case env_e of
-        Left err  => pure $ Left err
-        Right env => do
-          -- Try to get the entity by its resolved ID to show full details
-          -- We don't know the entity type, so we try common types
-          let tryGetters : List (String, IO (Either String String))
-              tryGetters =
-                [ ("task",    map (map encode) $ getTask @{env} nid)
-                , ("issue",   map (map encode) $ getIssue @{env} nid)
-                , ("story",   map (map encode) $ getStory @{env} nid)
-                , ("epic",    map (map encode) $ getEpic @{env} nid)
-                , ("wiki",    map (map encode) $ getWiki @{env} nid)
-                , ("sprint",  map (map encode) $ getMilestone @{env} nid)
-                ]
-          -- Try each getter until one succeeds
-          go tryGetters ref nid
-          where
-            go : List (String, IO (Either String String)) -> String -> Nat64Id -> IO (Either String CmdResult)
-            go [] r n          = pure $ Right $ cmdOk ("Resolved ref " ++ r ++ " to id " ++ show n.id) n
-            go ((name, action) :: rest) r n = do
-              result <- action
-              case result of
-                Right jsonStr => pure $ Right $ cmdOk ("Resolved ref " ++ r ++ " to " ++ name ++ " id=" ++ show n.id) jsonStr
-                Left _        => go rest r n
+handleResolve ref = runAppM (resolveAndLookup ref)
+
+  where
+    resolveAndLookup : String -> AppM CmdResult
+    resolveAndLookup ref = do
+      (_, nid) <- resolveRef ref
+      env      <- liftIOEither resolveApiEnv
+      let getters =
+            [ ("task",   liftIOEither $ map (map encode) $ getTask @{env} nid)
+            , ("issue",  liftIOEither $ map (map encode) $ getIssue @{env} nid)
+            , ("story",  liftIOEither $ map (map encode) $ getStory @{env} nid)
+            , ("epic",   liftIOEither $ map (map encode) $ getEpic @{env} nid)
+            , ("wiki",   liftIOEither $ map (map encode) $ getWiki @{env} nid)
+            , ("sprint", liftIOEither $ map (map encode) $ getMilestone @{env} nid)
+            ]
+      catchE
+        (do (name, json) <- firstSuccessNamed getters
+            pure $ cmdOk ("Resolved ref " ++ ref ++ " to " ++ name ++ " id=" ++ show nid.id) json)
+        (\_ => pure $ cmdOk ("Resolved ref " ++ ref ++ " to id " ++ show nid.id) nid)
 
 ------------------------------------------------------------------------------
 -- Dispatch
