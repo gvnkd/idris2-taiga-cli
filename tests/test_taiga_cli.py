@@ -748,6 +748,103 @@ class TestSubcommandCRUD:
         assert "err" in err
 
 
+class TestCommentsSubcommand:
+    """Test comment operations via subcommand CLI."""
+
+    BASE = "http://127.0.0.1:8000/api/v1"
+
+    @staticmethod
+    def _token_file():
+        home = os.path.expanduser("~")
+        return os.path.join(home, ".local", "share", "taiga-cli", "tokens",
+                            "http___127.0.0.1_8000_api_v1.json")
+
+    @pytest.fixture
+    def workspace(self, tmp_path):
+        tf = self._token_file()
+        if os.path.exists(tf):
+            os.remove(tf)
+
+        proc = subprocess.run(
+            [BIN, "init", self.BASE],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(tmp_path),
+        )
+        assert proc.returncode == 0, f"init failed: {proc.stdout}{proc.stderr}"
+
+        yield tmp_path
+
+        if os.path.exists(tf):
+            os.remove(tf)
+
+    def _login(self, workspace):
+        proc = subprocess.run(
+            [BIN, "login", "--user", "rune"],
+            input="rune-secret-42\n",
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0
+
+    def _set_project(self, workspace):
+        proc = subprocess.run(
+            [BIN, "project", "set", PROJECT_ID],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0
+
+    def test_comment_add_and_list_task(self, workspace, client):
+        """comment add and list on a task."""
+        self._login(workspace)
+        self._set_project(workspace)
+
+        ts = _ts()
+        created = client.create_task(f"comment test task {ts}")
+        tid, ref = created["id"], created["ref"]
+        try:
+            # Add comment
+            proc = subprocess.run(
+                [BIN, "comment", "add", "task", str(ref), f"test comment {ts}"],
+                capture_output=True, text=True, timeout=30,
+                cwd=str(workspace),
+            )
+            assert proc.returncode == 0, f"comment add failed: {proc.stdout}{proc.stderr}"
+            assert "[OK]" in proc.stdout
+
+            # List comments
+            proc = subprocess.run(
+                [BIN, "comment", "list", "task", str(ref)],
+                capture_output=True, text=True, timeout=30,
+                cwd=str(workspace),
+            )
+            assert proc.returncode == 0, f"comment list failed: {proc.stdout}{proc.stderr}"
+            assert "[OK]" in proc.stdout
+            data = json.loads(proc.stdout.split("\n", 1)[1])
+            assert isinstance(data, list)
+        finally:
+            client.delete_task(tid)
+
+    def test_comment_add_issue(self, workspace, client):
+        """comment add on an issue."""
+        self._login(workspace)
+        self._set_project(workspace)
+
+        ts = _ts()
+        created = client.create_issue(f"comment test issue {ts}")
+        iid, ref = created["id"], created["ref"]
+        try:
+            proc = subprocess.run(
+                [BIN, "comment", "add", "issue", str(ref), f"issue comment {ts}"],
+                capture_output=True, text=True, timeout=30,
+                cwd=str(workspace),
+            )
+            assert proc.returncode == 0, f"comment add failed: {proc.stdout}{proc.stderr}"
+            assert "[OK]" in proc.stdout
+        finally:
+            client.delete_issue(iid)
+
+
 class TestUsersMembershipsRoles:
     def test_list_users(self, client):
         users = client.list_users()

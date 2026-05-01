@@ -12,6 +12,7 @@ import Model.UserStory
 import Model.Issue
 import Model.Milestone
 import Model.WikiPage
+import Model.Comment
 import JSON.Derive
 import JSON.ToJSON
 import JSON.Parser
@@ -28,6 +29,7 @@ import Taiga.UserStory
 import Taiga.Issue
 import Taiga.Milestone
 import Taiga.Wiki
+import Taiga.History
 import Taiga.Search
 import Data.List
 import Data.String
@@ -111,6 +113,8 @@ data Action : Type where
   ActSprintCreate : String -> Maybe String -> Maybe String -> Action
   ActSprintUpdate : String -> Maybe String -> Maybe String -> Maybe String -> Bits64 -> Action
   ActSprintDelete : String -> Action
+  ActCommentAdd  : String -> String -> String -> Action
+  ActCommentList : String -> String -> Action
   ActResolve     : String -> Action
 
 %runElab derive "Action" [Show]
@@ -971,6 +975,66 @@ handleSprintDelete ident = do
                 Left err  => Right $ cmdError err
                 Right _   => Right $ cmdOk "Sprint deleted" "deleted"
 
+||| Map user-friendly entity name to Taiga API entity name.
+private
+apiEntityName : String -> Maybe String
+apiEntityName "task"   = Just "task"
+apiEntityName "issue"  = Just "issue"
+apiEntityName "story"  = Just "userstory"
+apiEntityName "wiki"   = Just "wiki"
+apiEntityName _        = Nothing
+
+||| Fetch an entity by type to get its version for comment operations.
+private
+fetchEntityVersion :
+     ApiEnv
+  -> String
+  -> Nat64Id
+  -> IO (Either String Bits32)
+fetchEntityVersion env entity eid =
+  case entity of
+    "task"   => map (map (\t => t.version.version)) $ getTask @{env} eid
+    "issue"  => map (map (\i => i.version.version)) $ getIssue @{env} eid
+    "userstory" => map (map (\s => s.version.version)) $ getStory @{env} eid
+    "wiki"   => map (map (\w => w.version.version)) $ getWiki @{env} eid
+    _        => pure $ Left $ "Unknown entity type: " ++ entity
+
+||| Handler for ActCommentAdd.
+public export
+handleCommentAdd : String -> String -> String -> IO (Either String CmdResult)
+handleCommentAdd entityName ident text = do
+  case apiEntityName entityName of
+    Nothing    => pure $ Left $ "Unknown entity type: " ++ entityName ++ ". Use: task, issue, story, wiki"
+    Just entity => do
+      id_e <- resolveToId ident
+      case id_e of
+        Left err   => pure $ Left err
+        Right eid  => do
+          env_e <- resolveApiEnv
+          case env_e of
+            Left err   => pure $ Left err
+            Right env  => do
+              ver_e <- fetchEntityVersion env entity eid
+              case ver_e of
+                Left err    => pure $ Right $ cmdError err
+                Right ver   => callToResult "Comment added" $ addComment @{env} entity eid text ver
+
+||| Handler for ActCommentList.
+public export
+handleCommentList : String -> String -> IO (Either String CmdResult)
+handleCommentList entityName ident = do
+  case apiEntityName entityName of
+    Nothing    => pure $ Left $ "Unknown entity type: " ++ entityName ++ ". Use: task, issue, story, wiki"
+    Just entity => do
+      id_e <- resolveToId ident
+      case id_e of
+        Left err   => pure $ Left err
+        Right eid  => do
+          env_e <- resolveApiEnv
+          case env_e of
+            Left err   => pure $ Left err
+            Right env  => callToResult "Comments" $ listHistory @{env} entity eid
+
 ||| Handler for ActResolve.
 public export
 handleResolve : String -> IO (Either String CmdResult)
@@ -1052,4 +1116,6 @@ executeAction (ActWikiGet wid)      = handleWikiGet wid
 executeAction (ActWikiCreate slug content) = handleWikiCreate slug content
 executeAction (ActWikiUpdate wid content slug) = handleWikiUpdate wid content slug
 executeAction (ActWikiDelete wid)   = handleWikiDelete wid
+executeAction (ActCommentAdd entity ident text) = handleCommentAdd entity ident text
+executeAction (ActCommentList entity ident) = handleCommentList entity ident
 executeAction (ActResolve ref)      = handleResolve ref
