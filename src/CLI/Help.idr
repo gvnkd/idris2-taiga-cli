@@ -18,47 +18,48 @@ usage =
   ++ "  --token TOKEN      Bearer token for authenticated commands\n"
   ++ "  --stdin            Read JSON command from stdin (agent mode)\n"
   ++ "\n"
-  ++ "Authentication:\n"
-  ++ "  --login USER PASS  Authenticate with username and password\n"
-  ++ "  --me               Show current user profile\n"
+  ++ "Core:\n"
+  ++ "  init [URL]                    Create state directory and default config\n"
+  ++ "  login --user U --pass P       Authenticate, persist token\n"
+  ++ "  logout                        Clear persisted token\n"
+  ++ "  show                          Display current state (project, auth status)\n"
   ++ "\n"
-  ++ "Projects:\n"
-  ++ "  --list-projects [OWNER]  List projects\n"
+  ++ "Project context:\n"
+  ++ "  project list                  List accessible projects\n"
+  ++ "  project set <slug|id>         Switch active project\n"
+  ++ "  project get                   Show active project details\n"
   ++ "\n"
-  ++ "Epics:\n"
-  ++ "  --list-epics PROJECT     List epics in PROJECT\n"
-  ++ "  --get-epic [ID]          Get epic by ID\n"
-  ++ "  --create-epic PROJECT TITLE [DESCRIPTION] [STATUS]\n"
-  ++ "  --delete-epic ID         Delete epic\n"
+  ++ "Task operations:\n"
+  ++ "  task list [--status S]        List tasks in active project\n"
+  ++ "  task create <subject>         Create task\n"
+  ++ "  task get <id>                 Get task by ID\n"
+  ++ "  task status <id> <status>    Change task status\n"
+  ++ "  task comment <id> <text>     Comment on a task\n"
   ++ "\n"
-  ++ "Stories:\n"
-  ++ "  --list-stories PROJECT   List user stories in PROJECT\n"
-  ++ "  --get-story [ID]         Get story by ID\n"
+  ++ "Epic operations:\n"
+  ++ "  epic list                     List epics in active project\n"
+  ++ "  epic get <id>                 Get epic details\n"
   ++ "\n"
-  ++ "Tasks:\n"
-  ++ "  --list-tasks [PROJECT]         List tasks\n"
-  ++ "  --get-task [ID]                  Get task by ID\n"
-  ++ "  --watch-task ID                  Get task details\n"
-  ++ "  --change-task-status ID STATUS VER  Change task status\n"
-  ++ "  --task-comment ID TEXT VERSION     Add comment to task\n"
-  ++ "  --create-task PROJECT PARENT_TITLE [EPIC_ID] [ASSIGNEE] [STATUS]\n"
+  ++ "Sprint operations:\n"
+  ++ "  sprint list                   List all sprints/milestones\n"
+  ++ "  sprint show                   Show current sprint state\n"
+  ++ "  sprint set <id>              Set active sprint context\n"
   ++ "\n"
-  ++ "Comments:\n"
-  ++ "  --list-comments ENTITY ID  List comments/history for entity\n"
+  ++ "Issue operations:\n"
+  ++ "  issue list                    List issues in active project\n"
+  ++ "  issue get <id>                Get issue details\n"
   ++ "\n"
-  ++ "Issues:\n"
-  ++ "  --list-issues PROJECT    List issues in PROJECT\n"
-  ++ "  --get-issue [ID]         Get issue by ID\n"
+  ++ "Story operations:\n"
+  ++ "  story list                    List stories in active project\n"
+  ++ "  story get <id>                Get story details\n"
   ++ "\n"
-  ++ "Wiki:\n"
-  ++ "  --list-wiki PROJECT      List wiki pages in PROJECT\n"
-  ++ "  --create-wiki PROJECT TITLE CONTENT\n"
+  ++ "Wiki operations:\n"
+  ++ "  wiki list                     List wiki pages in active project\n"
+  ++ "  wiki get <id>                 Get wiki page details\n"
   ++ "\n"
-  ++ "Milestones:\n"
-  ++ "  --list-milestones PROJECT  List milestones in PROJECT\n"
-  ++ "\n"
-  ++ "Search:\n"
-  ++ "  --search PROJECT QUERY   Search in PROJECT\n"
+  ++ "Global flags:\n"
+  ++ "  --json                        Output JSON instead of text\n"
+  ++ "  --base <url>                 Override base URL for this invocation\n"
 
 ||| Generate a short synopsis (first line of --help).
 public export
@@ -69,30 +70,43 @@ usageSynopsis = "taiga-cli [OPTIONS] COMMAND"
 ||| Returns `Nothing` if the name is not recognised.
 public export
 commandHelp : String -> Maybe String
-commandHelp "login"       = Just $ "--login USERNAME PASSWORD\n" ++
-                               "    Authenticate with Taiga and receive a token."
-commandHelp "me"          = Just $ "--me\n" ++
-                               "    Show the current authenticated user's profile."
-commandHelp "list-projects" = Just $ "--list-projects [OWNER]\n" ++
-                               "    List projects, optionally filtered by owner."
-commandHelp "list-epics"  = Just $ "--list-epics PROJECT\n" ++
-                               "    List epics in the given project (slug or ID)."
-commandHelp "list-tasks"  = Just $ "--list-tasks [PROJECT]\n" ++
-                               "    List tasks, optionally filtered by project."
-commandHelp _             = Nothing
+commandHelp "init"       = Just $ "init [BASE_URL]\n" ++
+                                "    Initialize workspace state in ./taiga/"
+commandHelp "login"      = Just $ "login --user USERNAME --pass PASSWORD\n" ++
+                                "    Authenticate with Taiga and persist token."
+commandHelp "logout"     = Just $ "logout\n" ++
+                                "    Clear persisted authentication token."
+commandHelp "show"       = Just $ "show\n" ++
+                                "    Display current workspace state."
+commandHelp "project"    = Just $ "project {list|set <slug>|get}\n" ++
+                                "    Manage active project context."
+commandHelp "task"       = Just $ "task {list|create|get|status|comment}\n" ++
+                                "    Manage tasks in active project."
+commandHelp "epic"       = Just $ "epic {list|get}\n" ++
+                                "    Manage epics in active project."
+commandHelp "sprint"     = Just $ "sprint {list|show|set}\n" ++
+                                "    Manage sprints/milestones."
+commandHelp "issue"      = Just $ "issue {list|get}\n" ++
+                                "    Manage issues in active project."
+commandHelp "story"      = Just $ "story {list|get}\n" ++
+                                "    Manage stories in active project."
+commandHelp "wiki"       = Just $ "wiki {list|get}\n" ++
+                                "    Manage wiki pages in active project."
+commandHelp _            = Nothing
 
 ||| List all recognised sub-command / flag names.
 public export
 knownCommands : List String
 knownCommands =
-  [ "help"
+  [ "init"
   , "login"
-  , "me"
-  , "list-projects"
-  , "list-epics"
-  , "list-stories"
-  , "list-tasks"
-  , "list-issues"
-  , "list-wiki"
-  , "list-milestones"
+  , "logout"
+  , "show"
+  , "project"
+  , "task"
+  , "epic"
+  , "sprint"
+  , "issue"
+  , "story"
+  , "wiki"
   ]

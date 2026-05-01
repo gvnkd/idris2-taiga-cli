@@ -6,6 +6,8 @@
 module CLI.Parse
 
 import CLI.Args
+import CLI.Subcommand
+import Model.Auth
 import Model.Common
 import Data.List
 
@@ -227,6 +229,14 @@ parseListComments = do
     Left  _     => failParse $ "invalid entity id: " ++ idStr
     Right nid   => pure $ ArgListComments entity (MkNat64Id nid)
 
+||| Parse `--delete-milestone ID`.
+parseDeleteMilestone : Parser CLIArgs
+parseDeleteMilestone = do
+  idStr <- pop
+  case readNat64 idStr of
+    Left  _     => failParse $ "invalid milestone id: " ++ idStr
+    Right nid   => pure $ ArgDeleteMilestone (MkNat64Id nid)
+
 ||| Parse a long flag and dispatch to the correct sub-parser.
 parseLongFlag : String -> Parser CLIArgs -> Parser CLIArgs
 parseLongFlag "--base"                recurse = parseBase recurse
@@ -239,6 +249,7 @@ parseLongFlag "--watch-task"          _        = parseWatchTask
 parseLongFlag "--change-task-status"  _        = parseChangeTaskStatus
 parseLongFlag "--task-comment"        _        = parseTaskComment
 parseLongFlag "--list-comments"       _        = parseListComments
+parseLongFlag "--delete-milestone"    _        = parseDeleteMilestone
 parseLongFlag flag                    _        = failParse $ "unimplemented flag: " ++ flag
 
 ||| Top-level parser: dispatch on the first argument and invoke
@@ -265,3 +276,78 @@ parseArgs rawArgs =
    in case run parseCLI st of
          Left  e              => Left e
          Right (args, st')    => Right $ MkParseResult args st'.base
+
+------------------------------------------------------------------------------
+-- Subcommand Parser
+------------------------------------------------------------------------------
+
+||| Parse subcommand arguments into an Action.
+|||
+||| Syntax: taiga-cli <verb> [<action>] [args...] [--json]
+public export
+parseAction : List String -> Either String Action
+parseAction []                         = Left "no command given"
+parseAction ("init" :: rest)           =
+  case rest of
+    []        => Right $ ActInit Nothing
+    (url ::_) => Right $ ActInit (Just url)
+parseAction ("login" :: "--user" :: u :: "--pass" :: p :: _) =
+  Right $ ActLogin (MkCredentials u p)
+parseAction ("login" :: _)             = Left "usage: login --user USER --pass PASS"
+parseAction ("logout" :: _)            = Right ActLogout
+parseAction ("show" :: _)              = Right ActShow
+parseAction ("project" :: "list" :: _) = Right ActProjectList
+parseAction ("project" :: "set" :: slug :: _) = Right $ ActProjectSet slug
+parseAction ("project" :: "get" :: _)  = Right ActProjectGet
+parseAction ("project" :: _)           = Left "usage: project {list|set <slug>|get}"
+parseAction ("task" :: "list" :: rest) =
+  case rest of
+    []               => Right $ ActTaskList Nothing
+    ("--status" :: s :: _) => Right $ ActTaskList (Just s)
+    _                => Left "usage: task list [--status STATUS]"
+parseAction ("task" :: "create" :: subj :: _) = Right $ ActTaskCreate subj
+parseAction ("task" :: "get" :: idStr :: _) =
+  case readNat64 idStr of
+    Right nid => Right $ ActTaskGet (MkNat64Id nid)
+    Left _    => Left $ "invalid task id: " ++ idStr
+parseAction ("task" :: "status" :: idStr :: stStr :: _) =
+  case (readNat64 idStr, readNat64 stStr) of
+    (Right nid, Right st) => Right $ ActTaskStatus (MkNat64Id nid) st
+    _                     => Left "usage: task status <id> <status-id>"
+parseAction ("task" :: "comment" :: idStr :: text :: _) =
+  case readNat64 idStr of
+    Right nid => Right $ ActTaskComment (MkNat64Id nid) text
+    Left _    => Left $ "invalid task id: " ++ idStr
+parseAction ("task" :: _)              = Left "usage: task {list|create <subject>|get <id>|status <id> <status>|comment <id> <text>}"
+parseAction ("epic" :: "list" :: _)    = Right ActEpicList
+parseAction ("epic" :: "get" :: idStr :: _) =
+  case readNat64 idStr of
+    Right nid => Right $ ActEpicGet (MkNat64Id nid)
+    Left _    => Left $ "invalid epic id: " ++ idStr
+parseAction ("epic" :: _)              = Left "usage: epic {list|get <id>}"
+parseAction ("sprint" :: "list" :: _)  = Right ActSprintList
+parseAction ("sprint" :: "show" :: _)  = Right ActSprintShow
+parseAction ("sprint" :: "set" :: idStr :: _) =
+  case readNat64 idStr of
+    Right nid => Right $ ActSprintSet (MkNat64Id nid)
+    Left _    => Left $ "invalid sprint id: " ++ idStr
+parseAction ("sprint" :: _)            = Left "usage: sprint {list|show|set <id>}"
+parseAction ("issue" :: "list" :: _)   = Right ActIssueList
+parseAction ("issue" :: "get" :: idStr :: _) =
+  case readNat64 idStr of
+    Right nid => Right $ ActIssueGet (MkNat64Id nid)
+    Left _    => Left $ "invalid issue id: " ++ idStr
+parseAction ("issue" :: _)             = Left "usage: issue {list|get <id>}"
+parseAction ("story" :: "list" :: _)   = Right ActStoryList
+parseAction ("story" :: "get" :: idStr :: _) =
+  case readNat64 idStr of
+    Right nid => Right $ ActStoryGet (MkNat64Id nid)
+    Left _    => Left $ "invalid story id: " ++ idStr
+parseAction ("story" :: _)             = Left "usage: story {list|get <id>}"
+parseAction ("wiki" :: "list" :: _)    = Right ActWikiList
+parseAction ("wiki" :: "get" :: idStr :: _) =
+  case readNat64 idStr of
+    Right nid => Right $ ActWikiGet (MkNat64Id nid)
+    Left _    => Left $ "invalid wiki id: " ++ idStr
+parseAction ("wiki" :: _)              = Left "usage: wiki {list|get <id>}"
+parseAction (cmd :: _)                 = Left $ "unknown command: " ++ cmd

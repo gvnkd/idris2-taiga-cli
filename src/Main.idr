@@ -1,26 +1,32 @@
 ||| CLI entry point.
 |||
-||| Two modes of operation:
+||| Three modes of operation:
 |||
 ||| 1. **Agent mode** (default): reads a JSON request from stdin,
 |||    dispatches to the appropriate command handler, and writes a
 |||    JSON response to stdout.  Used by AI agents.
 |||
-||| 2. **CLI mode**: activated when `getArgs` returns non-empty.
-|||    Parses human-friendly flags (`--list-epics`, `--login`, etc.)
-|||    and dispatches directly.  Output is plain JSON to stdout.
+||| 2. **CLI mode** (legacy flags): activated when `getArgs` returns
+|||    flags like `--list-epics`, `--login`, etc.
+|||
+||| 3. **Subcommand mode** (new): verb-noun commands like
+|||    `taiga-cli task list`, `taiga-cli project set taiga`.
 module Main
 
 import CLI.Args
 import CLI.Help
 import CLI.Parse
+import CLI.Output
+import CLI.Subcommand
 import Command
 import Model.Auth
 import Protocol.Request
 import Protocol.Response
+import State.Config
 import System.File
 import System
 import Data.List
+import Data.String
 
 %language ElabReflection
 
@@ -74,7 +80,7 @@ runAgent = do
               resp <- dispatchCommand command token req.base
               writeStdout (serializeResponse resp)
 
-||| Run the CLI path: parse args, dispatch command, print result.
+||| Run the legacy CLI path: parse flags, dispatch command, print result.
 runCLI : List String -> IO ()
 runCLI rawArgs =
   case parseArgs rawArgs of
@@ -89,14 +95,37 @@ runCLI rawArgs =
               resp <- dispatchCommand command Nothing base
               cliPrintResponse resp
 
+||| Run the new subcommand path.
+runSubcommand : List String -> IO ()
+runSubcommand args = do
+  fmt <- resolveOutputFormat
+  case parseAction args of
+    Left err => do
+      putStrLn $ "error: " ++ err
+      exitWith (ExitFailure 1)
+    Right action => do
+      result <- executeAction action
+      case result of
+        Left err => do
+          putStrLn $ "error: " ++ err
+          exitWith (ExitFailure 1)
+        Right cr => putStrLn $ renderCmdResult fmt cr
+
+||| Check if args look like legacy flags (start with --).
+looksLikeFlags : List String -> Bool
+looksLikeFlags []     = False
+looksLikeFlags (x::_) = Data.String.isPrefixOf "--" x
+
 ||| Top-level entry point.
 |||
-||| If `getArgs` returns non-empty, enter CLI mode.
-||| Otherwise, enter agent mode (read JSON from stdin).
+||| If `getArgs` returns non-empty, route to the appropriate mode.
 main : IO ()
 main = do
   args <- getArgs
   let args' := drop 1 args
   case args' of
     []    => putStrLn usage
-    _     => runCLI args'
+    _     =>
+      if looksLikeFlags args'
+        then runCLI args'
+        else runSubcommand args'

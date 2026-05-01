@@ -6,7 +6,7 @@ import pytest
 
 BIN = "/srv/taiga-cli/build/exec/taiga-cli"
 BASE = "http://127.0.0.1:8000/api/v1"
-PROJECT_ID = "12"
+PROJECT_ID = "13"
 
 
 def _run(cmd, args_dict, token=None):
@@ -69,7 +69,7 @@ class TaigaClient:
 
     def refresh(self, token):
         """Refresh the auth token and return new token string."""
-        return self._json("refresh", {"token": token})
+        return self._json("refresh", {"refresh": token, "refreshArgsTag": ""})
 
     # --- auth -----------------------------------------------------------------
     def me(self):
@@ -230,6 +230,10 @@ class TaigaClient:
             "version": version,
         })
 
+    def delete_milestone(self, mid):
+        """Delete returns raw 'deleted' string — use _raw."""
+        return self._raw("delete-milestone", {"id": mid, "nat64ArgsTag": ""})
+
     # --- comments -------------------------------------------------------------
     def add_comment(self, entity, eid, text):
         return self._raw("comment", {
@@ -248,7 +252,7 @@ class TaigaClient:
 
     def resolve(self, ref):
         raw = _assert_ok(_run("resolve", {
-            "project": "taiga", "ref": ref,
+            "project": "test-project", "ref": ref,
         }, self.token))
         return json.loads(raw.strip())
 

@@ -14,9 +14,9 @@ record Issue where
   ref : Bits32
   subject : String
   description : String
-  status : Maybe String
-  priority : Maybe String
-  severity : Maybe String
+  status : Maybe Bits64
+  priority : Maybe Bits64
+  severity : Maybe Bits64
 
 %runElab derive "Issue" [Show,Eq,ToJSON,FromJSON]
 
@@ -27,7 +27,7 @@ record IssueSummary where
   id : Nat64Id
   ref : Bits32
   subject : String
-  status : Maybe String
-  priority : Maybe String
+  status : Maybe Bits64
+  priority : Maybe Bits64
 
 %runElab derive "IssueSummary" [Show,Eq,ToJSON,FromJSON]

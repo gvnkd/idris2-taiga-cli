@@ -14,7 +14,7 @@ record UserStory where
   ref : Bits32
   subject : String
   description : String
-  status : Maybe String
+  status : Maybe Bits64
   milestone : Maybe Nat64Id
   version : Version
 
@@ -27,7 +27,7 @@ record UserStorySummary where
   id : Nat64Id
   ref : Bits32
   subject : String
-  status : Maybe String
+  status : Maybe Bits64
   milestone : Maybe Nat64Id
 
 %runElab derive "UserStorySummary" [Show,Eq,ToJSON,FromJSON]

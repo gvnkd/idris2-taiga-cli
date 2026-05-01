@@ -8,3 +8,4 @@ logs/
 result
 .opencode/
 tests/__pycache__/
+taiga/

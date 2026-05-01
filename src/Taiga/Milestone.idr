@@ -99,3 +99,14 @@ parameters {auto env : ApiEnv}
         url  := buildUrl ["milestones", showId id] [] env.base
     resp <- authPatch env url body
     expectJson resp 200 "update milestone"
+
+  ||| Delete a milestone.
+  public export
+  deleteMilestone :
+       (id : Nat64Id)
+    -> {auto _ : HasIO io}
+    -> io (Either String ())
+  deleteMilestone id = do
+    let url := buildUrl ["milestones", showId id] [] env.base
+    resp <- authDelete env url
+    expectOk resp 204 "delete milestone"

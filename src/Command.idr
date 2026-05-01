@@ -338,6 +338,7 @@ data Command : Type where
   -- Milestones
   CmdCreateMilestone : String -> String -> String -> String -> Command
   CmdUpdateMilestone : Nat64Id -> Maybe String -> Maybe String -> Maybe String -> Version -> Command
+  CmdDeleteMilestone : Nat64Id -> Command
 
 %runElab derive "Command" [Show,ToJSON,FromJSON]
 
@@ -507,6 +508,9 @@ mkCreateMilestoneCmd a      = CmdCreateMilestone a.project a.name a.estimated_st
 private mkUpdateMilestoneCmd : UpdateMilestoneArgs -> Command
 mkUpdateMilestoneCmd a      = CmdUpdateMilestone (mkNat64Id a.id) a.name a.estimated_start a.estimated_finish (mkVersion a.version)
 
+private mkDeleteMilestoneCmd : Nat64Args -> Command
+mkDeleteMilestoneCmd a      = CmdDeleteMilestone (mkNat64Id a.id)
+
 ||| Parse a command name and JSON arguments into a Command.
 public export
 parseCommand : (cmd : String) -> (args : String) -> Either String Command
@@ -555,6 +559,7 @@ parseCommand "delete-comment"   args        = parseCmdArgs mkDeleteCommentCmd ar
 parseCommand "list-comments"    args        = parseCmdArgs mkListCommentsCmd args
 parseCommand "create-milestone" args        = parseCmdArgs mkCreateMilestoneCmd args
 parseCommand "update-milestone" args        = parseCmdArgs mkUpdateMilestoneCmd args
+parseCommand "delete-milestone" args        = parseCmdArgs mkDeleteMilestoneCmd args
 parseCommand cmd _              = Left $ "Unknown command: " ++ cmd
 
 ||| Helper: wrap IO action result in a Response.
@@ -618,6 +623,7 @@ dispatchWithEnv' command env =
         CmdDeleteWiki id                                  => dispatchWithEnvHelper (deleteWiki @{env} id) (const "deleted")
         CmdCreateMilestone p n es ef                      => dispatchWithEnvHelper (createMilestone @{env} p n es ef) encode
         CmdUpdateMilestone id n es ef v                   => dispatchWithEnvHelper (updateMilestone @{env} id n es ef v) encode
+        CmdDeleteMilestone id                             => dispatchWithEnvHelper (deleteMilestone @{env} id) (const "deleted")
         CmdComment e eid t                                => dispatchWithEnvHelper (addComment @{env} e eid t 0) Prelude.id
         CmdEditComment e eid cid t                        => dispatchWithEnvHelper (editComment @{env} e eid (show cid.id) t) Prelude.id
         CmdDeleteComment e eid cid                        => dispatchWithEnvHelper (deleteComment @{env} e eid (show cid.id)) (const "deleted")

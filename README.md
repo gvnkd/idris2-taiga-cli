@@ -1,19 +1,19 @@
 # taiga-cli
 
-A command-line tool written in [Idris 2](https://github.com/idris-lang/Idris2) that lets AI agents interact with a [Taiga](https://taiga.io) project management instance over its REST API.
-
-It exposes a compact JSON-over-stdin/stdout protocol so an agent can authenticate, query, create, and edit Taiga entities with minimal token overhead.
+A command-line tool written in [Idris 2](https://github.com/idris-lang/Idris2) that lets AI agents and human users interact with a [Taiga](https://taiga.io) project management instance over its REST API.
 
 ## Features
 
 - **Agent mode** (default): reads one JSON request from stdin, dispatches the command, writes one JSON response to stdout
-- **CLI mode**: human-friendly flags (`--list-epics`, `--login`, etc.) with plain JSON output
+- **Subcommand mode** (new): stateful verb-noun commands (`taiga-cli task list`, `taiga-cli project set taiga`)
+- **Legacy CLI mode**: human-friendly flags (`--list-epics`, `--login`, etc.) with plain JSON output
 - Full CRUD for epics, user stories, tasks, issues, wiki pages, and milestones
 - Comment management via the Taiga history API
 - Global project search and entity resolution by slug/ref
 - Token-minimal compact JSON protocol
 - OCC (optimistic concurrency control) version handling on all mutations
 - Structured error responses with error codes and messages
+- Stateful workspace with secure auth storage
 
 ## Building
 
@@ -51,7 +51,37 @@ nix develop --command run
 
 ## Usage
 
-### CLI Mode
+### Subcommand Mode (Stateful)
+
+The new subcommand mode maintains workspace state in `./taiga/` and authenticates via `~/.local/share/taiga-cli/`.
+
+```shell
+# Initialize workspace state
+taiga-cli init http://127.0.0.1:8000/api/v1
+
+# Authenticate (token stored in global auth dir, NOT in ./taiga/)
+taiga-cli login --user admin --pass secretpassword
+
+# Switch project context
+taiga-cli project set my-project
+
+# List tasks in active project
+taiga-cli task list
+
+# Create a task
+taiga-cli task create "Fix auth bug"
+
+# List sprints/milestones
+taiga-cli sprint list
+
+# Show current state
+taiga-cli show
+
+# Output JSON instead of text
+taiga-cli task list --json
+```
+
+### Legacy CLI Mode
 
 ```shell
 # Authenticate
@@ -76,17 +106,29 @@ Pipe a JSON request to stdin and read a JSON response from stdout:
 
 ```shell
 # Login
-echo '{"cmd":"login","args":{"username":"admin","password":"1234"},"base":"http://127.0.0.1:8000/api/v1"}' \
+echo '{"cmd":"login","args":"{\"username\":\"admin\",\"password\":\"1234\"}","base":"http://127.0.0.1:8000/api/v1"}' \
   | taiga-cli --stdin
 
 # List projects
-echo '{"cmd":"list-projects","auth":{"token":"eyJ..."},"base":"http://127.0.0.1:8000/api/v1"}' \
+echo '{"cmd":"list-projects","args":"{\"member\":null,\"listProjectsTag\":\"\"}","auth":{"tag":"TokenAuth","contents":"eyJ..."},"base":"http://127.0.0.1:8000/api/v1"}' \
   | taiga-cli --stdin
 
 # Create a task
-echo '{"cmd":"create-task","args":{"project":"backend","subject":"Fix auth bug","story":42},"auth":{"token":"eyJ..."},"base":"http://127.0.0.1:8000/api/v1"}' \
+echo '{"cmd":"create-task","args":"{\"project\":\"backend\",\"subject\":\"Fix auth bug\",\"story\":null,\"description\":null,\"status\":null,\"milestone\":null}","auth":{"tag":"TokenAuth","contents":"eyJ..."},"base":"http://127.0.0.1:8000/api/v1"}' \
   | taiga-cli --stdin
 ```
+
+## Security: State Storage
+
+**Credentials are NEVER stored in the project directory.**
+
+| Data Type | Storage Location | Safe to commit |
+|-----------|-------------------|----------------|
+| **Auth tokens, refresh tokens** | `~/.local/share/taiga-cli/tokens/` | No |
+| **Workspace state** (active project, base URL) | `./taiga/state.json` | Yes |
+| **Config** (output format prefs) | `./taiga/config.json` | Yes |
+
+The workspace state (`AppSt`) has no auth fields — it's structurally impossible to persist a token to `./taiga/`. Auth is resolved at runtime by looking up the instance hash of the base URL in the global tokens directory.
 
 ## JSON Protocol
 
@@ -95,8 +137,8 @@ echo '{"cmd":"create-task","args":{"project":"backend","subject":"Fix auth bug",
 ```json
 {
   "cmd":   "<command>",
-  "args":  { },
-  "auth":  { "token": "..." },
+  "args":  "{}",
+  "auth":  { "tag": "TokenAuth", "contents": "..." },
   "base":  "http://127.0.0.1:8000/api/v1"
 }
 ```
@@ -104,27 +146,69 @@ echo '{"cmd":"create-task","args":{"project":"backend","subject":"Fix auth bug",
 | Field  | Required  | Description                                                |
 |--------|-----------|------------------------------------------------------------|
 | `cmd`  | yes       | Command name, e.g. `"login"`, `"list-projects"`           |
-| `args` | per-cmd   | Command-specific parameters                                |
-| `auth` | most cmds | `{"token":"..."}` or `{"username":"...","password":"..."}` |
-| `base` | no        | Taiga API base URL (default from env `TAIGA_URL`)          |
+| `args` | per-cmd   | Command-specific parameters (JSON string)                  |
+| `auth` | most cmds | `{"tag":"TokenAuth","contents":"..."}` or credential auth  |
+| `base` | no        | Taiga API base URL                                         |
 
 ### Response
 
 Success:
 
 ```json
-{"ok": true, "data": { }}
+{"tag":"Ok","contents":{"ok":true,"payload":"{...}"}}
 ```
 
 Error:
 
 ```json
-{"ok": false, "err": "not-found", "msg": "Project 42 not found"}
+{"tag":"Err","contents":{"ok":false,"err":"not-found","msg":"Project 42 not found"}}
 ```
 
 ## Command Reference
 
-### Authentication
+### Subcommand Mode
+
+```
+taiga-cli <verb> [<action>] [args...] [--json]
+
+Core:
+  init [URL]                    Create state directory and default config
+  login --user U --pass P       Authenticate, persist token globally
+  logout                        Clear persisted token
+  show                          Display current state
+
+Project context:
+  project list                  List accessible projects
+  project set <slug|id>         Switch active project
+  project get                   Show active project details
+
+Entity operations (on active project):
+  task list [--status S]        List tasks
+  task create <subject>         Create task
+  task get <id>                 Get task by ID
+  task status <id> <status>     Change task status
+  task comment <id> <text>      Comment on a task
+
+  epic list                     List epics
+  epic get <id>                 Get epic details
+
+  sprint list                   List sprints/milestones
+  sprint show                   Show current sprint state
+  sprint set <id>               Set active sprint
+
+  issue list                    List issues
+  issue get <id>                Get issue details
+
+  story list                    List stories
+  story get <id>                Get story details
+
+  wiki list                     List wiki pages
+  wiki get <id>                 Get wiki page details
+```
+
+### Agent Mode Commands
+
+#### Authentication
 
 | cmd       | args                          | description                       |
 |-----------|-------------------------------|-----------------------------------|
@@ -132,7 +216,7 @@ Error:
 | `refresh` | `{"refresh":"..."}`           | Refresh an expiring token         |
 | `me`      | —                             | Get current user profile          |
 
-### Read Operations
+#### Read Operations
 
 | cmd                  | key args                   | description                    |
 |----------------------|----------------------------|--------------------------------|
@@ -156,7 +240,7 @@ Error:
 | `resolve`            | `project`, `ref`           | Resolve entity by slug/ref     |
 | `list-comments`      | `entity`, `id`             | List comments/history          |
 
-### Write Operations
+#### Write Operations
 
 | cmd                  | key args                                            | description             |
 |----------------------|-----------------------------------------------------|-------------------------|
@@ -180,6 +264,7 @@ Error:
 | `delete-wiki`        | `id`                                                | Delete wiki page        |
 | `create-milestone`   | `project`, `name`, `start`, `finish`                | Create milestone        |
 | `update-milestone`   | `id`, fields..., `version`                          | Update milestone        |
+| `delete-milestone`   | `id`                                                | Delete milestone        |
 | `comment`            | `entity`, `id`, `text`                              | Add comment             |
 | `edit-comment`       | `entity`, `id`, `comment_id`, `text`               | Edit existing comment   |
 | `delete-comment`     | `entity`, `id`, `comment_id`                       | Delete comment          |
@@ -190,12 +275,14 @@ All mutation commands require a `version` field for optimistic concurrency contr
 
 ```
 src/
-  Main.idr               CLI entry point (agent mode + CLI mode)
+  Main.idr               CLI entry point (agent + subcommand + legacy CLI)
   Command.idr            Command sum type and dispatch table
   CLI/
-    Args.idr             CLI argument data types
+    Args.idr             CLI argument data types (legacy flags)
     Help.idr             Usage/help text generation
-    Parse.idr            CLI argument parser
+    Output.idr           Dual-format output (text / JSON)
+    Parse.idr            CLI argument parser (legacy flags + subcommands)
+    Subcommand.idr       Subcommand routing and action handlers
   Model/
     Auth.idr             Token and credential types
     Common.idr           Shared types (Nat64Id, Slug, Version)
@@ -211,6 +298,11 @@ src/
   Protocol/
     Request.idr          Request envelope parser
     Response.idr         Response envelope serializer
+  State/
+    File.idr             JSON persistence layer (workspace + global auth)
+    State.idr            Workspace state model (no secrets)
+    Config.idr           Static configuration (output format, etc.)
+    AuthStore.idr        Token lifecycle management (global storage)
   Taiga/
     Api.idr              HTTP client wrapper (via curl subprocess)
     Auth.idr             Login, refresh, token management
@@ -252,6 +344,17 @@ HTTP requests are performed by shelling out to `curl` via `System.run`, avoiding
 4. **OCC-aware writes** — every mutation requires `version`; tool returns updated entity
 5. **Fail loudly** — structured errors with `err` code + human `msg`
 6. **Deterministic output** — same input always produces same output shape
+7. **Security boundary** — workspace state (`./taiga/`) never contains credentials
+8. **Dual output** — every command produces human-readable text by default, JSON with `--json`
+
+## Architecture
+
+See `docs/arch/` for detailed architecture documentation:
+
+- `00-overview.md` — Vision, design principles, command structure
+- `01-dataflow.md` — Request lifecycle, security boundary, state isolation
+- `02-modules.md` — Module specifications and interfaces
+- `50-func-patterns.md` — Functional patterns and code samples
 
 ## License
 

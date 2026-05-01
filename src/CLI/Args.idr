@@ -83,6 +83,7 @@ data CLIArgs : Type where
   -- Milestones
   ArgCreateMilestone   : String -> String -> String -> String -> CLIArgs
   ArgUpdateMilestone   : Nat64Id -> Maybe String -> Maybe String -> Maybe String -> Version -> CLIArgs
+  ArgDeleteMilestone   : Nat64Id -> CLIArgs
 
 ||| Convert parsed CLI args into the unified Command type.
 ||| Authentication and base URL are resolved separately by the caller.
@@ -136,3 +137,4 @@ toCommand (ArgChangeTaskStatus id st v) = CmdChangeTaskStatus id st v
 toCommand (ArgTaskComment id t v)  = CmdTaskComment id t v
 toCommand (ArgCreateMilestone p n es ef) = CmdCreateMilestone p n es ef
 toCommand (ArgUpdateMilestone id n es ef v) = CmdUpdateMilestone id n es ef v
+toCommand (ArgDeleteMilestone id) = CmdDeleteMilestone id
