@@ -362,6 +362,11 @@ public export
 liftRawIO : IO a -> AppM a
 liftRawIO = lift
 
+||| Lift a pure Either into the monad.
+private
+liftEither : Either String a -> AppM a
+liftEither = MkEitherT . pure
+
 public export
 appFail : String -> AppM a
 appFail err = MkEitherT $ pure $ Left err
@@ -371,12 +376,10 @@ appFail err = MkEitherT $ pure $ Left err
 public export
 getProjectEnv : AppM (ApiEnv, Nat64Id)
 getProjectEnv = do
-  st  <- liftIOEither loadState
-  case getActiveProject st of
-    Left err => appFail err
-    Right pid => do
-      env <- liftIOEither resolveApiEnv
-      pure (env, pid)
+  st   <- liftIOEither loadState
+  pid  <- liftEither $ getActiveProject st
+  env  <- liftIOEither resolveApiEnv
+  pure (env, pid)
 
 ------------------------------------------------------------------------------
 -- Action Handlers
@@ -385,13 +388,17 @@ getProjectEnv = do
 ||| Handler for ActInit.
 public export
 handleInit : Maybe String -> IO (Either String CmdResult)
-handleInit maybeBaseUrl = do
+
+initAux : Maybe String -> AppM CmdResult
+initAux maybeBaseUrl = do
   let baseUrl := case maybeBaseUrl of
-                    Just u  => u
-                    Nothing => "http://localhost:8000"
-  ensureDir WorkspaceStore
-  _ <- saveState (defaultState baseUrl)
-  pure $ Right $ cmdInfo ("Initialized taiga state in ./.taiga/ (base: " ++ baseUrl ++ ")")
+                     Just u  => u
+                     Nothing => "http://localhost:8000"
+  liftRawIO $ ensureDir WorkspaceStore
+  _ <- liftIOEither $ saveState (defaultState baseUrl)
+  pure $ cmdInfo ("Initialized taiga state in ./.taiga/ (base: " ++ baseUrl ++ ")")
+
+handleInit maybeBaseUrl = runAppM (initAux maybeBaseUrl)
 
 ||| Read password securely.  If stdin is a TTY, disables terminal echo
 ||| before reading and restores it after.  If piped, reads normally.
@@ -439,27 +446,29 @@ handleLogin user mpass = do
 ||| Handler for ActLogout.
 public export
 handleLogout : IO (Either String CmdResult)
-handleLogout = do
-  st_e <- loadState
-  case st_e of
-    Left err  => pure $ Left err
-    Right st  => do
-      removeToken st.base_url
-      pure $ Right $ cmdInfo "Logged out."
+
+logoutAux : AppM CmdResult
+logoutAux = do
+  st <- liftIOEither loadState
+  liftRawIO $ removeToken st.base_url
+  pure $ cmdInfo "Logged out."
+
+handleLogout = runAppM logoutAux
 
 ||| Handler for ActShow.
 public export
 handleShow : IO (Either String CmdResult)
-handleShow = do
-  st_e <- loadState
-  case st_e of
-    Left err  => pure $ Left err
-    Right st  => do
-      let msg := "Base URL: " ++ st.base_url ++ "\n" ++
-                 "Active project: " ++ case st.active_project of
-                                          Nothing => "(none)"
-                                          Just p  => show p.id
-      pure $ Right $ cmdInfo msg
+
+showAux : AppM CmdResult
+showAux = do
+  st <- liftIOEither loadState
+  let projId := case st.active_project of
+                   Nothing => "(none)"
+                   Just p  => show p.id
+      msg := "Base URL: " ++ st.base_url ++ "\nActive project: " ++ projId
+  pure $ cmdInfo msg
+
+handleShow = runAppM showAux
 
 ||| Handler for ActProjectList.
 public export
@@ -504,39 +513,45 @@ projectAccessError ident =
 ||| Handler for ActProjectSet.
 public export
 handleProjectSet : String -> IO (Either String CmdResult)
-handleProjectSet ident = do
-  env_e <- resolveApiEnv
-  case env_e of
-    Left err  => pure $ Left err
-    Right env => do
-      result <- getProjectBySlug @{env} (MkSlug ident)
-      case result of
-        Right proj => do
-          _ <- setActiveProjectCached proj
-          pure $ Right $ cmdOk ("Active project set to: " ++ proj.name) proj
-        Left _ =>
-          case readNat ident of
-            Just pid => do
-              result' <- getProjectById @{env} (MkNat64Id pid)
-              case result' of
-                Left err'  => pure $ Right $ cmdError ("Failed to get project: " ++ err')
-                Right proj => do
-                  _ <- setActiveProjectCached proj
-                  pure $ Right $ cmdOk ("Active project set to: " ++ proj.name) proj
-            Nothing  => do
-              -- Slug lookup failed and input is not numeric.
-              -- Try to find the project in the list and use its ID.
-              mPid <- findProjectInList env ident
-              case mPid of
-                Just pid => do
-                  result' <- getProjectById @{env} pid
-                  case result' of
-                    Left err'  => pure $ Right $ cmdError ("Failed to get project: " ++ err')
-                    Right proj => do
-                      _ <- setActiveProjectCached proj
-                      pure $ Right $ cmdOk ("Active project set to: " ++ proj.name) proj
-                Nothing =>
-                  pure $ Right $ cmdError (projectAccessError ident)
+
+private
+projectSetById : ApiEnv -> Nat64Id -> IO (Either String CmdResult)
+projectSetById env pid = do
+  res <- getProjectById @{env} pid
+  case res of
+    Left err'  => pure $ Right $ cmdError ("Failed to get project: " ++ err')
+    Right proj => do
+      _ <- setActiveProjectCached proj
+      pure $ Right $ cmdOk ("Active project set to: " ++ proj.name) proj
+
+private
+projectSetFallbackChain : String -> ApiEnv -> IO (Either String CmdResult)
+projectSetFallbackChain ident env = do
+  case readNat ident of
+    Just pid => projectSetById env (MkNat64Id pid)
+    Nothing => do
+      mPid <- findProjectInList env ident
+      case mPid of
+        Just pid => projectSetById env pid
+        Nothing  => pure $ Right $ cmdError (projectAccessError ident)
+
+private
+projectSetIO : String -> ApiEnv -> IO (Either String CmdResult)
+projectSetIO ident env = do
+  slugRes <- getProjectBySlug @{env} (MkSlug ident)
+  case slugRes of
+    Right proj => do
+      _ <- setActiveProjectCached proj
+      pure $ Right $ cmdOk ("Active project set to: " ++ proj.name) proj
+    Left _ => projectSetFallbackChain ident env
+
+projectSetAux : String -> AppM CmdResult
+projectSetAux ident = do
+  env <- liftIOEither resolveApiEnv
+  res <- liftIOEither $ projectSetIO ident env
+  pure res
+
+handleProjectSet ident = runAppM (projectSetAux ident)
 
 ||| Handler for ActProjectGet.
 public export
@@ -750,26 +765,18 @@ handleEpicUpdate ident mSubject mDesc mStatusText mStatusId = runAppM (epicUpdat
 public export
 handleEpicDelete : String -> IO (Either String CmdResult)
 
-epicDeleteAux : String -> IO (Either String CmdResult)
+epicDeleteAux : String -> AppM CmdResult
 epicDeleteAux ident = do
-  eid_e <- resolveEpicId ident
-  case eid_e of
-    Left err   => pure $ Left err
-    Right eid  => do
-      env_e <- resolveApiEnv
-      case env_e of
-        Left err   => pure $ Left err
-        Right env  => do
-          confirmed <- confirmDelete ("epic " ++ ident)
-          if not confirmed
-            then pure $ Right $ cmdInfo "Delete cancelled"
-            else do
-              result <- deleteEpic @{env} eid
-              pure $ case result of
-                Left err  => Right $ cmdError err
-                Right _   => Right $ cmdOk "Epic deleted" $ MkDeleteResult "epic" eid.id
+  eid <- liftIOEither $ resolveEpicId ident
+  env <- liftIOEither resolveApiEnv
+  confirmed <- liftRawIO $ confirmDelete ("epic " ++ ident)
+  if not confirmed
+    then pure $ cmdInfo "Delete cancelled"
+    else do
+      liftIOEither $ deleteEpic @{env} eid
+      pure $ cmdOk "Epic deleted" $ MkDeleteResult "epic" eid.id
 
-handleEpicDelete ident = epicDeleteAux ident
+handleEpicDelete ident = runAppM (epicDeleteAux ident)
 
 ||| Handler for ActSprintList.
 public export
@@ -791,15 +798,15 @@ handleSprintShow = handleSprintList
 ||| Handler for ActSprintSet.
 public export
 handleSprintSet : String -> IO (Either String CmdResult)
-handleSprintSet ident = do
-  id_e <- resolveMilestoneId ident
-  case id_e of
-    Left err   => pure $ Left err
-    Right sid  => do
-      env_e <- resolveApiEnv
-      case env_e of
-        Left err   => pure $ Left err
-        Right env  => callToResult "Sprint" $ getMilestone @{env} sid
+
+sprintSetAux : String -> AppM CmdResult
+sprintSetAux ident = do
+  sid <- liftIOEither $ resolveMilestoneId ident
+  env <- liftIOEither resolveApiEnv
+  val <- liftIOEither $ getMilestone @{env} sid
+  pure $ cmdOk "Sprint" val
+
+handleSprintSet ident = runAppM (sprintSetAux ident)
 
 ||| Handler for ActIssueList.
 public export
@@ -1128,35 +1135,28 @@ formatStatusList ss =
 ||| Handler for listing statuses of a given entity type.
 private
 handleStatusList : String -> IO (Either String CmdResult)
-handleStatusList entityType = do
-  st_e <- loadState
-  case st_e of
-    Left err  => pure $ Left err
-    Right st  => do
-      case getActiveProject st of
-        Left err   => pure $ Left err
-        Right pid  => do
-          env_e <- resolveApiEnv
-          case env_e of
-            Left err   => pure $ Left err
-            Right env  => do
-              proj_e <- getProjectForStatus env st
-              case proj_e of
-                Left err   => pure $ Right $ cmdError err
-                Right proj =>
-                  let statuses := case entityType of
-                                    "task"   => proj.task_statuses
-                                    "issue"  => proj.issue_statuses
-                                    "us"     => proj.us_statuses
-                                    "epic"   => proj.epic_statuses
-                                    _        => []
-                      title := case entityType of
-                                 "task"   => "Task statuses"
-                                 "issue"  => "Issue statuses"
-                                 "us"     => "Story statuses"
-                                 "epic"   => "Epic statuses"
-                                 _        => "Statuses"
-                   in pure $ Right $ cmdInfo (title ++ ":\n" ++ formatStatusList statuses)
+
+statusListAux : String -> AppM CmdResult
+statusListAux entityType = do
+  st   <- liftIOEither loadState
+  pid  <- liftEither $ getActiveProject st
+  env  <- liftIOEither resolveApiEnv
+  proj <- liftIOEither $ getProjectForStatus env st
+  let statuses := case entityType of
+                     "task"   => proj.task_statuses
+                     "issue"  => proj.issue_statuses
+                     "us"     => proj.us_statuses
+                     "epic"   => proj.epic_statuses
+                     _        => []
+      title := case entityType of
+                   "task"   => "Task statuses"
+                   "issue"  => "Issue statuses"
+                   "us"     => "Story statuses"
+                   "epic"   => "Epic statuses"
+                   _        => "Statuses"
+  pure $ cmdInfo (title ++ ":\n" ++ formatStatusList statuses)
+
+handleStatusList entityType = runAppM (statusListAux entityType)
 
 ||| Handler for ActResolve.
 public export
