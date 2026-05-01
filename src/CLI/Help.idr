@@ -9,57 +9,58 @@ import CLI.Args
 ||| Print the full usage message to stdout.
 public export
 usage : String
-usage =
-  "Usage: taiga-cli [OPTIONS] COMMAND\n"
-  ++ "\n"
-  ++ "Options:\n"
-  ++ "  -h, --help          Show this help message\n"
-  ++ "  --base URL         Taiga API base URL (e.g. http://127.0.0.1:8000/api/v1)\n"
-  ++ "  --token TOKEN      Bearer token for authenticated commands\n"
-  ++ "  --stdin            Read JSON command from stdin (agent mode)\n"
-  ++ "\n"
-  ++ "Core:\n"
-  ++ "  init [URL]                    Create state directory and default config\n"
-  ++ "  login --user U [--password P] Authenticate, persist token\n"
-  ++ "  logout                        Clear persisted token\n"
-  ++ "  show                          Display current state (project, auth status)\n"
-  ++ "\n"
-  ++ "Project context:\n"
-  ++ "  project list                  List accessible projects\n"
-  ++ "  project set <slug|id>         Switch active project\n"
-  ++ "  project get                   Show active project details\n"
-  ++ "\n"
-  ++ "Task operations:\n"
-  ++ "  task list [--status S]        List tasks in active project\n"
-  ++ "  task create <subject>         Create task\n"
-  ++ "  task get <id>                 Get task by ID\n"
-  ++ "  task status <id> <status>    Change task status\n"
-  ++ "  task comment <id> <text>     Comment on a task\n"
-  ++ "\n"
-  ++ "Epic operations:\n"
-  ++ "  epic list                     List epics in active project\n"
-  ++ "  epic get <id>                 Get epic details\n"
-  ++ "\n"
-  ++ "Sprint operations:\n"
-  ++ "  sprint list                   List all sprints/milestones\n"
-  ++ "  sprint show                   Show current sprint state\n"
-  ++ "  sprint set <id>              Set active sprint context\n"
-  ++ "\n"
-  ++ "Issue operations:\n"
-  ++ "  issue list                    List issues in active project\n"
-  ++ "  issue get <id>                Get issue details\n"
-  ++ "\n"
-  ++ "Story operations:\n"
-  ++ "  story list                    List stories in active project\n"
-  ++ "  story get <id>                Get story details\n"
-  ++ "\n"
-  ++ "Wiki operations:\n"
-  ++ "  wiki list                     List wiki pages in active project\n"
-  ++ "  wiki get <id>                 Get wiki page details\n"
-  ++ "\n"
-  ++ "Global flags:\n"
-  ++ "  --json                        Output JSON instead of text\n"
-  ++ "  --base <url>                 Override base URL for this invocation\n"
+usage = unlines
+  [ "Usage: taiga-cli [OPTIONS] COMMAND"
+  , ""
+  , "Options:"
+  , "  -h, --help          Show this help message"
+  , "  --base URL         Taiga API base URL (e.g. http://127.0.0.1:8000/api/v1)"
+  , "  --token TOKEN      Bearer token for authenticated commands"
+  , "  --stdin            Read JSON command from stdin (agent mode)"
+  , ""
+  , "Core:"
+  , "  init [URL]                    Create state directory and default config"
+  , "  login --user U [--password P] Authenticate, persist token"
+  , "  logout                        Clear persisted token"
+  , "  show                          Display current state (project, auth status)"
+  , ""
+  , "Project context:"
+  , "  project list                  List accessible projects"
+  , "  project set <slug|id>         Switch active project"
+  , "  project get                   Show active project details"
+  , ""
+  , "Task operations:"
+  , "  task list [--status S]        List tasks in active project"
+  , "  task create <subject>         Create task"
+  , "  task get <id>                 Get task by ID"
+  , "  task status <id> <status>    Change task status"
+  , "  task comment <id> <text>     Comment on a task"
+  , ""
+  , "Epic operations:"
+  , "  epic list                     List epics in active project"
+  , "  epic get <id>                 Get epic details"
+  , ""
+  , "Sprint operations:"
+  , "  sprint list                   List all sprints/milestones"
+  , "  sprint show                   Show current sprint state"
+  , "  sprint set <id>              Set active sprint context"
+  , ""
+  , "Issue operations:"
+  , "  issue list                    List issues in active project"
+  , "  issue get <id>                Get issue details"
+  , ""
+  , "Story operations:"
+  , "  story list                    List stories in active project"
+  , "  story get <id>                Get story details"
+  , ""
+  , "Wiki operations:"
+  , "  wiki list                     List wiki pages in active project"
+  , "  wiki get <id>                 Get wiki page details"
+  , ""
+  , "Global flags:"
+  , "  --json                        Output JSON instead of text"
+  , "  --base <url>                 Override base URL for this invocation"
+  ]
 
 ||| Generate a short synopsis (first line of --help).
 public export
@@ -70,30 +71,20 @@ usageSynopsis = "taiga-cli [OPTIONS] COMMAND"
 ||| Returns `Nothing` if the name is not recognised.
 public export
 commandHelp : String -> Maybe String
-commandHelp "init"       = Just $ "init [BASE_URL]\n" ++
-                                "    Initialize workspace state in ./.taiga/"
-commandHelp "login"      = Just $ "login --user USERNAME [--password PASSWORD]\n" ++
-                                "    Authenticate with Taiga and persist token.\n" ++
-                                "    If --password is omitted, the password is read interactively.\n" ++
-                                "    WARNING: Passing --password on the command line is insecure."
-commandHelp "logout"     = Just $ "logout\n" ++
-                                "    Clear persisted authentication token."
-commandHelp "show"       = Just $ "show\n" ++
-                                "    Display current workspace state."
-commandHelp "project"    = Just $ "project {list|set <slug>|get}\n" ++
-                                "    Manage active project context."
-commandHelp "task"       = Just $ "task {list|create|get|status|comment}\n" ++
-                                "    Manage tasks in active project."
-commandHelp "epic"       = Just $ "epic {list|get}\n" ++
-                                "    Manage epics in active project."
-commandHelp "sprint"     = Just $ "sprint {list|show|set}\n" ++
-                                "    Manage sprints/milestones."
-commandHelp "issue"      = Just $ "issue {list|get}\n" ++
-                                "    Manage issues in active project."
-commandHelp "story"      = Just $ "story {list|get}\n" ++
-                                "    Manage stories in active project."
-commandHelp "wiki"       = Just $ "wiki {list|get}\n" ++
-                                "    Manage wiki pages in active project."
+commandHelp "init"       = Just $ unlines ["init [BASE_URL]", "    Initialize workspace state in ./.taiga/"]
+commandHelp "login"      = Just $ unlines ["login --user USERNAME [--password PASSWORD]",
+                                          "    Authenticate with Taiga and persist token.",
+                                          "    If --password is omitted, the password is read interactively.",
+                                          "    WARNING: Passing --password on the command line is insecure."]
+commandHelp "logout"     = Just $ unlines ["logout", "    Clear persisted authentication token."]
+commandHelp "show"       = Just $ unlines ["show", "    Display current workspace state."]
+commandHelp "project"    = Just $ unlines ["project {list|set <slug>|get}", "    Manage active project context."]
+commandHelp "task"       = Just $ unlines ["task {list|create|get|status|comment}", "    Manage tasks in active project."]
+commandHelp "epic"       = Just $ unlines ["epic {list|get}", "    Manage epics in active project."]
+commandHelp "sprint"     = Just $ unlines ["sprint {list|show|set}", "    Manage sprints/milestones."]
+commandHelp "issue"      = Just $ unlines ["issue {list|get}", "    Manage issues in active project."]
+commandHelp "story"      = Just $ unlines ["story {list|get}", "    Manage stories in active project."]
+commandHelp "wiki"       = Just $ unlines ["wiki {list|get}", "    Manage wiki pages in active project."]
 commandHelp _            = Nothing
 
 ||| List all recognised sub-command / flag names.
