@@ -22,24 +22,23 @@ record CmdResult where
   payload  : String
 
 ||| Encode a CmdResult to JSON string.  Payload is embedded raw (not
-||| double-encoded).
+||| double-encoded). Uses ToJSON for status/message and splices in the
+||| pre-formatted payload as-is.
+public export
+ToJSON CmdResult where
+  toJSON cr = object
+    [ jpair "status" cr.status
+    , jpair "message" cr.message
+    ]
+
 encodeCmdResult : CmdResult -> String
 encodeCmdResult cr =
-  "{\"status\":" ++ show cr.status ++
-  ",\"message\":\"" ++ escapeString cr.message ++ "\"" ++
-  ",\"payload\":" ++ cr.payload ++ "}"
+  let header := encode cr
+   in "{" ++ dropLastBrace header ++ ",\"payload\":" ++ cr.payload ++ "}"
 
   where
-    escapeChar : Char -> String
-    escapeChar '"'  = "\\\""
-    escapeChar '\\' = "\\\\"
-    escapeChar '\n' = "\\n"
-    escapeChar '\r' = "\\r"
-    escapeChar '\t' = "\\t"
-    escapeChar c    = pack [c]
-
-    escapeString : String -> String
-    escapeString s = concat $ map escapeChar (unpack s)
+    dropLastBrace : String -> String
+    dropLastBrace s = pack $ init (unpack s)
 
 ||| Convenience constructor for success.
 public export
