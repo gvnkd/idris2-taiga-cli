@@ -320,6 +320,34 @@ handleProjectList = do
     Left err  => pure $ Left err
     Right env => callToResult "Projects" $ listProjects @{env} Nothing Nothing Nothing
 
+||| Helper: find a project by slug in the project list.
+||| Returns the project ID if found.
+findProjectInList : ApiEnv -> String -> IO (Maybe Nat64Id)
+findProjectInList env slug = do
+  list_e <- listProjects @{env} Nothing Nothing Nothing
+  pure $ case list_e of
+    Left _   => Nothing
+    Right ps => findId ps
+  where
+    findId : List ProjectSummary -> Maybe Nat64Id
+    findId [] = Nothing
+    findId (p :: ps) = if p.slug.slug == slug then Just p.id else findId ps
+
+||| Helper: build a detailed error message for project access denial.
+projectAccessError : String -> String
+projectAccessError ident =
+  "Cannot access project '" ++ ident ++ "' by slug.\n" ++
+  "\n" ++
+  "The project exists in your project list, but the slug-based lookup\n" ++
+  "endpoint requires full project membership. You may have only\n" ++
+  "public/view-level access.\n" ++
+  "\n" ++
+  "Try using the numeric project ID instead:\n" ++
+  "  tcli project set <number>\n" ++
+  "\n" ++
+  "To find the numeric ID, run:\n" ++
+  "  tcli project list"
+
 ||| Handler for ActProjectSet.
 public export
 handleProjectSet : String -> IO (Either String CmdResult)
@@ -335,7 +363,6 @@ handleProjectSet ident = do
           pure $ Right $ cmdOk ("Active project set to: " ++ proj.name) proj
         Left _ =>
           case readNat ident of
-            Nothing  => pure $ Right $ cmdError ("Cannot resolve project: " ++ ident)
             Just pid => do
               result' <- getProjectById @{env} (MkNat64Id pid)
               case result' of
@@ -343,6 +370,20 @@ handleProjectSet ident = do
                 Right proj => do
                   _ <- setActiveProjectCached proj
                   pure $ Right $ cmdOk ("Active project set to: " ++ proj.name) proj
+            Nothing  => do
+              -- Slug lookup failed and input is not numeric.
+              -- Try to find the project in the list and use its ID.
+              mPid <- findProjectInList env ident
+              case mPid of
+                Just pid => do
+                  result' <- getProjectById @{env} pid
+                  case result' of
+                    Left err'  => pure $ Right $ cmdError ("Failed to get project: " ++ err')
+                    Right proj => do
+                      _ <- setActiveProjectCached proj
+                      pure $ Right $ cmdOk ("Active project set to: " ++ proj.name) proj
+                Nothing =>
+                  pure $ Right $ cmdError (projectAccessError ident)
 
 ||| Handler for ActProjectGet.
 public export

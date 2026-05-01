@@ -26,5 +26,9 @@ record ProjectSummary where
   id : Nat64Id
   slug : Slug
   name : String
+  my_permissions : List String
+  i_am_member : Bool
+  i_am_admin : Bool
+  i_am_owner : Bool
 
 %runElab derive "ProjectSummary" [Show,Eq,ToJSON,FromJSON]
