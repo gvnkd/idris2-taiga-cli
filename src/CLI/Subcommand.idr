@@ -341,6 +341,70 @@ callToResult msg action = do
     Right val => Right $ cmdOk msg val
 
 ------------------------------------------------------------------------------
+-- AppM Monad - eliminates nested Either boilerplate in handlers
+------------------------------------------------------------------------------
+
+||| Monadic wrapper around IO (Either String a) so that error propagation
+||| is automatic instead of manual nested case chains.
+public export
+record AppM (a : Type) where
+  constructor MkAppM
+  run : IO (Either String a)
+
+public export
+runAppM : AppM a -> IO (Either String a)
+runAppM app = app.run
+
+public export
+liftIOEither : IO (Either String a) -> AppM a
+liftIOEither io = MkAppM io
+
+public export
+appFail : String -> AppM a
+appFail err = MkAppM $ pure $ Left err
+
+public export
+appPure : Either String a -> AppM a
+appPure either = MkAppM $ pure either
+
+||| Functor instance for AppM.
+public export
+Functor AppM where
+  map f (MkAppM io) = MkAppM $ map (map f) io
+
+||| Applicative instance for AppM.
+public export
+Applicative AppM where
+  pure val       = MkAppM $ pure $ Right val
+  (MkAppM mf) <*> (MkAppM mv) = MkAppM $ do
+    f <- mf
+    v <- mv
+    pure $ case (f, v) of
+      (Right g, Right x) => Right (g x)
+      _                  => Left "internal"
+
+||| Monad instance for AppM.
+public export
+Monad AppM where
+  (MkAppM mx) >>= f = MkAppM $ do
+    ex <- mx
+    case ex of
+      Left err  => pure $ Left err
+      Right val => run (f val)
+
+||| Extract project-scoped environment: load state, resolve active project,
+||| and authenticate. Returns (ApiEnv, Nat64Id).
+public export
+getProjectEnv : AppM (ApiEnv, Nat64Id)
+getProjectEnv = do
+  st  <- liftIOEither loadState
+  case getActiveProject st of
+    Left err => appFail err
+    Right pid => do
+      env <- liftIOEither resolveApiEnv
+      pure (env, pid)
+
+------------------------------------------------------------------------------
 -- Action Handlers
 ------------------------------------------------------------------------------
 
@@ -500,63 +564,51 @@ handleProjectSet ident = do
 ||| Handler for ActProjectGet.
 public export
 handleProjectGet : IO (Either String CmdResult)
-handleProjectGet = do
-  st_e <- loadState
-  case st_e of
-    Left err  => pure $ Left err
-    Right st  => do
-      case getActiveProject st of
-        Left err   => pure $ Left err
-        Right pid  => do
-          env_e <- resolveApiEnv
-          case env_e of
-            Left err   => pure $ Left err
-            Right env  => callToResult "Project" $ getProjectById @{env} pid
+
+projectGetAux : AppM CmdResult
+projectGetAux = do
+  (env, pid) <- getProjectEnv
+  val <- liftIOEither $ getProjectById @{env} pid
+  pure $ cmdOk "Project" val
+
+handleProjectGet = runAppM projectGetAux
 
 ||| Handler for ActTaskList.
 public export
 handleTaskList : Maybe String -> IO (Either String CmdResult)
-handleTaskList maybeStatus = do
-  st_e <- loadState
-  case st_e of
-    Left err  => pure $ Left err
-    Right st  => do
-      case getActiveProject st of
-        Left err   => pure $ Left err
-        Right pid  => do
-          env_e <- resolveApiEnv
-          case env_e of
-            Left err   => pure $ Left err
-            Right env  => callToResult "Tasks" $ listTasks @{env} (Just (show pid.id)) Nothing Nothing Nothing
+
+taskListAux : AppM CmdResult
+taskListAux = do
+  (env, pid) <- getProjectEnv
+  val <- liftIOEither $ listTasks @{env} (Just (show pid.id)) Nothing Nothing Nothing
+  pure $ cmdOk "Tasks" val
+
+handleTaskList maybeStatus = runAppM taskListAux
 
 ||| Handler for ActTaskCreate.
 public export
 handleTaskCreate : String -> IO (Either String CmdResult)
-handleTaskCreate subject = do
-  st_e <- loadState
-  case st_e of
-    Left err  => pure $ Left err
-    Right st  => do
-      case getActiveProject st of
-        Left err   => pure $ Left err
-        Right pid  => do
-          env_e <- resolveApiEnv
-          case env_e of
-            Left err   => pure $ Left err
-            Right env  => callToResult "Task created" $ createTask @{env} (show pid.id) subject Nothing Nothing Nothing Nothing
+
+taskCreateAux : String -> AppM CmdResult
+taskCreateAux subject = do
+  (env, pid) <- getProjectEnv
+  val <- liftIOEither $ createTask @{env} (show pid.id) subject Nothing Nothing Nothing Nothing
+  pure $ cmdOk "Task created" val
+
+handleTaskCreate subject = runAppM (taskCreateAux subject)
 
 ||| Handler for ActTaskGet.
 public export
 handleTaskGet : String -> IO (Either String CmdResult)
-handleTaskGet ident = do
-  id_e <- resolveTaskId ident
-  case id_e of
-    Left err   => pure $ Left err
-    Right tid  => do
-      env_e <- resolveApiEnv
-      case env_e of
-        Left err   => pure $ Left err
-        Right env  => callToResult "Task" $ getTask @{env} tid
+
+taskGetAux : String -> AppM CmdResult
+taskGetAux ident = do
+  tid <- liftIOEither (resolveTaskId ident)
+  env <- liftIOEither resolveApiEnv
+  val <- liftIOEither $ getTask @{env} tid
+  pure $ cmdOk "Task" val
+
+handleTaskGet ident = runAppM (taskGetAux ident)
 
 ||| Handler for ActTaskStatus.
 public export
