@@ -1,6 +1,5 @@
 .direnv/
 build/
-docs/
 libs_sources/
 *.swp
 *.so
