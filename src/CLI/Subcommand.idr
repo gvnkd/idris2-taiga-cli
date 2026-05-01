@@ -749,84 +749,68 @@ handleTaskDelete ident = do
 ||| Handler for ActEpicList.
 public export
 handleEpicList : IO (Either String CmdResult)
-handleEpicList = do
-  st_e <- loadState
-  case st_e of
-    Left err  => pure $ Left err
-    Right st  => do
-      case getActiveProject st of
-        Left err   => pure $ Left err
-        Right pid  => do
-          env_e <- resolveApiEnv
-          case env_e of
-            Left err   => pure $ Left err
-            Right env  => callToResult "Epics" $ listEpics @{env} (show pid.id) Nothing Nothing
+
+epicListAux : AppM CmdResult
+epicListAux = do
+  (env, pid) <- getProjectEnv
+  val <- liftIOEither $ listEpics @{env} (show pid.id) Nothing Nothing
+  pure $ cmdOk "Epics" val
+
+handleEpicList = runAppM epicListAux
 
 ||| Handler for ActEpicGet.
 public export
 handleEpicGet : String -> IO (Either String CmdResult)
-handleEpicGet ident = do
-  id_e <- resolveEpicId ident
-  case id_e of
-    Left err   => pure $ Left err
-    Right eid  => do
-      env_e <- resolveApiEnv
-      case env_e of
-        Left err   => pure $ Left err
-        Right env  => callToResult "Epic" $ getEpic @{env} eid
+
+epicGetAux : String -> AppM CmdResult
+epicGetAux ident = do
+  eid <- liftIOEither (resolveEpicId ident)
+  env <- liftIOEither resolveApiEnv
+  val <- liftIOEither $ getEpic @{env} eid
+  pure $ cmdOk "Epic" val
+
+handleEpicGet ident = runAppM (epicGetAux ident)
 
 ||| Handler for ActEpicCreate.
 public export
 handleEpicCreate : String -> Maybe String -> Maybe String -> IO (Either String CmdResult)
-handleEpicCreate subject mDesc mStatus = do
-  st_e <- loadState
-  case st_e of
-    Left err  => pure $ Left err
-    Right st  => do
-      case getActiveProject st of
-        Left err   => pure $ Left err
-        Right pid  => do
-          env_e <- resolveApiEnv
-          case env_e of
-            Left err   => pure $ Left err
-            Right env  => callToResult "Epic created" $ createEpic @{env} (show pid.id) subject mDesc mStatus
+
+epicCreateAux : String -> Maybe String -> Maybe String -> AppM CmdResult
+epicCreateAux subject mDesc mStatus = do
+  (env, pid) <- getProjectEnv
+  val <- liftIOEither $ createEpic @{env} (show pid.id) subject mDesc mStatus
+  pure $ cmdOk "Epic created" val
+
+handleEpicCreate subject mDesc mStatus = runAppM (epicCreateAux subject mDesc mStatus)
 
 ||| Handler for ActEpicUpdate.
 public export
 handleEpicUpdate : String -> Maybe String -> Maybe String -> Maybe String -> Maybe Bits64 -> IO (Either String CmdResult)
-handleEpicUpdate ident mSubject mDesc mStatusText mStatusId = do
-  id_e <- resolveEpicId ident
-  case id_e of
-    Left err   => pure $ Left err
-    Right eid  => do
-      env_e <- resolveApiEnv
-      case env_e of
-        Left err   => pure $ Left err
-        Right env  => do
-          current_e <- getEpic @{env} eid
-          case current_e of
-            Left err     => pure $ Right $ cmdError err
-            Right current =>
-              case current.version of
-                Nothing => pure $ Right $ cmdError "Cannot update epic: no version available"
-                Just ver => do
-                  let subj := case mSubject of
-                                Nothing => current.subject
-                                Just s  => s
-                      desc := case mDesc of
-                                Nothing => current.description
-                                Just d  => d
-                  stat_e <- resolveUpdateStatus env "epic" mStatusText mStatusId
-                  case stat_e of
-                    Left err   => pure $ Right $ cmdError err
-                    Right stat => callToResult "Epic updated" $ updateEpic @{env} eid (Just subj) (Just desc) (map show stat) ver
+
+epicUpdateAux : String -> Maybe String -> Maybe String -> Maybe String -> Maybe Bits64 -> AppM CmdResult
+epicUpdateAux ident mSubject mDesc mStatusText mStatusId = do
+  eid <- liftIOEither (resolveEpicId ident)
+  env <- liftIOEither resolveApiEnv
+  current <- liftIOEither $ getEpic @{env} eid
+  case current.version of
+    Nothing => appFail "Cannot update epic: no version available"
+    Just ver => do
+      let subj := case mSubject of Nothing => current.subject ; Just s => s
+          desc := case mDesc     of Nothing => current.description ; Just d => d
+      stat <- liftIOEither $ resolveUpdateStatus env "epic" mStatusText mStatusId
+      val <- liftIOEither $ updateEpic @{env} eid (Just subj) (Just desc) (map show stat) ver
+      pure $ cmdOk "Epic updated" val
+
+handleEpicUpdate ident mSubject mDesc mStatusText mStatusId = runAppM (epicUpdateAux ident mSubject mDesc mStatusText mStatusId)
 
 ||| Handler for ActEpicDelete.
 public export
 handleEpicDelete : String -> IO (Either String CmdResult)
-handleEpicDelete ident = do
-  id_e <- resolveEpicId ident
-  case id_e of
+
+epicDeleteAux : String -> IO (Either String CmdResult)
+epicDeleteAux ident = do
+  eid_e <- resolveEpicId ident
+  case eid_e of
     Left err   => pure $ Left err
     Right eid  => do
       env_e <- resolveApiEnv
@@ -842,21 +826,19 @@ handleEpicDelete ident = do
                 Left err  => Right $ cmdError err
                 Right _   => Right $ cmdOk "Epic deleted" $ MkDeleteResult "epic" eid.id
 
+handleEpicDelete ident = epicDeleteAux ident
+
 ||| Handler for ActSprintList.
 public export
 handleSprintList : IO (Either String CmdResult)
-handleSprintList = do
-  st_e <- loadState
-  case st_e of
-    Left err  => pure $ Left err
-    Right st  => do
-      case getActiveProject st of
-        Left err   => pure $ Left err
-        Right pid  => do
-          env_e <- resolveApiEnv
-          case env_e of
-            Left err   => pure $ Left err
-            Right env  => callToResult "Sprints" $ listMilestones @{env} (show pid.id) Nothing Nothing
+
+sprintListAux : AppM CmdResult
+sprintListAux = do
+  (env, pid) <- getProjectEnv
+  val <- liftIOEither $ listMilestones @{env} (show pid.id) Nothing Nothing
+  pure $ cmdOk "Sprints" val
+
+handleSprintList = runAppM sprintListAux
 
 ||| Handler for ActSprintShow.
 public export
@@ -879,47 +861,39 @@ handleSprintSet ident = do
 ||| Handler for ActIssueList.
 public export
 handleIssueList : IO (Either String CmdResult)
-handleIssueList = do
-  st_e <- loadState
-  case st_e of
-    Left err  => pure $ Left err
-    Right st  => do
-      case getActiveProject st of
-        Left err   => pure $ Left err
-        Right pid  => do
-          env_e <- resolveApiEnv
-          case env_e of
-            Left err   => pure $ Left err
-            Right env  => callToResult "Issues" $ listIssues @{env} (show pid.id) Nothing Nothing
+
+issueListAux : AppM CmdResult
+issueListAux = do
+  (env, pid) <- getProjectEnv
+  val <- liftIOEither $ listIssues @{env} (show pid.id) Nothing Nothing
+  pure $ cmdOk "Issues" val
+
+handleIssueList = runAppM issueListAux
 
 ||| Handler for ActIssueGet.
 public export
 handleIssueGet : String -> IO (Either String CmdResult)
-handleIssueGet ident = do
-  id_e <- resolveIssueId ident
-  case id_e of
-    Left err   => pure $ Left err
-    Right iid  => do
-      env_e <- resolveApiEnv
-      case env_e of
-        Left err   => pure $ Left err
-        Right env  => callToResult "Issue" $ getIssue @{env} iid
+
+issueGetAux : String -> AppM CmdResult
+issueGetAux ident = do
+  iid <- liftIOEither (resolveIssueId ident)
+  env <- liftIOEither resolveApiEnv
+  val <- liftIOEither $ getIssue @{env} iid
+  pure $ cmdOk "Issue" val
+
+handleIssueGet ident = runAppM (issueGetAux ident)
 
 ||| Handler for ActIssueCreate.
 public export
 handleIssueCreate : String -> Maybe String -> Maybe String -> Maybe String -> Maybe String -> IO (Either String CmdResult)
-handleIssueCreate subject mDesc mPriority mSeverity mType = do
-  st_e <- loadState
-  case st_e of
-    Left err  => pure $ Left err
-    Right st  => do
-      case getActiveProject st of
-        Left err   => pure $ Left err
-        Right pid  => do
-          env_e <- resolveApiEnv
-          case env_e of
-            Left err   => pure $ Left err
-            Right env  => callToResult "Issue created" $ createIssue @{env} (show pid.id) subject mDesc mPriority mSeverity mType
+
+issueCreateAux : String -> Maybe String -> Maybe String -> Maybe String -> Maybe String -> AppM CmdResult
+issueCreateAux subject mDesc mPriority mSeverity mType = do
+  (env, pid) <- getProjectEnv
+  val <- liftIOEither $ createIssue @{env} (show pid.id) subject mDesc mPriority mSeverity mType
+  pure $ cmdOk "Issue created" val
+
+handleIssueCreate subject mDesc mPriority mSeverity mType = runAppM (issueCreateAux subject mDesc mPriority mSeverity mType)
 
 ||| Handler for ActIssueUpdate.
 public export
@@ -972,63 +946,76 @@ handleIssueDelete ident = do
 ||| Handler for ActStoryList.
 public export
 handleStoryList : IO (Either String CmdResult)
-handleStoryList = do
-  st_e <- loadState
-  case st_e of
-    Left err  => pure $ Left err
-    Right st  => do
-      case getActiveProject st of
-        Left err   => pure $ Left err
-        Right pid  => do
-          env_e <- resolveApiEnv
-          case env_e of
-            Left err   => pure $ Left err
-            Right env  => do
-              result <- listStories @{env} (show pid.id) Nothing Nothing
-              pure $ case result of
-                Left err   => Right $ cmdError err
-                Right vals => Right $ cmdOk "Stories" vals
+
+storyListAux : AppM CmdResult
+storyListAux = do
+  (env, pid) <- getProjectEnv
+  val <- liftIOEither $ listStories @{env} (show pid.id) Nothing Nothing
+  pure $ cmdOk "Stories" val
+
+handleStoryList = runAppM storyListAux
 
 ||| Handler for ActStoryGet.
 public export
 handleStoryGet : String -> IO (Either String CmdResult)
-handleStoryGet ident = do
-  id_e <- resolveStoryId ident
-  case id_e of
-    Left err   => pure $ Left err
-    Right sid  => do
-      env_e <- resolveApiEnv
-      case env_e of
-        Left err   => pure $ Left err
-        Right env  => do
-          result <- getStory @{env} sid
-          pure $ case result of
-            Left err   => Right $ cmdError err
-            Right val  => Right $ cmdOk "Story" val
+
+storyGetAux : String -> AppM CmdResult
+storyGetAux ident = do
+  sid <- liftIOEither (resolveStoryId ident)
+  env <- liftIOEither resolveApiEnv
+  val <- liftIOEither $ getStory @{env} sid
+  pure $ cmdOk "Story" val
+
+handleStoryGet ident = runAppM (storyGetAux ident)
+
+||| Handler for ActWikiList.
+public export
+handleWikiList : IO (Either String CmdResult)
+
+wikiListAux : AppM CmdResult
+wikiListAux = do
+  (env, pid) <- getProjectEnv
+  val <- liftIOEither $ listWiki @{env} (show pid.id) Nothing Nothing
+  pure $ cmdOk "Wiki pages" val
+
+handleWikiList = runAppM wikiListAux
+
+||| Handler for ActWikiGet.
+public export
+handleWikiGet : String -> IO (Either String CmdResult)
+
+wikiGetAux : String -> AppM CmdResult
+wikiGetAux ident = do
+  wid <- liftIOEither (resolveWikiId ident)
+  env <- liftIOEither resolveApiEnv
+  val <- liftIOEither $ getWiki @{env} wid
+  pure $ cmdOk "Wiki page" val
+
+handleWikiGet ident = runAppM (wikiGetAux ident)
+
+||| Handler for ActWikiCreate.
+public export
+handleWikiCreate : String -> String -> IO (Either String CmdResult)
+
+wikiCreateAux : String -> String -> AppM CmdResult
+wikiCreateAux slug content = do
+  (env, pid) <- getProjectEnv
+  val <- liftIOEither $ createWiki @{env} (show pid.id) slug content
+  pure $ cmdOk "Wiki page created" val
+
+handleWikiCreate slug content = runAppM (wikiCreateAux slug content)
 
 ||| Handler for ActStoryCreate.
 public export
 handleStoryCreate : String -> Maybe String -> Maybe String -> IO (Either String CmdResult)
-handleStoryCreate subject mDesc mMilestone = do
-  st_e <- loadState
-  case st_e of
-    Left err  => pure $ Left err
-    Right st  => do
-      case getActiveProject st of
-        Left err   => pure $ Left err
-        Right pid  => do
-          env_e <- resolveApiEnv
-          case env_e of
-            Left err   => pure $ Left err
-            Right env  => do
-              mMsId <- case mMilestone of
-                          Nothing => pure Nothing
-                          Just ms => do
-                            ms_e <- resolveMilestoneId ms
-                            pure $ case ms_e of
-                              Left _  => Nothing
-                              Right v => Just v
-              callToResult "Story created" $ createStory @{env} (show pid.id) subject mDesc mMsId
+
+storyCreateAux : String -> Maybe String -> Maybe String -> AppM CmdResult
+storyCreateAux subject mDesc mMilestone = do
+  (env, pid) <- getProjectEnv
+  val <- liftIOEither $ createStory @{env} (show pid.id) subject mDesc Nothing
+  pure $ cmdOk "Story created" val
+
+handleStoryCreate subject mDesc mMilestone = runAppM (storyCreateAux subject mDesc mMilestone)
 
 ||| Handler for ActStoryUpdate.
 public export
@@ -1046,17 +1033,9 @@ handleStoryUpdate ident mSubject mDesc mMilestone mStatusText mStatusId = do
           case current_e of
             Left err     => pure $ Right $ cmdError err
             Right current => do
-              let subj := case mSubject of
-                            Nothing => current.subject
-                            Just s  => s
-                  desc := case mDesc of
-                            Nothing => current.description
-                            Just d  => d
-                  mMs := case mMilestone of
-                           Nothing => Nothing
-                           Just ms => Just ms
-              -- Note: Story status updates are not supported by the current API model.
-              -- The --status flag is accepted for future compatibility but ignored.
+              let subj := case mSubject of Nothing => current.subject ; Just s => s
+                  desc := case mDesc     of Nothing => current.description ; Just d => d
+                  mMs  := case mMilestone of Nothing => Nothing ; Just ms => Just ms
               callToResult "Story updated" $ updateStory @{env} sid (Just subj) (Just desc) mMs current.version
 
 ||| Handler for ActStoryDelete.
@@ -1079,59 +1058,6 @@ handleStoryDelete ident = do
               pure $ case result of
                 Left err  => Right $ cmdError err
                 Right _   => Right $ cmdOk "Story deleted" $ MkDeleteResult "story" sid.id
-
-||| Handler for ActWikiList.
-public export
-handleWikiList : IO (Either String CmdResult)
-handleWikiList = do
-  st_e <- loadState
-  case st_e of
-    Left err  => pure $ Left err
-    Right st  => do
-      case getActiveProject st of
-        Left err   => pure $ Left err
-        Right pid  => do
-          env_e <- resolveApiEnv
-          case env_e of
-            Left err   => pure $ Left err
-            Right env  => do
-              result <- listWiki @{env} (show pid.id) Nothing Nothing
-              pure $ case result of
-                Left err   => Right $ cmdError err
-                Right vals => Right $ cmdOk "Wiki pages" vals
-
-||| Handler for ActWikiGet.
-public export
-handleWikiGet : String -> IO (Either String CmdResult)
-handleWikiGet ident = do
-  id_e <- resolveWikiId ident
-  case id_e of
-    Left err   => pure $ Left err
-    Right wid  => do
-      env_e <- resolveApiEnv
-      case env_e of
-        Left err   => pure $ Left err
-        Right env  => do
-          result <- getWiki @{env} wid
-          pure $ case result of
-            Left err   => Right $ cmdError err
-            Right val  => Right $ cmdOk "Wiki page" val
-
-||| Handler for ActWikiCreate.
-public export
-handleWikiCreate : String -> String -> IO (Either String CmdResult)
-handleWikiCreate slug content = do
-  st_e <- loadState
-  case st_e of
-    Left err  => pure $ Left err
-    Right st  => do
-      case getActiveProject st of
-        Left err   => pure $ Left err
-        Right pid  => do
-          env_e <- resolveApiEnv
-          case env_e of
-            Left err   => pure $ Left err
-            Right env  => callToResult "Wiki page created" $ createWiki @{env} (show pid.id) slug content
 
 ||| Handler for ActWikiUpdate.
 public export
