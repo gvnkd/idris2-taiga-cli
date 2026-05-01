@@ -7,7 +7,8 @@ A command-line tool written in [Idris 2](https://github.com/idris-lang/Idris2) t
 - **Agent mode** (default): reads one JSON request from stdin, dispatches the command, writes one JSON response to stdout
 - **Subcommand mode** (new): stateful verb-noun commands (`taiga-cli task list`, `taiga-cli project set taiga`)
 - **Legacy CLI mode**: human-friendly flags (`--list-epics`, `--login`, etc.) with plain JSON output
-- Full CRUD for epics, user stories, tasks, issues, wiki pages, and milestones
+- Full CRUD for epics, user stories, tasks, issues, wiki pages, and milestones via subcommand CLI
+- Ref-first identifiers — all entity lookups accept user-facing ref IDs (not just internal DB IDs)
 - Comment management via the Taiga history API
 - Global project search and entity resolution by slug/ref
 - Token-minimal compact JSON protocol
@@ -53,7 +54,10 @@ nix develop --command run
 
 ### Subcommand Mode (Stateful)
 
-The new subcommand mode maintains workspace state in `./.taiga/` and authenticates via `~/.local/share/taiga-cli/`.
+The subcommand mode maintains workspace state in `./.taiga/` and authenticates via `~/.local/share/taiga-cli/`.
+
+All entity commands operate on the **active project** set via `project set`.
+All entity lookups accept **ref IDs** (user-facing numbers from the Taiga UI) or raw database IDs.
 
 ```shell
 # Initialize workspace state
@@ -70,15 +74,6 @@ taiga-cli login --user admin --password secretpassword
 
 # Switch project context
 taiga-cli project set my-project
-
-# List tasks in active project
-taiga-cli task list
-
-# Create a task
-taiga-cli task create "Fix auth bug"
-
-# List sprints/milestones
-taiga-cli sprint list
 
 # Show current state
 taiga-cli show
@@ -188,28 +183,64 @@ Project context:
   project set <slug|id>         Switch active project
   project get                   Show active project details
 
-Entity operations (on active project):
-  task list [--status S]        List tasks
-  task create <subject>         Create task
-  task get <id>                 Get task by ID
-  task status <id> <status>     Change task status
-  task comment <id> <text>      Comment on a task
+Entity operations (on active project, id = ref-id or db-id):
 
-  epic list                     List epics
-  epic get <id>                 Get epic details
+  task list [--status S]                List tasks
+  task create <subject>                 Create task
+  task get <id>                         Get task
+  task update <id> [--subject S] [--description D] [--status ST]
+                                        Update task
+  task delete <id>                      Delete task (prompts for confirmation)
+  task status <id> <status-id>          Change task status
+  task comment <id> <text>              Comment on a task
 
-  sprint list                   List sprints/milestones
-  sprint show                   Show current sprint state
-  sprint set <id>               Set active sprint
+  epic list                             List epics
+  epic get <id>                         Get epic
+  epic create <subject> [--description D] [--status ST]
+                                        Create epic
+  epic update <id> [--subject S] [--description D] [--status ST]
+                                        Update epic
+  epic delete <id>                      Delete epic
 
-  issue list                    List issues
-  issue get <id>                Get issue details
+  story list                            List stories
+  story get <id>                        Get story
+  story create <subject> [--description D] [--milestone M]
+                                        Create story
+  story update <id> [--subject S] [--description D] [--milestone M]
+                                        Update story
+  story delete <id>                     Delete story
 
-  story list                    List stories
-  story get <id>                Get story details
+  issue list                            List issues
+  issue get <id>                        Get issue
+  issue create <subject> [--description D] [--priority P] [--severity S] [--type T]
+                                        Create issue
+  issue update <id> [--subject S] [--description D] [--type T]
+                                        Update issue
+  issue delete <id>                     Delete issue
 
-  wiki list                     List wiki pages
-  wiki get <id>                 Get wiki page details
+  sprint list                           List sprints/milestones
+  sprint show                           Show current sprint state
+  sprint set <id>                       Set active sprint
+  sprint create <name> [--start DATE] [--end DATE]
+                                        Create sprint
+  sprint update <id> --version VER [--name N] [--start DATE] [--end DATE]
+                                        Update sprint (needs --version)
+  sprint delete <id>                    Delete sprint
+
+  wiki list                             List wiki pages
+  wiki get <id>                         Get wiki page
+  wiki create <slug> <content>          Create wiki page
+  wiki update <id> [--content C] [--slug S]
+                                        Update wiki page
+  wiki delete <id>                      Delete wiki page
+
+Comments:
+  comment add <entity> <id> <text>      Add comment to entity
+  comment list <entity> <id>            List comments on entity
+                                        entity: task, issue, story, wiki
+
+Resolution:
+  resolve <ref>                         Resolve ref to entity details
 ```
 
 ### Agent Mode Commands
@@ -355,12 +386,7 @@ HTTP requests are performed by shelling out to `curl` via `System.run`, avoiding
 
 ## Architecture
 
-See `docs/arch/` for detailed architecture documentation:
-
-- `00-overview.md` — Vision, design principles, command structure
-- `01-dataflow.md` — Request lifecycle, security boundary, state isolation
-- `02-modules.md` — Module specifications and interfaces
-- `50-func-patterns.md` — Functional patterns and code samples
+See `docs/CRUD_PLAN.md` for the full CRUD implementation plan.
 
 ## License
 

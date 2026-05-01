@@ -11,11 +11,13 @@
 
 ## Architecture
 
-- **Entry point:** `src/Main.idr` — agent mode (stdin JSON, default) vs CLI mode (parsed flags)
-- **Command dispatch:** `src/Command.idr` — sum type + `parseCommand` / `dispatchCommand`
+- **Entry point:** `src/Main.idr` — agent mode (stdin JSON, default) vs subcommand CLI vs legacy CLI
+- **Command dispatch (agent):** `src/Command.idr` — sum type + `parseCommand` / `dispatchCommand`
+- **Subcommand dispatch:** `src/CLI/Subcommand.idr` — `Action` GADT + `executeAction`
 - **HTTP client:** `src/Taiga/Api.idr` — shells out to `curl` via `popen`, parses status/body
 - **Protocol:** `src/Protocol/{Request,Response}.idr` — JSON envelopes
 - **Models:** `src/Model/*.idr` — records with `%runElab derive [ToJSON,FromJSON]`
+- **State:** `src/State/` — workspace state (no secrets) + global auth store
 - **Style:** Follow `STYLE.md` (80 chars, 2 spaces, GADT-style data, `let ... in`, `where` blocks)
 
 ## Critical Idris2 / JSON Gotchas
@@ -40,11 +42,14 @@
 
 - Tests are in `tests/test_taiga_cli.py` with `tests/conftest.py`
 - Binary path is hardcoded: `/srv/taiga-cli/build/exec/taiga-cli`
-- Test project: id 12, slug `taiga`
+- Test project: id 13, slug `test-project`
 - Default credentials: `rune` / `rune-secret-42`
 - `client` fixture is session-scoped and logs in once
 - CRUD tests create temp entities and clean up in `finally` blocks
 - `change-task-status` and `task-comment` have special OCC behavior (see test comments)
+- Subcommand CLI tests use `subprocess.run` against `./build/exec/taiga-cli` directly
+- Subcommand tests use a fresh workspace (`tmp_path`) and log in each time
+- Delete tests pipe "yes\n" to confirm the TTY prompt
 
 ## Dependencies
 
