@@ -422,9 +422,12 @@ readPassword = do
 ||| Handler for ActLogin.
 public export
 handleLogin : String -> Maybe String -> IO (Either String CmdResult)
-handleLogin user mpass = do
+
+private
+loginIO : String -> Maybe String -> IO (Either String CmdResult)
+loginIO user mpass = do
   password <- case mpass of
-    Just p  => do
+    Just p => do
       putStrLn ""
       putStrLn "WARNING: Passing passwords via command line arguments is insecure."
       putStrLn "         The password may be visible in shell history and process listings."
@@ -442,6 +445,8 @@ handleLogin user mpass = do
       case result of
         Left err  => pure $ Right $ cmdError ("Login failed: " ++ err)
         Right _   => pure $ Right $ cmdInfo "Authenticated successfully"
+
+handleLogin user mpass = runAppM $ liftIOEither $ loginIO user mpass
 
 ||| Handler for ActLogout.
 public export
