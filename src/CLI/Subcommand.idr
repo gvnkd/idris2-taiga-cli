@@ -280,6 +280,51 @@ callToResult msg action =
   map (cmdOk msg) action
     `catchE` \err => pure (cmdError err)
 
+||| Generic handler for listing entities in the active project.
+public export
+handleEntityList :
+     ToJSON a
+  => String
+  -> (ApiEnv -> String -> IO (Either String (List a)))
+  -> IO (Either String CmdResult)
+handleEntityList name listFn = runAppM $ do
+  (env, pid) <- getProjectEnv
+  val <- liftIOEither $ listFn env (show pid.id)
+  pure $ cmdOk (name ++ "s") val
+
+||| Generic handler for getting an entity by identifier.
+public export
+handleEntityGet :
+     ToJSON a
+  => String
+  -> (String -> AppM Nat64Id)
+  -> (ApiEnv -> Nat64Id -> IO (Either String a))
+  -> String
+  -> IO (Either String CmdResult)
+handleEntityGet name resolveId getFn ident = runAppM $ do
+  eid <- resolveId ident
+  env  <- resolveApiEnv
+  val <- liftIOEither $ getFn env eid
+  pure $ cmdOk name val
+
+||| Generic handler for deleting an entity by identifier.
+public export
+handleEntityDelete :
+     String
+  -> (String -> AppM Nat64Id)
+  -> (ApiEnv -> Nat64Id -> IO (Either String ()))
+  -> String
+  -> IO (Either String CmdResult)
+handleEntityDelete name resolveId deleteFn ident = runAppM $ do
+  eid <- resolveId ident
+  env  <- resolveApiEnv
+  confirmed <- liftRawIO (confirmDelete (name ++ " " ++ ident))
+  if not confirmed
+    then pure $ cmdInfo "Delete cancelled"
+    else do
+      liftIOEither $ deleteFn env eid
+      pure $ cmdOk (name ++ " deleted") $ MkDeleteResult name eid.id
+
 ------------------------------------------------------------------------------
 -- Action Handlers
 ------------------------------------------------------------------------------
@@ -592,36 +637,12 @@ handleTaskUpdate ident mSubject mDesc mStatusText mStatusId = runAppM (taskUpdat
 ||| Handler for ActTaskDelete.
 public export
 handleTaskDelete : String -> IO (Either String CmdResult)
-
-taskDeleteAux : String -> AppM CmdResult
-taskDeleteAux ident = do
-  tid <- resolveTaskId ident
-  env  <- resolveApiEnv
-  confirmed <- liftRawIO (confirmDelete ("task " ++ ident))
-  if not confirmed
-    then pure $ cmdInfo "Delete cancelled"
-    else do
-      liftIOEither $ deleteTask @{env} tid
-      pure $ cmdOk "Task deleted" $ MkDeleteResult "task" tid.id
-
-handleTaskDelete ident = runAppM (taskDeleteAux ident)
+handleTaskDelete = handleEntityDelete "task" resolveTaskId (\e, i => deleteTask @{e} i)
 
 ||| Handler for ActEpicDelete.
 public export
 handleEpicDelete : String -> IO (Either String CmdResult)
-
-epicDeleteAux : String -> AppM CmdResult
-epicDeleteAux ident = do
-  eid <- resolveEpicId ident
-  env  <- resolveApiEnv
-  confirmed <- liftRawIO $ confirmDelete ("epic " ++ ident)
-  if not confirmed
-    then pure $ cmdInfo "Delete cancelled"
-    else do
-      liftIOEither $ deleteEpic @{env} eid
-      pure $ cmdOk "Epic deleted" $ MkDeleteResult "epic" eid.id
-
-handleEpicDelete ident = runAppM (epicDeleteAux ident)
+handleEpicDelete = handleEntityDelete "epic" resolveEpicId (\e, i => deleteEpic @{e} i)
 
 ||| Handler for ActEpicUpdate.
 public export
@@ -646,27 +667,12 @@ handleEpicUpdate ident mSubject mDesc mStatusText mStatusId = runAppM (epicUpdat
 ||| Handler for ActEpicList.
 public export
 handleEpicList : IO (Either String CmdResult)
-
-epicListAux : AppM CmdResult
-epicListAux = do
-  (env, pid) <- getProjectEnv
-  val <- liftIOEither $ listEpics @{env} (show pid.id) Nothing Nothing
-  pure $ cmdOk "Epics" val
-
-handleEpicList = runAppM epicListAux
+handleEpicList = handleEntityList "Epic" (\e, p => listEpics @{e} p Nothing Nothing)
 
 ||| Handler for ActEpicGet.
 public export
 handleEpicGet : String -> IO (Either String CmdResult)
-
-epicGetAux : String -> AppM CmdResult
-epicGetAux ident = do
-  eid <- resolveEpicId ident
-  env  <- resolveApiEnv
-  val <- liftIOEither $ getEpic @{env} eid
-  pure $ cmdOk "Epic" val
-
-handleEpicGet ident = runAppM (epicGetAux ident)
+handleEpicGet = handleEntityGet "Epic" resolveEpicId (\e, i => getEpic @{e} i)
 
 ||| Handler for ActEpicCreate.
 public export
@@ -683,14 +689,7 @@ handleEpicCreate subject mDesc mStatus = runAppM (epicCreateAux subject mDesc mS
 ||| Handler for ActSprintList.
 public export
 handleSprintList : IO (Either String CmdResult)
-
-sprintListAux : AppM CmdResult
-sprintListAux = do
-  (env, pid) <- getProjectEnv
-  val <- liftIOEither $ listMilestones @{env} (show pid.id) Nothing Nothing
-  pure $ cmdOk "Sprints" val
-
-handleSprintList = runAppM sprintListAux
+handleSprintList = handleEntityList "Sprint" (\e, p => listMilestones @{e} p Nothing Nothing)
 
 ||| Handler for ActSprintShow.
 public export
@@ -700,40 +699,17 @@ handleSprintShow = handleSprintList
 ||| Handler for ActSprintSet.
 public export
 handleSprintSet : String -> IO (Either String CmdResult)
-
-sprintSetAux : String -> AppM CmdResult
-sprintSetAux ident = do
-  sid <- resolveMilestoneId ident
-  env  <- resolveApiEnv
-  val <- liftIOEither $ getMilestone @{env} sid
-  pure $ cmdOk "Sprint" val
-
-handleSprintSet ident = runAppM (sprintSetAux ident)
+handleSprintSet = handleEntityGet "Sprint" resolveMilestoneId (\e, i => getMilestone @{e} i)
 
 ||| Handler for ActIssueList.
 public export
 handleIssueList : IO (Either String CmdResult)
-
-issueListAux : AppM CmdResult
-issueListAux = do
-  (env, pid) <- getProjectEnv
-  val <- liftIOEither $ listIssues @{env} (show pid.id) Nothing Nothing
-  pure $ cmdOk "Issues" val
-
-handleIssueList = runAppM issueListAux
+handleIssueList = handleEntityList "Issue" (\e, p => listIssues @{e} p Nothing Nothing)
 
 ||| Handler for ActIssueGet.
 public export
 handleIssueGet : String -> IO (Either String CmdResult)
-
-issueGetAux : String -> AppM CmdResult
-issueGetAux ident = do
-  iid <- resolveIssueId ident
-  env  <- resolveApiEnv
-  val <- liftIOEither $ getIssue @{env} iid
-  pure $ cmdOk "Issue" val
-
-handleIssueGet ident = runAppM (issueGetAux ident)
+handleIssueGet = handleEntityGet "Issue" resolveIssueId (\e, i => getIssue @{e} i)
 
 ||| Handler for ActIssueCreate.
 public export
@@ -767,69 +743,27 @@ handleIssueUpdate ident mSubject mDesc mType mStatusText mStatusId = runAppM (is
 ||| Handler for ActIssueDelete.
 public export
 handleIssueDelete : String -> IO (Either String CmdResult)
-
-issueDeleteAux : String -> AppM CmdResult
-issueDeleteAux ident = do
-  iid <- resolveIssueId ident
-  env  <- resolveApiEnv
-  confirmed <- liftRawIO (confirmDelete ("issue " ++ ident))
-  if not confirmed
-    then pure $ cmdInfo "Delete cancelled"
-    else do
-      liftIOEither $ deleteIssue @{env} iid
-      pure $ cmdOk "Issue deleted" $ MkDeleteResult "issue" iid.id
-
-handleIssueDelete ident = runAppM (issueDeleteAux ident)
+handleIssueDelete = handleEntityDelete "issue" resolveIssueId (\e, i => deleteIssue @{e} i)
 
 ||| Handler for ActStoryList.
 public export
 handleStoryList : IO (Either String CmdResult)
-
-storyListAux : AppM CmdResult
-storyListAux = do
-  (env, pid) <- getProjectEnv
-  val <- liftIOEither $ listStories @{env} (show pid.id) Nothing Nothing
-  pure $ cmdOk "Stories" val
-
-handleStoryList = runAppM storyListAux
+handleStoryList = handleEntityList "Story" (\e, p => listStories @{e} p Nothing Nothing)
 
 ||| Handler for ActStoryGet.
 public export
 handleStoryGet : String -> IO (Either String CmdResult)
-
-storyGetAux : String -> AppM CmdResult
-storyGetAux ident = do
-  sid <- resolveStoryId ident
-  env  <- resolveApiEnv
-  val <- liftIOEither $ getStory @{env} sid
-  pure $ cmdOk "Story" val
-
-handleStoryGet ident = runAppM (storyGetAux ident)
+handleStoryGet = handleEntityGet "Story" resolveStoryId (\e, i => getStory @{e} i)
 
 ||| Handler for ActWikiList.
 public export
 handleWikiList : IO (Either String CmdResult)
-
-wikiListAux : AppM CmdResult
-wikiListAux = do
-  (env, pid) <- getProjectEnv
-  val <- liftIOEither $ listWiki @{env} (show pid.id) Nothing Nothing
-  pure $ cmdOk "Wiki pages" val
-
-handleWikiList = runAppM wikiListAux
+handleWikiList = handleEntityList "Wiki page" (\e, p => listWiki @{e} p Nothing Nothing)
 
 ||| Handler for ActWikiGet.
 public export
 handleWikiGet : String -> IO (Either String CmdResult)
-
-wikiGetAux : String -> AppM CmdResult
-wikiGetAux ident = do
-  wid <- resolveWikiId ident
-  env  <- resolveApiEnv
-  val <- liftIOEither $ getWiki @{env} wid
-  pure $ cmdOk "Wiki page" val
-
-handleWikiGet ident = runAppM (wikiGetAux ident)
+handleWikiGet = handleEntityGet "Wiki page" resolveWikiId (\e, i => getWiki @{e} i)
 
 ||| Handler for ActWikiCreate.
 public export
@@ -876,19 +810,7 @@ handleStoryUpdate ident mSubject mDesc mMilestone mStatusText mStatusId = runApp
 ||| Handler for ActStoryDelete.
 public export
 handleStoryDelete : String -> IO (Either String CmdResult)
-
-storyDeleteAux : String -> AppM CmdResult
-storyDeleteAux ident = do
-  sid <- resolveStoryId ident
-  env  <- resolveApiEnv
-  confirmed <- liftRawIO (confirmDelete ("story " ++ ident))
-  if not confirmed
-    then pure $ cmdInfo "Delete cancelled"
-    else do
-      liftIOEither $ deleteStory @{env} sid
-      pure $ cmdOk "Story deleted" $ MkDeleteResult "story" sid.id
-
-handleStoryDelete ident = runAppM (storyDeleteAux ident)
+handleStoryDelete = handleEntityDelete "story" resolveStoryId (\e, i => deleteStory @{e} i)
 
 ||| Handler for ActWikiUpdate.
 public export
@@ -909,19 +831,7 @@ handleWikiUpdate ident mContent mSlug = runAppM (wikiUpdateAux ident mContent mS
 ||| Handler for ActWikiDelete.
 public export
 handleWikiDelete : String -> IO (Either String CmdResult)
-
-wikiDeleteAux : String -> AppM CmdResult
-wikiDeleteAux ident = do
-  wid <- resolveWikiId ident
-  env  <- resolveApiEnv
-  confirmed <- liftRawIO (confirmDelete ("wiki page " ++ ident))
-  if not confirmed
-    then pure $ cmdInfo "Delete cancelled"
-    else do
-      liftIOEither $ deleteWiki @{env} wid
-      pure $ cmdOk "Wiki page deleted" $ MkDeleteResult "wiki" wid.id
-
-handleWikiDelete ident = runAppM (wikiDeleteAux ident)
+handleWikiDelete = handleEntityDelete "wiki page" resolveWikiId (\e, i => deleteWiki @{e} i)
 
 ||| Handler for ActSprintCreate.
 public export
@@ -956,19 +866,7 @@ handleSprintUpdate ident mName mStart mEnd ver = runAppM (sprintUpdateAux ident 
 ||| Handler for ActSprintDelete.
 public export
 handleSprintDelete : String -> IO (Either String CmdResult)
-
-sprintDeleteAux : String -> AppM CmdResult
-sprintDeleteAux ident = do
-  sid <- resolveMilestoneId ident
-  env  <- resolveApiEnv
-  confirmed <- liftRawIO (confirmDelete ("sprint " ++ ident))
-  if not confirmed
-    then pure $ cmdInfo "Delete cancelled"
-    else do
-      liftIOEither $ deleteMilestone @{env} sid
-      pure $ cmdOk "Sprint deleted" $ MkDeleteResult "sprint" sid.id
-
-handleSprintDelete ident = runAppM (sprintDeleteAux ident)
+handleSprintDelete = handleEntityDelete "sprint" resolveMilestoneId (\e, i => deleteMilestone @{e} i)
 
 ||| Fetch an entity by kind to get its version for comment operations.
 private
