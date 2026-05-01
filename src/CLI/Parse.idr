@@ -331,7 +331,8 @@ parseAction ("task" :: "status" :: ident :: stStr :: _) =
     Right st  => Right $ ActTaskStatus ident st
     Left _    => Left "usage: task status <id-or-ref> <status-id>"
 parseAction ("task" :: "comment" :: ident :: text :: _) = Right $ ActTaskComment ident text
-parseAction ("task" :: _)              = Left "usage: task {list|create <subject>|get <id-or-ref>|update <id-or-ref> [--subject S] [--description D] [--status ST]|delete <id-or-ref>|status <id-or-ref> <status>|comment <id-or-ref> <text>}"
+parseAction ("task" :: "assign-story" :: taskIdent :: storyIdent :: _) = Right $ ActTaskAssignStory taskIdent storyIdent
+parseAction ("task" :: _)              = Left "usage: task {list|create <subject>|get <id-or-ref>|update <id-or-ref> [--subject S] [--description D] [--status ST]|delete <id-or-ref>|status <id-or-ref> <status>|comment <id-or-ref> <text>|assign-story <task-id-or-ref> <story-id-or-ref>}"
 parseAction ("epic" :: "list" :: _)    = Right ActEpicList
 parseAction ("epic" :: "get" :: ident :: _) = Right $ ActEpicGet ident
 parseAction ("epic" :: "create" :: subj :: rest) =
@@ -370,9 +371,10 @@ parseAction ("issue" :: "update" :: ident :: rest) =
   let mSubj := findFlag "--subject" rest
       mDesc := findFlag "--description" rest
       mType := findFlag "--type" rest
-   in Right $ ActIssueUpdate ident mSubj mDesc mType
+      mStat := findFlag "--status" rest
+   in Right $ ActIssueUpdate ident mSubj mDesc mType mStat
 parseAction ("issue" :: "delete" :: ident :: _) = Right $ ActIssueDelete ident
-parseAction ("issue" :: _)             = Left "usage: issue {list|get <id-or-ref>|create <subject> [--description D] [--priority P] [--severity S] [--type T]|update <id-or-ref> [--subject S] [--description D] [--type T]|delete <id-or-ref>}"
+parseAction ("issue" :: _)             = Left "usage: issue {list|get <id-or-ref>|create <subject> [--description D] [--priority P] [--severity S] [--type T]|update <id-or-ref> [--subject S] [--description D] [--type T] [--status ST]|delete <id-or-ref>}"
 parseAction ("wiki" :: "list" :: _)    = Right ActWikiList
 parseAction ("wiki" :: "get" :: ident :: _) = Right $ ActWikiGet ident
 parseAction ("wiki" :: "create" :: slug :: content :: _) = Right $ ActWikiCreate slug content

@@ -202,6 +202,7 @@ record UpdateIssueArgs where
   subject : Maybe String
   description : Maybe String
   type : Maybe String
+  status : Maybe String
   version : Bits32
 %runElab derive "UpdateIssueArgs" [Show,FromJSON]
 
@@ -321,7 +322,7 @@ data Command : Type where
 
   -- Write / mutation commands — issues
   CmdCreateIssue : String -> String -> Maybe String -> Maybe String -> Maybe String -> Maybe String -> Command
-  CmdUpdateIssue : Nat64Id -> Maybe String -> Maybe String -> Maybe String -> Version -> Command
+  CmdUpdateIssue : Nat64Id -> Maybe String -> Maybe String -> Maybe String -> Maybe String -> Version -> Command
   CmdDeleteIssue : Nat64Id -> Command
 
   -- Write / mutation commands — wiki
@@ -336,7 +337,7 @@ data Command : Type where
   CmdListComments  : String -> Nat64Id -> Command
 
   -- Milestones
-  CmdCreateMilestone : String -> String -> String -> String -> Command
+  CmdCreateMilestone : String -> String -> Maybe String -> Maybe String -> Command
   CmdUpdateMilestone : Nat64Id -> Maybe String -> Maybe String -> Maybe String -> Version -> Command
   CmdDeleteMilestone : Nat64Id -> Command
 
@@ -476,7 +477,7 @@ private mkCreateIssueCmd    : CreateIssueArgs -> Command
 mkCreateIssueCmd a          = CmdCreateIssue a.project a.subject a.description a.priority a.severity a.type
 
 private mkUpdateIssueCmd    : UpdateIssueArgs -> Command
-mkUpdateIssueCmd a          = CmdUpdateIssue (mkNat64Id a.id) a.subject a.description a.type (mkVersion a.version)
+mkUpdateIssueCmd a          = CmdUpdateIssue (mkNat64Id a.id) a.subject a.description a.type a.status (mkVersion a.version)
 
 private mkDeleteIssueCmd    : Nat64Args -> Command
 mkDeleteIssueCmd a          = CmdDeleteIssue (mkNat64Id a.id)
@@ -501,9 +502,13 @@ mkDeleteCommentCmd a        = CmdDeleteComment a.entity (mkNat64Id a.id) (mkNat6
 
 private mkListCommentsCmd   : EntityIdArgs -> Command
 mkListCommentsCmd a         = CmdListComments a.entity (mkNat64Id a.id)
-
 private mkCreateMilestoneCmd : CreateMilestoneArgs -> Command
-mkCreateMilestoneCmd a      = CmdCreateMilestone a.project a.name a.estimated_start a.estimated_finish
+
+mkCreateMilestoneCmd a      = CmdCreateMilestone a.project a.name (toMaybe a.estimated_start) (toMaybe a.estimated_finish)
+  where
+    toMaybe : String -> Maybe String
+    toMaybe ""      = Nothing
+    toMaybe str     = Just str
 
 private mkUpdateMilestoneCmd : UpdateMilestoneArgs -> Command
 mkUpdateMilestoneCmd a      = CmdUpdateMilestone (mkNat64Id a.id) a.name a.estimated_start a.estimated_finish (mkVersion a.version)
@@ -616,7 +621,7 @@ dispatchWithEnv' command env =
         CmdChangeTaskStatus tid st v                      => dispatchWithEnvHelper (changeTaskStatus @{env} tid st v) encode
         CmdTaskComment tid txt v                          => dispatchWithEnvHelper (taskComment @{env} tid txt v) Prelude.id
         CmdCreateIssue p s d pr sv it                     => dispatchWithEnvHelper (createIssue @{env} p s d pr sv it) encode
-        CmdUpdateIssue id sj d it v                       => dispatchWithEnvHelper (updateIssue @{env} id sj d it v) encode
+        CmdUpdateIssue id sj d it st v                    => dispatchWithEnvHelper (updateIssue @{env} id sj d it st v) encode
         CmdDeleteIssue id                                 => dispatchWithEnvHelper (deleteIssue @{env} id) (const "deleted")
         CmdCreateWiki p sl c                              => dispatchWithEnvHelper (createWiki @{env} p sl c) encode
         CmdUpdateWiki id c sl v                           => dispatchWithEnvHelper (updateWiki @{env} id c sl v) encode

@@ -182,7 +182,7 @@ class TaigaClient:
     def update_issue(self, iid, subject=None, version=1):
         return self._json("update-issue", {
             "id": iid, "subject": subject,
-            "description": None, "type": None, "version": version,
+            "description": None, "type": None, "status": None, "version": version,
         })
 
     def delete_issue(self, iid):

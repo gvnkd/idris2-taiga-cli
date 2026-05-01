@@ -42,6 +42,7 @@ record UpdateIssueBody where
   subject     : Maybe String
   description : Maybe String
   issueType   : Maybe String
+  status      : Maybe Bits64
   version     : Version
 
 public export
@@ -51,6 +52,7 @@ ToJSON UpdateIssueBody where
       [ omitNothing "subject" b.subject
       , omitNothing "description" b.description
       , omitNothing "issue_type" b.issueType
+      , omitNothing "status" b.status
       , Just $ jpair "version" b.version
       ]
 
@@ -108,11 +110,12 @@ parameters {auto env : ApiEnv}
     -> (subject : Maybe String)
     -> (description : Maybe String)
     -> (issueType : Maybe String)
+    -> (status : Maybe String)
     -> (version : Version)
     -> {auto _ : HasIO io}
     -> io (Either String Issue)
-  updateIssue id subj desc itype ver = do
-    let body := encode $ MkUpdateIssueBody subj desc itype ver
+  updateIssue id subj desc itype stat ver = do
+    let body := encode $ MkUpdateIssueBody subj desc itype (map parseBits64 stat) ver
         url  := buildUrl ["issues", showId id] [] env.base
     resp <- authPatch env url body
     expectJson resp 200 "update issue"

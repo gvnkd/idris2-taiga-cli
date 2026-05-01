@@ -99,7 +99,7 @@ data Action : Type where
   ActIssueList   : Action
   ActIssueGet    : String -> Action
   ActIssueCreate : String -> Maybe String -> Maybe String -> Maybe String -> Maybe String -> Action
-  ActIssueUpdate : String -> Maybe String -> Maybe String -> Maybe String -> Action
+  ActIssueUpdate : String -> Maybe String -> Maybe String -> Maybe String -> Maybe String -> Action
   ActIssueDelete : String -> Action
   ActStoryList   : Action
   ActStoryGet    : String -> Action
@@ -232,9 +232,6 @@ resolveToIdForType expectedType s = do
         then pure $ Right nid
         else fallbackToRawId s
     Left _ => fallbackToRawId s
-    Left err => do
-      putStrLn $ "DEBUG resolveToIdForType: resolveRef failed: " ++ err ++ ", falling back"
-      fallbackToRawId s
 
 ||| Map user-friendly entity name to the key used by the Taiga resolver API.
 private
@@ -787,8 +784,8 @@ handleIssueCreate subject mDesc mPriority mSeverity mType = do
 
 ||| Handler for ActIssueUpdate.
 public export
-handleIssueUpdate : String -> Maybe String -> Maybe String -> Maybe String -> IO (Either String CmdResult)
-handleIssueUpdate ident mSubject mDesc mType = do
+handleIssueUpdate : String -> Maybe String -> Maybe String -> Maybe String -> Maybe String -> IO (Either String CmdResult)
+handleIssueUpdate ident mSubject mDesc mType mStatus = do
   id_e <- resolveIssueId ident
   case id_e of
     Left err   => pure $ Left err
@@ -807,7 +804,8 @@ handleIssueUpdate ident mSubject mDesc mType = do
                   desc := case mDesc of
                             Nothing => current.description
                             Just d  => d
-               in callToResult "Issue updated" $ updateIssue @{env} iid (Just subj) (Just desc) mType current.version
+                  stat := mStatus
+               in callToResult "Issue updated" $ updateIssue @{env} iid (Just subj) (Just desc) mType stat current.version
 
 ||| Handler for ActIssueDelete.
 public export
@@ -1233,7 +1231,7 @@ executeAction (ActSprintDelete sid) = handleSprintDelete sid
 executeAction ActIssueList          = handleIssueList
 executeAction (ActIssueGet iid)     = handleIssueGet iid
 executeAction (ActIssueCreate subj d p s t) = handleIssueCreate subj d p s t
-executeAction (ActIssueUpdate iid subj d t) = handleIssueUpdate iid subj d t
+executeAction (ActIssueUpdate iid subj d t s) = handleIssueUpdate iid subj d t s
 executeAction (ActIssueDelete iid)  = handleIssueDelete iid
 executeAction ActStoryList          = handleStoryList
 executeAction (ActStoryGet sid)     = handleStoryGet sid

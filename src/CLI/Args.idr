@@ -61,7 +61,7 @@ data CLIArgs : Type where
 
   -- Issues
   ArgCreateIssue  : String -> String -> Maybe String -> Maybe String -> Maybe String -> Maybe String -> CLIArgs
-  ArgUpdateIssue  : Nat64Id -> Maybe String -> Maybe String -> Maybe String -> Version -> CLIArgs
+  ArgUpdateIssue  : Nat64Id -> Maybe String -> Maybe String -> Maybe String -> Maybe String -> Version -> CLIArgs
   ArgDeleteIssue  : Nat64Id -> CLIArgs
 
   -- Wiki
@@ -81,7 +81,7 @@ data CLIArgs : Type where
   ArgTaskComment   : Nat64Id -> String -> Version -> CLIArgs
 
   -- Milestones
-  ArgCreateMilestone   : String -> String -> String -> String -> CLIArgs
+  ArgCreateMilestone   : String -> String -> Maybe String -> Maybe String -> CLIArgs
   ArgUpdateMilestone   : Nat64Id -> Maybe String -> Maybe String -> Maybe String -> Version -> CLIArgs
   ArgDeleteMilestone   : Nat64Id -> CLIArgs
 
@@ -123,7 +123,7 @@ toCommand (ArgCreateTask p s st d st2 ms) = CmdCreateTask p s st d st2 ms
 toCommand (ArgUpdateTask id s d st v) = CmdUpdateTask id s d st v
 toCommand (ArgDeleteTask id)       = CmdDeleteTask id
 toCommand (ArgCreateIssue p s d pr sv it) = CmdCreateIssue p s d pr sv it
-toCommand (ArgUpdateIssue id s d it v) = CmdUpdateIssue id s d it v
+toCommand (ArgUpdateIssue id s d it st v) = CmdUpdateIssue id s d it st v
 toCommand (ArgDeleteIssue id)      = CmdDeleteIssue id
 toCommand (ArgCreateWiki p sl c)  = CmdCreateWiki p sl c
 toCommand (ArgUpdateWiki id c sl v) = CmdUpdateWiki id c sl v
