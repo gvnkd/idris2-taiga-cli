@@ -1,9 +1,0 @@
-Let's switch our approach to use a stateful state, like in Terraform workspaces. The app state should be stored in the `./.taiga` directory. Main interfaces:
-- `taiga-cli init` // create a new state
-- `taiga-cli show` // print current state in useful form
-- `taiga-cli project set <project_name>` // switch active project
-- 'taiga-cli task list` // list all tasks in current project
-- 'taiga-cli sprint show` // shows the state of started sprint in active project
-Continue the list. I hope you get the idea. The app state should be stored as a json file.
-Output interface should support for simple text output for end-user and json output for AI Agents and for autimation scripts.
-Provide a detailed architecture according to your best skills in functional approached and wide knowledges.
