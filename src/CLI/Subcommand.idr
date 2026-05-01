@@ -86,8 +86,9 @@ data Action : Type where
   ActTaskUpdate  : String -> Maybe String -> Maybe String -> Maybe String -> Action
   ActTaskDelete  : String -> Action
   ActTaskStatus  : String -> Bits64 -> Action
-  ActTaskComment : String -> String -> Action
-  ActEpicList    : Action
+  ActTaskComment     : String -> String -> Action
+  ActTaskAssignStory : String -> String -> Action
+  ActEpicList        : Action
   ActEpicGet     : String -> Action
   ActEpicCreate  : String -> Maybe String -> Maybe String -> Action
   ActEpicUpdate  : String -> Maybe String -> Maybe String -> Maybe String -> Action
@@ -146,10 +147,12 @@ getProjectSlug env st =
             Left err   => Left err
             Right proj => Right proj.slug.slug
 
-||| Resolve a project-scoped ref to a database ID.
+||| Resolve a project-scoped ref to a database ID and entity type.
 ||| Uses the Taiga resolver API: GET /resolver?project=<slug>&ref=<ref>
+||| Returns (entityType, id) where entityType is the JSON key from the
+||| resolver response (e.g. "task", "issue", "userstory").
 public export
-resolveRef : String -> IO (Either String Nat64Id)
+resolveRef : String -> IO (Either String (String, Nat64Id))
 resolveRef ref = do
   st_e <- loadState
   case st_e of
@@ -167,16 +170,14 @@ resolveRef ref = do
               case result of
                 Left err => pure $ Left err
                 Right jsonStr =>
-                  -- The resolve API returns {"project": N, "task": N} or similar.
-                  -- We extract the first numeric value that isn't the project key.
                   case extractIdFromResolve jsonStr of
                     Nothing => pure $ Left $ "Ref " ++ ref ++ " not found in project"
-                    Just nid => pure $ Right nid
+                    Just pair => pure $ Right pair
 
   where
-    ||| Extract the first numeric ID from a raw resolve JSON response string.
-    ||| Ignores the "project" key and looks for entity keys (task, issue, etc.)
-    extractIdFromResolve : String -> Maybe Nat64Id
+    ||| Extract entity type and numeric ID from a raw resolve JSON response.
+    ||| Ignores the "project" key and returns the first other key-value pair.
+    extractIdFromResolve : String -> Maybe (String, Nat64Id)
     extractIdFromResolve s =
       let pairs := forget $ split (== ',') s
           cleanPairs := map cleanPair pairs
@@ -185,7 +186,7 @@ resolveRef ref = do
         cleanPair : String -> String
         cleanPair p = trim (pack (filter (\c => c /= '"') (unpack p)))
 
-        findId : List String -> Maybe Nat64Id
+        findId : List String -> Maybe (String, Nat64Id)
         findId [] = Nothing
         findId (p :: ps) =
           case break (== ':') (unpack p) of
@@ -195,12 +196,20 @@ resolveRef ref = do
                in if key == "project"
                     then findId ps
                     else case readNat val of
-                           Just n  => Just $ MkNat64Id n
+                           Just n  => Just (key, MkNat64Id n)
                            Nothing => findId ps
             _ => findId ps
 
+||| Fallback: parse a string as a raw database ID.
+private
+fallbackToRawId : String -> IO (Either String Nat64Id)
+fallbackToRawId s =
+  case readNat s of
+    Nothing => pure $ Left $ "Invalid identifier: " ++ s
+    Just n  => pure $ Right $ MkNat64Id n
+
 ||| Convert a user-provided identifier string to a database Nat64Id.
-||| First tries to resolve as a project ref (the user-facing identifier).
+||| First tries to resolve as a project ref (any entity type).
 ||| If ref resolution fails, falls back to treating the input as a raw
 ||| database ID for backward compatibility with scripts.
 public export
@@ -208,11 +217,59 @@ resolveToId : String -> IO (Either String Nat64Id)
 resolveToId s = do
   refResult <- resolveRef s
   case refResult of
-    Right nid => pure $ Right nid
-    Left _    =>
-      case readNat s of
-        Nothing => pure $ Left $ "Invalid identifier: " ++ s
-        Just n  => pure $ Right $ MkNat64Id n
+    Right (_, nid) => pure $ Right nid
+    Left _         => fallbackToRawId s
+
+||| Resolve an identifier constrained to a specific entity type.
+||| If the ref resolves to a different entity type, falls back to raw ID.
+public export
+resolveToIdForType : String -> String -> IO (Either String Nat64Id)
+resolveToIdForType expectedType s = do
+  refResult <- resolveRef s
+  case refResult of
+    Right (entityType, nid) =>
+      if entityType == expectedType
+        then pure $ Right nid
+        else fallbackToRawId s
+    Left _ => fallbackToRawId s
+    Left err => do
+      putStrLn $ "DEBUG resolveToIdForType: resolveRef failed: " ++ err ++ ", falling back"
+      fallbackToRawId s
+
+||| Map user-friendly entity name to the key used by the Taiga resolver API.
+private
+resolverEntityKey : String -> Maybe String
+resolverEntityKey "task"   = Just "task"
+resolverEntityKey "issue"  = Just "issue"
+resolverEntityKey "story"  = Just "us"
+resolverEntityKey "wiki"   = Just "wiki"
+resolverEntityKey _        = Nothing
+
+||| Entity-specific resolvers.
+||| Note: the Taiga resolver API uses "us" (not "userstory") for user stories.
+public export
+resolveTaskId      : String -> IO (Either String Nat64Id)
+resolveTaskId      = resolveToIdForType "task"
+
+public export
+resolveEpicId      : String -> IO (Either String Nat64Id)
+resolveEpicId      = resolveToIdForType "epic"
+
+public export
+resolveStoryId     : String -> IO (Either String Nat64Id)
+resolveStoryId     = resolveToIdForType "us"
+
+public export
+resolveIssueId     : String -> IO (Either String Nat64Id)
+resolveIssueId     = resolveToIdForType "issue"
+
+public export
+resolveWikiId      : String -> IO (Either String Nat64Id)
+resolveWikiId      = resolveToIdForType "wiki"
+
+public export
+resolveMilestoneId : String -> IO (Either String Nat64Id)
+resolveMilestoneId = resolveToIdForType "milestone"
 
 ||| Helper: run a Taiga API call and wrap result in CmdResult.
 public export
@@ -437,7 +494,7 @@ handleTaskCreate subject = do
 public export
 handleTaskGet : String -> IO (Either String CmdResult)
 handleTaskGet ident = do
-  id_e <- resolveToId ident
+  id_e <- resolveTaskId ident
   case id_e of
     Left err   => pure $ Left err
     Right tid  => do
@@ -450,7 +507,7 @@ handleTaskGet ident = do
 public export
 handleTaskStatus : String -> Bits64 -> IO (Either String CmdResult)
 handleTaskStatus ident statusId = do
-  id_e <- resolveToId ident
+  id_e <- resolveTaskId ident
   case id_e of
     Left err   => pure $ Left err
     Right tid  => do
@@ -467,7 +524,7 @@ handleTaskStatus ident statusId = do
 public export
 handleTaskComment : String -> String -> IO (Either String CmdResult)
 handleTaskComment ident text = do
-  id_e <- resolveToId ident
+  id_e <- resolveTaskId ident
   case id_e of
     Left err   => pure $ Left err
     Right tid  => do
@@ -484,11 +541,36 @@ handleTaskComment ident text = do
                 Left err  => Right $ cmdError err
                 Right raw => Right $ cmdOkRaw "Comment added" raw
 
+||| Handler for ActTaskAssignStory - assigns a task to a user story.
+public export
+handleTaskAssignStory : String -> String -> IO (Either String CmdResult)
+handleTaskAssignStory taskIdent storyIdent = do
+  taskId_e <- resolveTaskId taskIdent
+  case taskId_e of
+    Left err   => pure $ Left err
+    Right tid  => do
+      storyId_e <- resolveStoryId storyIdent
+      case storyId_e of
+        Left err   => pure $ Left err
+        Right sid  => do
+          env_e <- resolveApiEnv
+          case env_e of
+            Left err   => pure $ Left err
+            Right env  => do
+              task_e <- getTask @{env} tid
+              case task_e of
+                Left err    => pure $ Right $ cmdError err
+                Right task  => do
+                  result <- assignTaskToStory @{env} tid (Just sid) task.version
+                  pure $ case result of
+                    Left err   => Right $ cmdError err
+                    Right t    => Right $ cmdOk "Task assigned to story" t
+
 ||| Handler for ActTaskUpdate.
 public export
 handleTaskUpdate : String -> Maybe String -> Maybe String -> Maybe String -> IO (Either String CmdResult)
 handleTaskUpdate ident mSubject mDesc mStatus = do
-  id_e <- resolveToId ident
+  id_e <- resolveTaskId ident
   case id_e of
     Left err   => pure $ Left err
     Right tid  => do
@@ -513,7 +595,7 @@ handleTaskUpdate ident mSubject mDesc mStatus = do
 public export
 handleTaskDelete : String -> IO (Either String CmdResult)
 handleTaskDelete ident = do
-  id_e <- resolveToId ident
+  id_e <- resolveTaskId ident
   case id_e of
     Left err   => pure $ Left err
     Right tid  => do
@@ -550,7 +632,7 @@ handleEpicList = do
 public export
 handleEpicGet : String -> IO (Either String CmdResult)
 handleEpicGet ident = do
-  id_e <- resolveToId ident
+  id_e <- resolveEpicId ident
   case id_e of
     Left err   => pure $ Left err
     Right eid  => do
@@ -579,7 +661,7 @@ handleEpicCreate subject mDesc mStatus = do
 public export
 handleEpicUpdate : String -> Maybe String -> Maybe String -> Maybe String -> IO (Either String CmdResult)
 handleEpicUpdate ident mSubject mDesc mStatus = do
-  id_e <- resolveToId ident
+  id_e <- resolveEpicId ident
   case id_e of
     Left err   => pure $ Left err
     Right eid  => do
@@ -607,7 +689,7 @@ handleEpicUpdate ident mSubject mDesc mStatus = do
 public export
 handleEpicDelete : String -> IO (Either String CmdResult)
 handleEpicDelete ident = do
-  id_e <- resolveToId ident
+  id_e <- resolveEpicId ident
   case id_e of
     Left err   => pure $ Left err
     Right eid  => do
@@ -649,7 +731,7 @@ handleSprintShow = handleSprintList
 public export
 handleSprintSet : String -> IO (Either String CmdResult)
 handleSprintSet ident = do
-  id_e <- resolveToId ident
+  id_e <- resolveMilestoneId ident
   case id_e of
     Left err   => pure $ Left err
     Right sid  => do
@@ -678,7 +760,7 @@ handleIssueList = do
 public export
 handleIssueGet : String -> IO (Either String CmdResult)
 handleIssueGet ident = do
-  id_e <- resolveToId ident
+  id_e <- resolveIssueId ident
   case id_e of
     Left err   => pure $ Left err
     Right iid  => do
@@ -707,7 +789,7 @@ handleIssueCreate subject mDesc mPriority mSeverity mType = do
 public export
 handleIssueUpdate : String -> Maybe String -> Maybe String -> Maybe String -> IO (Either String CmdResult)
 handleIssueUpdate ident mSubject mDesc mType = do
-  id_e <- resolveToId ident
+  id_e <- resolveIssueId ident
   case id_e of
     Left err   => pure $ Left err
     Right iid  => do
@@ -731,7 +813,7 @@ handleIssueUpdate ident mSubject mDesc mType = do
 public export
 handleIssueDelete : String -> IO (Either String CmdResult)
 handleIssueDelete ident = do
-  id_e <- resolveToId ident
+  id_e <- resolveIssueId ident
   case id_e of
     Left err   => pure $ Left err
     Right iid  => do
@@ -772,7 +854,7 @@ handleStoryList = do
 public export
 handleStoryGet : String -> IO (Either String CmdResult)
 handleStoryGet ident = do
-  id_e <- resolveToId ident
+  id_e <- resolveStoryId ident
   case id_e of
     Left err   => pure $ Left err
     Right sid  => do
@@ -803,7 +885,7 @@ handleStoryCreate subject mDesc mMilestone = do
               mMsId <- case mMilestone of
                           Nothing => pure Nothing
                           Just ms => do
-                            ms_e <- resolveToId ms
+                            ms_e <- resolveMilestoneId ms
                             pure $ case ms_e of
                               Left _  => Nothing
                               Right v => Just v
@@ -813,7 +895,7 @@ handleStoryCreate subject mDesc mMilestone = do
 public export
 handleStoryUpdate : String -> Maybe String -> Maybe String -> Maybe String -> IO (Either String CmdResult)
 handleStoryUpdate ident mSubject mDesc mMilestone = do
-  id_e <- resolveToId ident
+  id_e <- resolveStoryId ident
   case id_e of
     Left err   => pure $ Left err
     Right sid  => do
@@ -840,7 +922,7 @@ handleStoryUpdate ident mSubject mDesc mMilestone = do
 public export
 handleStoryDelete : String -> IO (Either String CmdResult)
 handleStoryDelete ident = do
-  id_e <- resolveToId ident
+  id_e <- resolveStoryId ident
   case id_e of
     Left err   => pure $ Left err
     Right sid  => do
@@ -881,7 +963,7 @@ handleWikiList = do
 public export
 handleWikiGet : String -> IO (Either String CmdResult)
 handleWikiGet ident = do
-  id_e <- resolveToId ident
+  id_e <- resolveWikiId ident
   case id_e of
     Left err   => pure $ Left err
     Right wid  => do
@@ -914,7 +996,7 @@ handleWikiCreate slug content = do
 public export
 handleWikiUpdate : String -> Maybe String -> Maybe String -> IO (Either String CmdResult)
 handleWikiUpdate ident mContent mSlug = do
-  id_e <- resolveToId ident
+  id_e <- resolveWikiId ident
   case id_e of
     Left err   => pure $ Left err
     Right wid  => do
@@ -938,7 +1020,7 @@ handleWikiUpdate ident mContent mSlug = do
 public export
 handleWikiDelete : String -> IO (Either String CmdResult)
 handleWikiDelete ident = do
-  id_e <- resolveToId ident
+  id_e <- resolveWikiId ident
   case id_e of
     Left err   => pure $ Left err
     Right wid  => do
@@ -969,18 +1051,13 @@ handleSprintCreate name mStart mEnd = do
           env_e <- resolveApiEnv
           case env_e of
             Left err   => pure $ Left err
-            Right env  => callToResult "Sprint created" $ createMilestone @{env} (show pid.id) name start end
-              where
-                start : String
-                start = case mStart of Nothing => "" ; Just s => s
-                end : String
-                end   = case mEnd of Nothing => "" ; Just s => s
+            Right env  => callToResult "Sprint created" $ createMilestone @{env} (show pid.id) name mStart mEnd
 
-||| Handler for ActSprintUpdate.
+|||| Handler for ActSprintUpdate.
 public export
 handleSprintUpdate : String -> Maybe String -> Maybe String -> Maybe String -> Bits64 -> IO (Either String CmdResult)
 handleSprintUpdate ident mName mStart mEnd ver = do
-  id_e <- resolveToId ident
+  id_e <- resolveMilestoneId ident
   case id_e of
     Left err   => pure $ Left err
     Right sid  => do
@@ -1003,7 +1080,7 @@ handleSprintUpdate ident mName mStart mEnd ver = do
 public export
 handleSprintDelete : String -> IO (Either String CmdResult)
 handleSprintDelete ident = do
-  id_e <- resolveToId ident
+  id_e <- resolveMilestoneId ident
   case id_e of
     Left err   => pure $ Left err
     Right sid  => do
@@ -1048,10 +1125,11 @@ fetchEntityVersion env entity eid =
 public export
 handleCommentAdd : String -> String -> String -> IO (Either String CmdResult)
 handleCommentAdd entityName ident text = do
-  case apiEntityName entityName of
-    Nothing    => pure $ Left $ "Unknown entity type: " ++ entityName ++ ". Use: task, issue, story, wiki"
-    Just entity => do
-      id_e <- resolveToId ident
+  case (resolverEntityKey entityName, apiEntityName entityName) of
+    (Nothing, _)       => pure $ Left $ "Unknown entity type: " ++ entityName ++ ". Use: task, issue, story, wiki"
+    (_, Nothing)       => pure $ Left $ "Unknown entity type: " ++ entityName ++ ". Use: task, issue, story, wiki"
+    (Just rKey, Just entity) => do
+      id_e <- resolveToIdForType rKey ident
       case id_e of
         Left err   => pure $ Left err
         Right eid  => do
@@ -1072,10 +1150,11 @@ handleCommentAdd entityName ident text = do
 public export
 handleCommentList : String -> String -> IO (Either String CmdResult)
 handleCommentList entityName ident = do
-  case apiEntityName entityName of
-    Nothing    => pure $ Left $ "Unknown entity type: " ++ entityName ++ ". Use: task, issue, story, wiki"
-    Just entity => do
-      id_e <- resolveToId ident
+  case (resolverEntityKey entityName, apiEntityName entityName) of
+    (Nothing, _)       => pure $ Left $ "Unknown entity type: " ++ entityName ++ ". Use: task, issue, story, wiki"
+    (_, Nothing)       => pure $ Left $ "Unknown entity type: " ++ entityName ++ ". Use: task, issue, story, wiki"
+    (Just rKey, Just entity) => do
+      id_e <- resolveToIdForType rKey ident
       case id_e of
         Left err   => pure $ Left err
         Right eid  => do
@@ -1091,7 +1170,7 @@ handleResolve ref = do
   id_e <- resolveRef ref
   case id_e of
     Left err  => pure $ Left err
-    Right nid => do
+    Right (_, nid) => do
       env_e <- resolveApiEnv
       case env_e of
         Left err  => pure $ Left err
@@ -1139,6 +1218,7 @@ executeAction (ActTaskUpdate tid subj desc stat) = handleTaskUpdate tid subj des
 executeAction (ActTaskDelete tid)   = handleTaskDelete tid
 executeAction (ActTaskStatus tid st) = handleTaskStatus tid st
 executeAction (ActTaskComment tid txt) = handleTaskComment tid txt
+executeAction (ActTaskAssignStory taskId storyId) = handleTaskAssignStory taskId storyId
 executeAction ActEpicList           = handleEpicList
 executeAction (ActEpicGet eid)      = handleEpicGet eid
 executeAction (ActEpicCreate subj d s) = handleEpicCreate subj d s

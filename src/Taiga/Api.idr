@@ -70,14 +70,25 @@ httpGet :
   -> io HttpResponse
 httpGet url auth = runCurlCmdIO (buildCurlGet url auth)
 
-||| Build curl command for a POST request with JSON body.
-buildCurlPost : (url : String) -> (auth : Maybe String) -> (body : String) -> String
-buildCurlPost url auth body =
+||| Build curl command for a POST request (body passed separately).
+buildCurlPost : (url : String) -> (auth : Maybe String) -> String
+buildCurlPost url auth =
   let authFlag := case auth of
                       Nothing    => ""
                       Just token => "--header \"Authorization: Bearer " ++ token ++ "\""
-      jsonFlag := "--header \"Content-Type: application/json\" --data '" ++ body ++ "'"
-   in "curl -s -w \"\\n%{http_code}\" -X POST " ++ authFlag ++ " " ++ jsonFlag ++ " \"" ++ url ++ "\""
+   in "curl -s -w \"\\n%{http_code}\" -X POST " ++ authFlag ++ " \"" ++ url ++ "\""
+
+||| Run curl with a request body passed via temporary file.
+||| Avoids shell injection of backticks, single quotes, etc.
+runCurlWithBody : HasIO io => String -> String -> io HttpResponse
+runCurlWithBody cmd' body = do
+  let tmpPath = "/tmp/taiga_cli_body.json"
+  Right () <- writeFile tmpPath body
+    | Left _ => pure (MkHttpResponse (MkStatusCode 1) "")
+  let cmdWithData = cmd' ++ " --header \"Content-Type: application/json\" --data @" ++ tmpPath
+  result <- runCurlCmdIO cmdWithData
+  _ <- system $ "rm -f " ++ tmpPath
+  pure result
 
 ||| Perform a POST request with a JSON body.
 public export
@@ -87,23 +98,19 @@ httpPost :
    -> (auth : Maybe String)
    -> (body : String)
    -> io HttpResponse
-httpPost url auth body = runCurlCmdIO (buildCurlPost url auth body)
+httpPost url auth body = runCurlWithBody (buildCurlPost url auth) body
 
-||| Build curl command for a generic HTTP method with optional JSON body.
+||| Build curl command for a generic HTTP method (body passed separately).
 buildCurlMethod :
      (method : String)
   -> (url : String)
   -> (auth : Maybe String)
-  -> (body : Maybe String)
   -> String
-buildCurlMethod method url auth body =
+buildCurlMethod method url auth =
   let authFlag := case auth of
                       Nothing    => ""
                       Just token => "--header \"Authorization: Bearer " ++ token ++ "\""
-      bodyFlag := case body of
-                      Nothing  => ""
-                      Just b   => "--header \"Content-Type: application/json\" --data '" ++ b ++ "'"
-   in "curl -s -w \"\\n%{http_code}\" -X " ++ method ++ " " ++ authFlag ++ " " ++ bodyFlag ++ " \"" ++ url ++ "\""
+   in "curl -s -w \"\\n%{http_code}\" -X " ++ method ++ " " ++ authFlag ++ " \"" ++ url ++ "\""
 
 ||| Perform a PUT request with a JSON body.
 public export
@@ -113,7 +120,7 @@ httpPut :
    -> (auth : Maybe String)
    -> (body : String)
    -> io HttpResponse
-httpPut url auth body = runCurlCmdIO (buildCurlMethod "PUT" url auth (Just body))
+httpPut url auth body = runCurlWithBody (buildCurlMethod "PUT" url auth) body
 
 ||| Perform a PATCH request with a JSON body.
 public export
@@ -123,7 +130,7 @@ httpPatch :
    -> (auth : Maybe String)
    -> (body : String)
    -> io HttpResponse
-httpPatch url auth body = runCurlCmdIO (buildCurlMethod "PATCH" url auth (Just body))
+httpPatch url auth body = runCurlWithBody (buildCurlMethod "PATCH" url auth) body
 
 ||| Perform a DELETE request.
 public export
@@ -132,4 +139,4 @@ httpDelete :
    => (url : String)
    -> (auth : Maybe String)
    -> io HttpResponse
-httpDelete url auth = runCurlCmdIO (buildCurlMethod "DELETE" url auth Nothing)
+httpDelete url auth = runCurlCmdIO (buildCurlMethod "DELETE" url auth)
