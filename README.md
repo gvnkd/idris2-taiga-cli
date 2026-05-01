@@ -8,7 +8,10 @@ A command-line tool written in [Idris 2](https://github.com/idris-lang/Idris2) t
 - **Subcommand mode** (new): stateful verb-noun commands (`taiga-cli task list`, `taiga-cli project set taiga`)
 - **Legacy CLI mode**: human-friendly flags (`--list-epics`, `--login`, etc.) with plain JSON output
 - Full CRUD for epics, user stories, tasks, issues, wiki pages, and milestones via subcommand CLI
+- **Text-based status resolution** — use human-readable status names (`New`, `Closed`, `In progress`) instead of numeric IDs
+- **Status discovery** — list available statuses per entity type with `task statuses`, `issue statuses`, etc.
 - Ref-first identifiers — all entity lookups accept user-facing ref IDs (not just internal DB IDs)
+- Entity-type-aware resolution — prevents ref collisions across different entity types
 - Comment management via the Taiga history API
 - Global project search and entity resolution by slug/ref
 - Token-minimal compact JSON protocol
@@ -188,35 +191,39 @@ Entity operations (on active project, id = ref-id or db-id):
   task list [--status S]                List tasks
   task create <subject>                 Create task
   task get <id>                         Get task
-  task update <id> [--subject S] [--description D] [--status ST]
-                                        Update task
+  task update <id> [--subject S] [--description D] [--status ST|--statusId N]
+                                        Update task (status by name or numeric ID)
   task delete <id>                      Delete task (prompts for confirmation)
   task status <id> <status-id>          Change task status
   task comment <id> <text>              Comment on a task
+  task statuses                         List available task statuses
 
   epic list                             List epics
   epic get <id>                         Get epic
   epic create <subject> [--description D] [--status ST]
                                         Create epic
-  epic update <id> [--subject S] [--description D] [--status ST]
-                                        Update epic
+  epic update <id> [--subject S] [--description D] [--status ST|--statusId N]
+                                        Update epic (status by name or numeric ID)
   epic delete <id>                      Delete epic
+  epic statuses                         List available epic statuses
 
   story list                            List stories
   story get <id>                        Get story
   story create <subject> [--description D] [--milestone M]
                                         Create story
-  story update <id> [--subject S] [--description D] [--milestone M]
-                                        Update story
+  story update <id> [--subject S] [--description D] [--milestone M] [--status ST|--statusId N]
+                                        Update story (status by name or numeric ID)
   story delete <id>                     Delete story
+  story statuses                        List available story statuses
 
   issue list                            List issues
   issue get <id>                        Get issue
   issue create <subject> [--description D] [--priority P] [--severity S] [--type T]
                                         Create issue
-  issue update <id> [--subject S] [--description D] [--type T]
-                                        Update issue
+  issue update <id> [--subject S] [--description D] [--type T] [--status ST|--statusId N]
+                                        Update issue (status by name or numeric ID)
   issue delete <id>                     Delete issue
+  issue statuses                        List available issue statuses
 
   sprint list                           List sprints/milestones
   sprint show                           Alias for sprint list (no active sprint state)
@@ -308,6 +315,67 @@ Resolution:
 
 All mutation commands require a `version` field for optimistic concurrency control. The tool returns the updated entity on success so the agent always has the latest version.
 
+## Status Resolution
+
+Taiga uses numeric status IDs internally, but `taiga-cli` lets you use **human-readable names**:
+
+```shell
+# Close a task by name
+$ tcli task update 330 --status "Closed"
+[OK]   Task updated
+
+# Reopen an issue
+$ tcli issue update 124 --status "New"
+[OK]   Issue updated
+
+# Use numeric ID when needed (scripts, automation)
+$ tcli task update 330 --statusId 44
+[OK]   Task updated
+```
+
+Discover available statuses for the active project:
+
+```shell
+$ tcli task statuses
+[INFO] Task statuses:
+  41  New  (new)
+  42  In progress  (in-progress)
+  43  Ready for test  (ready-for-test)
+  44  Closed  (closed)
+  45  Needs Info  (needs-info)
+
+$ tcli issue statuses
+[INFO] Issue statuses:
+  57  New  (new)
+  58  In progress  (in-progress)
+  59  Ready for test  (ready-for-test)
+  60  Closed  (closed)
+  61  Needs Info  (needs-info)
+  62  Rejected  (rejected)
+  63  Postponed  (postponed)
+```
+
+Status names are resolved **dynamically** from the project endpoint, so custom statuses created in the Taiga web UI work automatically. Matching is case-insensitive and accepts both display names and slugs.
+
+## Active Project Validation
+
+All entity creation commands require an active project. If none is set, the tool fails early with a clear message:
+
+```shell
+$ tcli task create "Fix bug"
+error: No active project set. Run 'taiga-cli project set <slug>' first.
+```
+
+This prevents accidentally creating orphaned entities with `project: null`.
+
+## Recent Fixes
+
+| Issue | Fix |
+|-------|-----|
+| **#356** | Entity-type-aware ref resolution — `resolveToId` now validates the resolved entity type matches the expected type. If a task ref collides with an issue ref, it falls back to treating the input as a raw database ID. |
+| **#357** | curl body injection — JSON request bodies are now passed via temporary file (`--data @tmpfile`) instead of inline shell arguments, preventing breakage on backticks, quotes, and dollar signs in descriptions. |
+| **#359** | `issue update` now accepts `--status` and `--statusId` flags for changing issue status from the CLI. |
+
 ## Project Structure
 
 ```
@@ -327,7 +395,8 @@ src/
     Epic.idr             Epic record
     Issue.idr            Issue record
     Milestone.idr        Milestone record
-    Project.idr          Project record
+    Project.idr          Project record (includes status metadata)
+    Status.idr           Status metadata record
     Task.idr             Task record
     User.idr             User record
     UserStory.idr        User story record
@@ -350,6 +419,7 @@ src/
     Milestone.idr        Milestone endpoints
     Project.idr          Project endpoints
     Search.idr           Search and resolver endpoints
+    Status.idr           Dynamic status resolution from project metadata
     Task.idr             Task endpoints
     User.idr             User/member endpoints
     UserStory.idr        User story endpoints
