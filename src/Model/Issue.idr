@@ -17,6 +17,7 @@ record Issue where
   status : Maybe Bits64
   priority : Maybe Bits64
   severity : Maybe Bits64
+  version : Version
 
 %runElab derive "Issue" [Show,Eq,ToJSON,FromJSON]
 

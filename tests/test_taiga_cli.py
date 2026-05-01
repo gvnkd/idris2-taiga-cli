@@ -475,6 +475,279 @@ class TestRefResolution:
             client.delete_task(tid)
 
 
+class TestSubcommandCRUD:
+    """Test CRUD operations via subcommand CLI mode."""
+
+    BASE = "http://127.0.0.1:8000/api/v1"
+
+    @staticmethod
+    def _token_file():
+        home = os.path.expanduser("~")
+        return os.path.join(home, ".local", "share", "taiga-cli", "tokens",
+                            "http___127.0.0.1_8000_api_v1.json")
+
+    @pytest.fixture
+    def workspace(self, tmp_path):
+        tf = self._token_file()
+        if os.path.exists(tf):
+            os.remove(tf)
+
+        proc = subprocess.run(
+            [BIN, "init", self.BASE],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(tmp_path),
+        )
+        assert proc.returncode == 0, f"init failed: {proc.stdout}{proc.stderr}"
+
+        yield tmp_path
+
+        if os.path.exists(tf):
+            os.remove(tf)
+
+    def _login(self, workspace):
+        proc = subprocess.run(
+            [BIN, "login", "--user", "rune"],
+            input="rune-secret-42\n",
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0
+
+    def _set_project(self, workspace):
+        proc = subprocess.run(
+            [BIN, "project", "set", PROJECT_ID],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0
+
+    # --- Task CRUD ---
+
+    def test_task_update(self, workspace, client):
+        """task update <ref> --subject S should update the task."""
+        self._login(workspace)
+        self._set_project(workspace)
+
+        ts = _ts()
+        created = client.create_task(f"update test task {ts}")
+        tid, ref = created["id"], created["ref"]
+        try:
+            proc = subprocess.run(
+                [BIN, "task", "update", str(ref), "--subject", f"updated task {ts}"],
+                capture_output=True, text=True, timeout=30,
+                cwd=str(workspace),
+            )
+            assert proc.returncode == 0, f"task update failed: {proc.stdout}{proc.stderr}"
+            assert "[OK]" in proc.stdout
+            data = json.loads(proc.stdout.split("\n", 1)[1])
+            assert data["subject"] == f"updated task {ts}"
+        finally:
+            client.delete_task(tid)
+
+    def test_task_delete(self, workspace, client):
+        """task delete <ref> --force should delete the task."""
+        self._login(workspace)
+        self._set_project(workspace)
+
+        ts = _ts()
+        created = client.create_task(f"delete test task {ts}")
+        tid, ref = created["id"], created["ref"]
+
+        proc = subprocess.run(
+            [BIN, "task", "delete", str(ref)],
+            input="yes\n",
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0, f"task delete failed: {proc.stdout}{proc.stderr}"
+        assert "deleted" in proc.stdout
+
+        # Verify it's gone
+        err = client._err("get-task", {"id": tid, "maybeNat64ArgsTag": ""})
+        assert "err" in err
+
+    # --- Epic CRUD ---
+
+    def test_epic_create(self, workspace):
+        """epic create <subject> should create an epic."""
+        self._login(workspace)
+        self._set_project(workspace)
+
+        ts = _ts()
+        proc = subprocess.run(
+            [BIN, "epic", "create", f"subcmd epic {ts}", "--description", "test desc"],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0, f"epic create failed: {proc.stdout}{proc.stderr}"
+        assert "[OK]" in proc.stdout
+        data = json.loads(proc.stdout.split("\n", 1)[1])
+        assert data["subject"] == f"subcmd epic {ts}"
+        assert data["description"] == "test desc"
+
+    def test_epic_update(self, workspace, client):
+        """epic update <ref> --subject S should update the epic."""
+        self._login(workspace)
+        self._set_project(workspace)
+
+        ts = _ts()
+        created = client.create_epic(f"update epic {ts}")
+        eid, ref = created["id"], created["ref"]
+        try:
+            proc = subprocess.run(
+                [BIN, "epic", "update", str(ref), "--subject", f"updated epic {ts}"],
+                capture_output=True, text=True, timeout=30,
+                cwd=str(workspace),
+            )
+            assert proc.returncode == 0, f"epic update failed: {proc.stdout}{proc.stderr}"
+            assert "[OK]" in proc.stdout
+            data = json.loads(proc.stdout.split("\n", 1)[1])
+            assert data["subject"] == f"updated epic {ts}"
+        finally:
+            client.delete_epic(eid)
+
+    def test_epic_delete(self, workspace, client):
+        """epic delete <ref> should delete the epic."""
+        self._login(workspace)
+        self._set_project(workspace)
+
+        ts = _ts()
+        created = client.create_epic(f"delete epic {ts}")
+        eid, ref = created["id"], created["ref"]
+
+        proc = subprocess.run(
+            [BIN, "epic", "delete", str(ref)],
+            input="yes\n",
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0, f"epic delete failed: {proc.stdout}{proc.stderr}"
+        assert "deleted" in proc.stdout
+
+        err = client._err("get-epic", {"id": eid, "maybeNat64ArgsTag": ""})
+        assert "err" in err
+
+    # --- Story CRUD ---
+
+    def test_story_create(self, workspace):
+        """story create <subject> should create a story."""
+        self._login(workspace)
+        self._set_project(workspace)
+
+        ts = _ts()
+        proc = subprocess.run(
+            [BIN, "story", "create", f"subcmd story {ts}", "--description", "test desc"],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0, f"story create failed: {proc.stdout}{proc.stderr}"
+        assert "[OK]" in proc.stdout
+        data = json.loads(proc.stdout.split("\n", 1)[1])
+        assert data["subject"] == f"subcmd story {ts}"
+
+    def test_story_update(self, workspace, client):
+        """story update <ref> --subject S should update the story."""
+        self._login(workspace)
+        self._set_project(workspace)
+
+        ts = _ts()
+        created = client.create_story(f"update story {ts}")
+        sid, ref = created["id"], created["ref"]
+        try:
+            proc = subprocess.run(
+                [BIN, "story", "update", str(ref), "--subject", f"updated story {ts}"],
+                capture_output=True, text=True, timeout=30,
+                cwd=str(workspace),
+            )
+            assert proc.returncode == 0, f"story update failed: {proc.stdout}{proc.stderr}"
+            assert "[OK]" in proc.stdout
+            data = json.loads(proc.stdout.split("\n", 1)[1])
+            assert data["subject"] == f"updated story {ts}"
+        finally:
+            client.delete_story(sid)
+
+    def test_story_delete(self, workspace, client):
+        """story delete <ref> should delete the story."""
+        self._login(workspace)
+        self._set_project(workspace)
+
+        ts = _ts()
+        created = client.create_story(f"delete story {ts}")
+        sid, ref = created["id"], created["ref"]
+
+        proc = subprocess.run(
+            [BIN, "story", "delete", str(ref)],
+            input="yes\n",
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0, f"story delete failed: {proc.stdout}{proc.stderr}"
+        assert "deleted" in proc.stdout
+
+        err = client._err("get-story", {"id": sid, "maybeNat64ArgsTag": ""})
+        assert "err" in err
+
+    # --- Issue CRUD ---
+
+    def test_issue_create(self, workspace):
+        """issue create <subject> should create an issue."""
+        self._login(workspace)
+        self._set_project(workspace)
+
+        ts = _ts()
+        proc = subprocess.run(
+            [BIN, "issue", "create", f"subcmd issue {ts}", "--description", "test desc"],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0, f"issue create failed: {proc.stdout}{proc.stderr}"
+        assert "[OK]" in proc.stdout
+        data = json.loads(proc.stdout.split("\n", 1)[1])
+        assert data["subject"] == f"subcmd issue {ts}"
+
+    def test_issue_update(self, workspace, client):
+        """issue update <ref> --subject S should update the issue."""
+        self._login(workspace)
+        self._set_project(workspace)
+
+        ts = _ts()
+        created = client.create_issue(f"update issue {ts}")
+        iid, ref = created["id"], created["ref"]
+        try:
+            proc = subprocess.run(
+                [BIN, "issue", "update", str(ref), "--subject", f"updated issue {ts}"],
+                capture_output=True, text=True, timeout=30,
+                cwd=str(workspace),
+            )
+            assert proc.returncode == 0, f"issue update failed: {proc.stdout}{proc.stderr}"
+            assert "[OK]" in proc.stdout
+            data = json.loads(proc.stdout.split("\n", 1)[1])
+            assert data["subject"] == f"updated issue {ts}"
+        finally:
+            client.delete_issue(iid)
+
+    def test_issue_delete(self, workspace, client):
+        """issue delete <ref> should delete the issue."""
+        self._login(workspace)
+        self._set_project(workspace)
+
+        ts = _ts()
+        created = client.create_issue(f"delete issue {ts}")
+        iid, ref = created["id"], created["ref"]
+
+        proc = subprocess.run(
+            [BIN, "issue", "delete", str(ref)],
+            input="yes\n",
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0, f"issue delete failed: {proc.stdout}{proc.stderr}"
+        assert "deleted" in proc.stdout
+
+        err = client._err("get-issue", {"id": iid, "maybeNat64ArgsTag": ""})
+        assert "err" in err
+
+
 class TestUsersMembershipsRoles:
     def test_list_users(self, client):
         users = client.list_users()

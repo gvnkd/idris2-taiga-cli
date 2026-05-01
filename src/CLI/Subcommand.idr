@@ -42,6 +42,19 @@ isStdinTTY = do
   res <- primIO (prim__isatty 0)
   pure (res /= 0)
 
+||| Prompt for delete confirmation when running in a TTY.
+||| When piped, auto-confirms (returns True) for scripting.
+public export
+confirmDelete : String -> IO Bool
+confirmDelete entityDesc = do
+  tty <- isStdinTTY
+  if not tty
+    then pure True
+    else do
+      putStr ("Delete " ++ entityDesc ++ "? (yes/no): ")
+      res <- getLine
+      pure (trim res == "yes")
+
 %language ElabReflection
 
 ||| Attempt to parse a string as Bits64.  Returns Nothing on invalid
@@ -68,17 +81,28 @@ data Action : Type where
   ActTaskList    : Maybe String -> Action
   ActTaskCreate  : String -> Action
   ActTaskGet     : String -> Action
+  ActTaskUpdate  : String -> Maybe String -> Maybe String -> Maybe String -> Action
+  ActTaskDelete  : String -> Action
   ActTaskStatus  : String -> Bits64 -> Action
   ActTaskComment : String -> String -> Action
   ActEpicList    : Action
   ActEpicGet     : String -> Action
+  ActEpicCreate  : String -> Maybe String -> Maybe String -> Action
+  ActEpicUpdate  : String -> Maybe String -> Maybe String -> Maybe String -> Action
+  ActEpicDelete  : String -> Action
   ActSprintList  : Action
   ActSprintShow  : Action
   ActSprintSet   : String -> Action
   ActIssueList   : Action
   ActIssueGet    : String -> Action
+  ActIssueCreate : String -> Maybe String -> Maybe String -> Maybe String -> Maybe String -> Action
+  ActIssueUpdate : String -> Maybe String -> Maybe String -> Maybe String -> Action
+  ActIssueDelete : String -> Action
   ActStoryList   : Action
   ActStoryGet    : String -> Action
+  ActStoryCreate : String -> Maybe String -> Maybe String -> Action
+  ActStoryUpdate : String -> Maybe String -> Maybe String -> Maybe String -> Action
+  ActStoryDelete : String -> Action
   ActWikiList    : Action
   ActWikiGet     : String -> Action
   ActResolve     : String -> Action
@@ -405,6 +429,52 @@ handleTaskComment ident text = do
             Left err    => pure $ Right $ cmdError err
             Right task  => callToResult "Comment added" $ taskComment @{env} tid text task.version
 
+||| Handler for ActTaskUpdate.
+public export
+handleTaskUpdate : String -> Maybe String -> Maybe String -> Maybe String -> IO (Either String CmdResult)
+handleTaskUpdate ident mSubject mDesc mStatus = do
+  id_e <- resolveToId ident
+  case id_e of
+    Left err   => pure $ Left err
+    Right tid  => do
+      env_e <- resolveApiEnv
+      case env_e of
+        Left err   => pure $ Left err
+        Right env  => do
+          current_e <- getTask @{env} tid
+          case current_e of
+            Left err     => pure $ Right $ cmdError err
+            Right current =>
+              let subj := case mSubject of
+                            Nothing => current.subject
+                            Just s  => s
+                  desc := case mDesc of
+                            Nothing => current.description
+                            Just d  => d
+                  stat := mStatus
+               in callToResult "Task updated" $ updateTask @{env} tid (Just subj) (Just desc) stat current.version
+
+||| Handler for ActTaskDelete.
+public export
+handleTaskDelete : String -> IO (Either String CmdResult)
+handleTaskDelete ident = do
+  id_e <- resolveToId ident
+  case id_e of
+    Left err   => pure $ Left err
+    Right tid  => do
+      env_e <- resolveApiEnv
+      case env_e of
+        Left err   => pure $ Left err
+        Right env  => do
+          confirmed <- confirmDelete ("task " ++ ident)
+          if not confirmed
+            then pure $ Right $ cmdInfo "Delete cancelled"
+            else do
+              result <- deleteTask @{env} tid
+              pure $ case result of
+                Left err  => Right $ cmdError err
+                Right _   => Right $ cmdOk "Task deleted" "deleted"
+
 ||| Handler for ActEpicList.
 public export
 handleEpicList : IO (Either String CmdResult)
@@ -433,6 +503,71 @@ handleEpicGet ident = do
       case env_e of
         Left err   => pure $ Left err
         Right env  => callToResult "Epic" $ getEpic @{env} eid
+
+||| Handler for ActEpicCreate.
+public export
+handleEpicCreate : String -> Maybe String -> Maybe String -> IO (Either String CmdResult)
+handleEpicCreate subject mDesc mStatus = do
+  st_e <- loadState
+  case st_e of
+    Left err  => pure $ Left err
+    Right st  => do
+      case getActiveProject st of
+        Left err   => pure $ Left err
+        Right pid  => do
+          env_e <- resolveApiEnv
+          case env_e of
+            Left err   => pure $ Left err
+            Right env  => callToResult "Epic created" $ createEpic @{env} (show pid.id) subject mDesc mStatus
+
+||| Handler for ActEpicUpdate.
+public export
+handleEpicUpdate : String -> Maybe String -> Maybe String -> Maybe String -> IO (Either String CmdResult)
+handleEpicUpdate ident mSubject mDesc mStatus = do
+  id_e <- resolveToId ident
+  case id_e of
+    Left err   => pure $ Left err
+    Right eid  => do
+      env_e <- resolveApiEnv
+      case env_e of
+        Left err   => pure $ Left err
+        Right env  => do
+          current_e <- getEpic @{env} eid
+          case current_e of
+            Left err     => pure $ Right $ cmdError err
+            Right current =>
+              case current.version of
+                Nothing => pure $ Right $ cmdError "Cannot update epic: no version available"
+                Just ver =>
+                  let subj := case mSubject of
+                                Nothing => current.subject
+                                Just s  => s
+                      desc := case mDesc of
+                                Nothing => current.description
+                                Just d  => d
+                      stat := mStatus
+                   in callToResult "Epic updated" $ updateEpic @{env} eid (Just subj) (Just desc) stat ver
+
+||| Handler for ActEpicDelete.
+public export
+handleEpicDelete : String -> IO (Either String CmdResult)
+handleEpicDelete ident = do
+  id_e <- resolveToId ident
+  case id_e of
+    Left err   => pure $ Left err
+    Right eid  => do
+      env_e <- resolveApiEnv
+      case env_e of
+        Left err   => pure $ Left err
+        Right env  => do
+          confirmed <- confirmDelete ("epic " ++ ident)
+          if not confirmed
+            then pure $ Right $ cmdInfo "Delete cancelled"
+            else do
+              result <- deleteEpic @{env} eid
+              pure $ case result of
+                Left err  => Right $ cmdError err
+                Right _   => Right $ cmdOk "Epic deleted" "deleted"
 
 ||| Handler for ActSprintList.
 public export
@@ -497,6 +632,67 @@ handleIssueGet ident = do
         Left err   => pure $ Left err
         Right env  => callToResult "Issue" $ getIssue @{env} iid
 
+||| Handler for ActIssueCreate.
+public export
+handleIssueCreate : String -> Maybe String -> Maybe String -> Maybe String -> Maybe String -> IO (Either String CmdResult)
+handleIssueCreate subject mDesc mPriority mSeverity mType = do
+  st_e <- loadState
+  case st_e of
+    Left err  => pure $ Left err
+    Right st  => do
+      case getActiveProject st of
+        Left err   => pure $ Left err
+        Right pid  => do
+          env_e <- resolveApiEnv
+          case env_e of
+            Left err   => pure $ Left err
+            Right env  => callToResult "Issue created" $ createIssue @{env} (show pid.id) subject mDesc mPriority mSeverity mType
+
+||| Handler for ActIssueUpdate.
+public export
+handleIssueUpdate : String -> Maybe String -> Maybe String -> Maybe String -> IO (Either String CmdResult)
+handleIssueUpdate ident mSubject mDesc mType = do
+  id_e <- resolveToId ident
+  case id_e of
+    Left err   => pure $ Left err
+    Right iid  => do
+      env_e <- resolveApiEnv
+      case env_e of
+        Left err   => pure $ Left err
+        Right env  => do
+          current_e <- getIssue @{env} iid
+          case current_e of
+            Left err     => pure $ Right $ cmdError err
+            Right current =>
+              let subj := case mSubject of
+                            Nothing => current.subject
+                            Just s  => s
+                  desc := case mDesc of
+                            Nothing => current.description
+                            Just d  => d
+               in callToResult "Issue updated" $ updateIssue @{env} iid (Just subj) (Just desc) mType current.version
+
+||| Handler for ActIssueDelete.
+public export
+handleIssueDelete : String -> IO (Either String CmdResult)
+handleIssueDelete ident = do
+  id_e <- resolveToId ident
+  case id_e of
+    Left err   => pure $ Left err
+    Right iid  => do
+      env_e <- resolveApiEnv
+      case env_e of
+        Left err   => pure $ Left err
+        Right env  => do
+          confirmed <- confirmDelete ("issue " ++ ident)
+          if not confirmed
+            then pure $ Right $ cmdInfo "Delete cancelled"
+            else do
+              result <- deleteIssue @{env} iid
+              pure $ case result of
+                Left err  => Right $ cmdError err
+                Right _   => Right $ cmdOk "Issue deleted" "deleted"
+
 ||| Handler for ActStoryList.
 public export
 handleStoryList : IO (Either String CmdResult)
@@ -533,6 +729,78 @@ handleStoryGet ident = do
           pure $ case result of
             Left err   => Right $ cmdError err
             Right val  => Right $ cmdOk "Story" val
+
+||| Handler for ActStoryCreate.
+public export
+handleStoryCreate : String -> Maybe String -> Maybe String -> IO (Either String CmdResult)
+handleStoryCreate subject mDesc mMilestone = do
+  st_e <- loadState
+  case st_e of
+    Left err  => pure $ Left err
+    Right st  => do
+      case getActiveProject st of
+        Left err   => pure $ Left err
+        Right pid  => do
+          env_e <- resolveApiEnv
+          case env_e of
+            Left err   => pure $ Left err
+            Right env  => do
+              mMsId <- case mMilestone of
+                          Nothing => pure Nothing
+                          Just ms => do
+                            ms_e <- resolveToId ms
+                            pure $ case ms_e of
+                              Left _  => Nothing
+                              Right v => Just v
+              callToResult "Story created" $ createStory @{env} (show pid.id) subject mDesc mMsId
+
+||| Handler for ActStoryUpdate.
+public export
+handleStoryUpdate : String -> Maybe String -> Maybe String -> Maybe String -> IO (Either String CmdResult)
+handleStoryUpdate ident mSubject mDesc mMilestone = do
+  id_e <- resolveToId ident
+  case id_e of
+    Left err   => pure $ Left err
+    Right sid  => do
+      env_e <- resolveApiEnv
+      case env_e of
+        Left err   => pure $ Left err
+        Right env  => do
+          current_e <- getStory @{env} sid
+          case current_e of
+            Left err     => pure $ Right $ cmdError err
+            Right current =>
+              let subj := case mSubject of
+                            Nothing => current.subject
+                            Just s  => s
+                  desc := case mDesc of
+                            Nothing => current.description
+                            Just d  => d
+                  mMs := case mMilestone of
+                           Nothing => Nothing
+                           Just ms => Just ms
+               in callToResult "Story updated" $ updateStory @{env} sid (Just subj) (Just desc) mMs current.version
+
+||| Handler for ActStoryDelete.
+public export
+handleStoryDelete : String -> IO (Either String CmdResult)
+handleStoryDelete ident = do
+  id_e <- resolveToId ident
+  case id_e of
+    Left err   => pure $ Left err
+    Right sid  => do
+      env_e <- resolveApiEnv
+      case env_e of
+        Left err   => pure $ Left err
+        Right env  => do
+          confirmed <- confirmDelete ("story " ++ ident)
+          if not confirmed
+            then pure $ Right $ cmdInfo "Delete cancelled"
+            else do
+              result <- deleteStory @{env} sid
+              pure $ case result of
+                Left err  => Right $ cmdError err
+                Right _   => Right $ cmdOk "Story deleted" "deleted"
 
 ||| Handler for ActWikiList.
 public export
@@ -622,17 +890,28 @@ executeAction ActProjectGet         = handleProjectGet
 executeAction (ActTaskList mstatus) = handleTaskList mstatus
 executeAction (ActTaskCreate subj)  = handleTaskCreate subj
 executeAction (ActTaskGet tid)      = handleTaskGet tid
+executeAction (ActTaskUpdate tid subj desc stat) = handleTaskUpdate tid subj desc stat
+executeAction (ActTaskDelete tid)   = handleTaskDelete tid
 executeAction (ActTaskStatus tid st) = handleTaskStatus tid st
 executeAction (ActTaskComment tid txt) = handleTaskComment tid txt
 executeAction ActEpicList           = handleEpicList
 executeAction (ActEpicGet eid)      = handleEpicGet eid
+executeAction (ActEpicCreate subj d s) = handleEpicCreate subj d s
+executeAction (ActEpicUpdate eid subj d s) = handleEpicUpdate eid subj d s
+executeAction (ActEpicDelete eid)   = handleEpicDelete eid
 executeAction ActSprintList         = handleSprintList
 executeAction ActSprintShow         = handleSprintShow
 executeAction (ActSprintSet sid)    = handleSprintSet sid
 executeAction ActIssueList          = handleIssueList
 executeAction (ActIssueGet iid)     = handleIssueGet iid
+executeAction (ActIssueCreate subj d p s t) = handleIssueCreate subj d p s t
+executeAction (ActIssueUpdate iid subj d t) = handleIssueUpdate iid subj d t
+executeAction (ActIssueDelete iid)  = handleIssueDelete iid
 executeAction ActStoryList          = handleStoryList
 executeAction (ActStoryGet sid)     = handleStoryGet sid
+executeAction (ActStoryCreate subj d m) = handleStoryCreate subj d m
+executeAction (ActStoryUpdate sid subj d m) = handleStoryUpdate sid subj d m
+executeAction (ActStoryDelete sid)  = handleStoryDelete sid
 executeAction ActWikiList           = handleWikiList
 executeAction (ActWikiGet wid)      = handleWikiGet wid
 executeAction (ActResolve ref)      = handleResolve ref

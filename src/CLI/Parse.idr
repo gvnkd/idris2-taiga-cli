@@ -277,6 +277,15 @@ parseArgs rawArgs =
          Left  e              => Left e
          Right (args, st')    => Right $ MkParseResult args st'.base
 
+||| Scan a list of tokens for `--flag value` and return the value.
+||| If the flag appears without a following value, returns Nothing.
+public export
+findFlag : String -> List String -> Maybe String
+findFlag _ [] = Nothing
+findFlag _ [_] = Nothing
+findFlag key (a :: b :: rest) =
+  if a == key then Just b else findFlag key (b :: rest)
+
 ------------------------------------------------------------------------------
 -- Subcommand Parser
 ------------------------------------------------------------------------------
@@ -311,25 +320,63 @@ parseAction ("task" :: "list" :: rest) =
     _                => Left "usage: task list [--status STATUS]"
 parseAction ("task" :: "create" :: subj :: _) = Right $ ActTaskCreate subj
 parseAction ("task" :: "get" :: ident :: _) = Right $ ActTaskGet ident
+parseAction ("task" :: "update" :: ident :: rest) =
+  let mSubj := findFlag "--subject" rest
+      mDesc := findFlag "--description" rest
+      mStat := findFlag "--status" rest
+   in Right $ ActTaskUpdate ident mSubj mDesc mStat
+parseAction ("task" :: "delete" :: ident :: _) = Right $ ActTaskDelete ident
 parseAction ("task" :: "status" :: ident :: stStr :: _) =
   case readNat64 stStr of
     Right st  => Right $ ActTaskStatus ident st
     Left _    => Left "usage: task status <id-or-ref> <status-id>"
 parseAction ("task" :: "comment" :: ident :: text :: _) = Right $ ActTaskComment ident text
-parseAction ("task" :: _)              = Left "usage: task {list|create <subject>|get <id-or-ref>|status <id-or-ref> <status>|comment <id-or-ref> <text>}"
+parseAction ("task" :: _)              = Left "usage: task {list|create <subject>|get <id-or-ref>|update <id-or-ref> [--subject S] [--description D] [--status ST]|delete <id-or-ref>|status <id-or-ref> <status>|comment <id-or-ref> <text>}"
 parseAction ("epic" :: "list" :: _)    = Right ActEpicList
 parseAction ("epic" :: "get" :: ident :: _) = Right $ ActEpicGet ident
-parseAction ("epic" :: _)              = Left "usage: epic {list|get <id-or-ref>}"
+parseAction ("epic" :: "create" :: subj :: rest) =
+  let mDesc   := findFlag "--description" rest
+      mStatus := findFlag "--status" rest
+   in Right $ ActEpicCreate subj mDesc mStatus
+parseAction ("epic" :: "update" :: ident :: rest) =
+  let mSubj := findFlag "--subject" rest
+      mDesc := findFlag "--description" rest
+      mStat := findFlag "--status" rest
+   in Right $ ActEpicUpdate ident mSubj mDesc mStat
+parseAction ("epic" :: "delete" :: ident :: _) = Right $ ActEpicDelete ident
+parseAction ("epic" :: _)              = Left "usage: epic {list|get <id-or-ref>|create <subject> [--description D] [--status ST]|update <id-or-ref> [--subject S] [--description D] [--status ST]|delete <id-or-ref>}"
 parseAction ("sprint" :: "list" :: _)  = Right ActSprintList
 parseAction ("sprint" :: "show" :: _)  = Right ActSprintShow
 parseAction ("sprint" :: "set" :: ident :: _) = Right $ ActSprintSet ident
 parseAction ("sprint" :: _)            = Left "usage: sprint {list|show|set <id-or-ref>}"
-parseAction ("issue" :: "list" :: _)   = Right ActIssueList
-parseAction ("issue" :: "get" :: ident :: _) = Right $ ActIssueGet ident
-parseAction ("issue" :: _)             = Left "usage: issue {list|get <id-or-ref>}"
 parseAction ("story" :: "list" :: _)   = Right ActStoryList
 parseAction ("story" :: "get" :: ident :: _) = Right $ ActStoryGet ident
-parseAction ("story" :: _)             = Left "usage: story {list|get <id-or-ref>}"
+parseAction ("story" :: "create" :: subj :: rest) =
+  let mDesc := findFlag "--description" rest
+      mMs   := findFlag "--milestone" rest
+   in Right $ ActStoryCreate subj mDesc mMs
+parseAction ("story" :: "update" :: ident :: rest) =
+  let mSubj := findFlag "--subject" rest
+      mDesc := findFlag "--description" rest
+      mMs   := findFlag "--milestone" rest
+   in Right $ ActStoryUpdate ident mSubj mDesc mMs
+parseAction ("story" :: "delete" :: ident :: _) = Right $ ActStoryDelete ident
+parseAction ("story" :: _)             = Left "usage: story {list|get <id-or-ref>|create <subject> [--description D] [--milestone M]|update <id-or-ref> [--subject S] [--description D] [--milestone M]|delete <id-or-ref>}"
+parseAction ("issue" :: "list" :: _)   = Right ActIssueList
+parseAction ("issue" :: "get" :: ident :: _) = Right $ ActIssueGet ident
+parseAction ("issue" :: "create" :: subj :: rest) =
+  let mDesc := findFlag "--description" rest
+      mPrio := findFlag "--priority" rest
+      mSev  := findFlag "--severity" rest
+      mType := findFlag "--type" rest
+   in Right $ ActIssueCreate subj mDesc mPrio mSev mType
+parseAction ("issue" :: "update" :: ident :: rest) =
+  let mSubj := findFlag "--subject" rest
+      mDesc := findFlag "--description" rest
+      mType := findFlag "--type" rest
+   in Right $ ActIssueUpdate ident mSubj mDesc mType
+parseAction ("issue" :: "delete" :: ident :: _) = Right $ ActIssueDelete ident
+parseAction ("issue" :: _)             = Left "usage: issue {list|get <id-or-ref>|create <subject> [--description D] [--priority P] [--severity S] [--type T]|update <id-or-ref> [--subject S] [--description D] [--type T]|delete <id-or-ref>}"
 parseAction ("wiki" :: "list" :: _)    = Right ActWikiList
 parseAction ("wiki" :: "get" :: ident :: _) = Right $ ActWikiGet ident
 parseAction ("wiki" :: _)              = Left "usage: wiki {list|get <id-or-ref>}"
