@@ -1,4 +1,4 @@
-Let's switch our approach to use a stateful state, like in Terraform workspaces. The app state should be stored in the `./taiga` directory. Main interfaces:
+Let's switch our approach to use a stateful state, like in Terraform workspaces. The app state should be stored in the `./.taiga` directory. Main interfaces:
 - `taiga-cli init` // create a new state
 - `taiga-cli show` // print current state in useful form
 - `taiga-cli project set <project_name>` // switch active project

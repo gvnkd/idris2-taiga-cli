@@ -28,7 +28,7 @@ data Store
 
 ||| Base directory for a given store.
 storeDir : Store -> String
-storeDir WorkspaceStore     = "./taiga"
+storeDir WorkspaceStore     = "./.taiga"
 storeDir GlobalAuthStore    = "~/.local/share/taiga-cli/tokens"
 storeDir GlobalConfigStore  = "~/.local/share/taiga-cli"
 

@@ -15,7 +15,7 @@ import Taiga.Env
 
 %language ElabReflection
 
-||| Persistent workspace state stored in ./taiga/state.json.
+||| Persistent workspace state stored in ./.taiga/state.json.
 |||
 ||| SECURITY: This record intentionally contains NO auth fields.
 ||| Credentials are managed separately by AuthStore and never

@@ -71,7 +71,7 @@ usageSynopsis = "taiga-cli [OPTIONS] COMMAND"
 public export
 commandHelp : String -> Maybe String
 commandHelp "init"       = Just $ "init [BASE_URL]\n" ++
-                                "    Initialize workspace state in ./taiga/"
+                                "    Initialize workspace state in ./.taiga/"
 commandHelp "login"      = Just $ "login --user USERNAME --pass PASSWORD\n" ++
                                 "    Authenticate with Taiga and persist token."
 commandHelp "logout"     = Just $ "logout\n" ++

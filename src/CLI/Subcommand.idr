@@ -113,7 +113,7 @@ handleInit maybeBaseUrl = do
                     Nothing => "http://localhost:8000"
   ensureDir WorkspaceStore
   _ <- saveState (defaultState baseUrl)
-  pure $ Right $ cmdInfo ("Initialized taiga state in ./taiga/ (base: " ++ baseUrl ++ ")")
+  pure $ Right $ cmdInfo ("Initialized taiga state in ./.taiga/ (base: " ++ baseUrl ++ ")")
 
 ||| Handler for ActLogin.
 public export

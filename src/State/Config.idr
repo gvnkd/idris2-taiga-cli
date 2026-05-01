@@ -1,7 +1,7 @@
 ||| Static Configuration.
 |||
 ||| Split between global config (~/.local/share/taiga-cli/config.json)
-||| and workspace config (./taiga/config.json).
+||| and workspace config (./.taiga/config.json).
 module State.Config
 
 import JSON.Derive
@@ -24,7 +24,7 @@ record GlobalConfig where
 
 %runElab derive "GlobalConfig" [Show, ToJSON, FromJSON]
 
-||| Per-project config stored in ./taiga/config.json
+||| Per-project config stored in ./.taiga/config.json
 public export
 record WorkspaceConfig where
   constructor MkWorkspaceConfig

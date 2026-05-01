@@ -53,13 +53,13 @@ nix develop --command run
 
 ### Subcommand Mode (Stateful)
 
-The new subcommand mode maintains workspace state in `./taiga/` and authenticates via `~/.local/share/taiga-cli/`.
+The new subcommand mode maintains workspace state in `./.taiga/` and authenticates via `~/.local/share/taiga-cli/`.
 
 ```shell
 # Initialize workspace state
 taiga-cli init http://127.0.0.1:8000/api/v1
 
-# Authenticate (token stored in global auth dir, NOT in ./taiga/)
+# Authenticate (token stored in global auth dir, NOT in ./.taiga/)
 taiga-cli login --user admin --pass secretpassword
 
 # Switch project context
@@ -125,10 +125,10 @@ echo '{"cmd":"create-task","args":"{\"project\":\"backend\",\"subject\":\"Fix au
 | Data Type | Storage Location | Safe to commit |
 |-----------|-------------------|----------------|
 | **Auth tokens, refresh tokens** | `~/.local/share/taiga-cli/tokens/` | No |
-| **Workspace state** (active project, base URL) | `./taiga/state.json` | Yes |
-| **Config** (output format prefs) | `./taiga/config.json` | Yes |
+| **Workspace state** (active project, base URL) | `./.taiga/state.json` | Yes |
+| **Config** (output format prefs) | `./.taiga/config.json` | Yes |
 
-The workspace state (`AppSt`) has no auth fields — it's structurally impossible to persist a token to `./taiga/`. Auth is resolved at runtime by looking up the instance hash of the base URL in the global tokens directory.
+The workspace state (`AppSt`) has no auth fields — it's structurally impossible to persist a token to `./.taiga/`. Auth is resolved at runtime by looking up the instance hash of the base URL in the global tokens directory.
 
 ## JSON Protocol
 
@@ -344,7 +344,7 @@ HTTP requests are performed by shelling out to `curl` via `System.run`, avoiding
 4. **OCC-aware writes** — every mutation requires `version`; tool returns updated entity
 5. **Fail loudly** — structured errors with `err` code + human `msg`
 6. **Deterministic output** — same input always produces same output shape
-7. **Security boundary** — workspace state (`./taiga/`) never contains credentials
+7.   **Security boundary** — workspace state (`./.taiga/`) never contains credentials
 8. **Dual output** — every command produces human-readable text by default, JSON with `--json`
 
 ## Architecture
