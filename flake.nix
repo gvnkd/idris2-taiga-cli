@@ -131,6 +131,9 @@
               (writeShellScriptBin "taiga-cli" ''
                 exec ./build/exec/taiga-cli "$@"
               '')
+              (writeShellScriptBin "tcli" ''
+                exec ./build/exec/taiga-cli "$@"
+              '')
             ]);
         };
       }
