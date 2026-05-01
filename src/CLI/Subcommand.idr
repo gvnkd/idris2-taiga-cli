@@ -37,6 +37,7 @@ import Data.List
 import Data.String
 import System
 
+import Control.Monad.Error.Either
 %foreign "C:isatty,libc"
 prim__isatty : Int -> PrimIO Int
 
@@ -344,58 +345,26 @@ callToResult msg action = do
 -- AppM Monad - eliminates nested Either boilerplate in handlers
 ------------------------------------------------------------------------------
 
-||| Monadic wrapper around IO (Either String a) so that error propagation
-||| is automatic instead of manual nested case chains.
-public export
-record AppM (a : Type) where
-  constructor MkAppM
-  run : IO (Either String a)
+||| Monadic wrapper around IO (Either String a) using EitherT from base.
+AppM : Type -> Type
+AppM a = EitherT String IO a
 
 public export
 runAppM : AppM a -> IO (Either String a)
-runAppM app = app.run
+runAppM = runEitherT
 
 public export
 liftIOEither : IO (Either String a) -> AppM a
-liftIOEither io = MkAppM io
+liftIOEither = MkEitherT
 
 ||| Lift any raw IO action into AppM, returning the result directly.
 public export
 liftRawIO : IO a -> AppM a
-liftRawIO act = MkAppM $ map Right act
+liftRawIO = lift
 
 public export
 appFail : String -> AppM a
-appFail err = MkAppM $ pure $ Left err
-
-public export
-appPure : Either String a -> AppM a
-appPure either = MkAppM $ pure either
-
-||| Functor instance for AppM.
-public export
-Functor AppM where
-  map f (MkAppM io) = MkAppM $ map (map f) io
-
-||| Applicative instance for AppM.
-public export
-Applicative AppM where
-  pure val       = MkAppM $ pure $ Right val
-  (MkAppM mf) <*> (MkAppM mv) = MkAppM $ do
-    f <- mf
-    v <- mv
-    pure $ case (f, v) of
-      (Right g, Right x) => Right (g x)
-      _                  => Left "internal"
-
-||| Monad instance for AppM.
-public export
-Monad AppM where
-  (MkAppM mx) >>= f = MkAppM $ do
-    ex <- mx
-    case ex of
-      Left err  => pure $ Left err
-      Right val => run (f val)
+appFail err = MkEitherT $ pure $ Left err
 
 ||| Extract project-scoped environment: load state, resolve active project,
 ||| and authenticate. Returns (ApiEnv, Nat64Id).
