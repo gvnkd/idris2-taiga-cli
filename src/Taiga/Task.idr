@@ -106,14 +106,16 @@ parameters {auto env : ApiEnv}
   listTasks :
        (project : Maybe String)
     -> (story : Maybe Nat64Id)
+    -> (status : Maybe String)
     -> (page : Maybe Bits32)
     -> (pageSize : Maybe Bits32)
     -> {auto _ : HasIO io}
     -> io (Either String (List TaskSummary))
-  listTasks project story page pageSize = do
+  listTasks project story mstatus page pageSize = do
     let opts := concat $ catMaybes
                    [ map (\p => [("project", p)]) project
                    , map (\s => [("userstory", showId s)]) story
+                   , map (\s => [("status", s)]) mstatus
                    , map (\p => [("page", show p)]) page
                    , map (\s => [("page_size", show s)]) pageSize ]
         url  := buildUrl ["tasks"] opts env.base

@@ -134,48 +134,51 @@ authPatch :
   -> io HttpResponse
 authPatch env url body = httpPatch url (Just env.token) body
 
-||| Parse an HTTP response as JSON on a specific status code.
-||| Returns `Right` with the decoded value if the status matches,
-||| otherwise returns `Left` with an error message.
+||| Generic HTTP response handler: check status, then apply a function.
 public export
-expectJson :
-     FromJSON a =>
-     HasIO io =>
-     (resp : HttpResponse) ->
-     (okStatus : Bits16) ->
-     (errMsg   : String) ->
-     io (Either String a)
-expectJson resp okStatus errMsg =
+expectWith :
+     HasIO io
+  => (resp : HttpResponse)
+  -> (okStatus : Bits16)
+  -> (errMsg : String)
+  -> (HttpResponse -> Either String a)
+  -> io (Either String a)
+expectWith resp okStatus errMsg f =
   pure $ if resp.status.code == okStatus
-           then decodeEither resp.body
+           then f resp
            else Left $ errMsg ++ " failed with status "
                          ++ show resp.status.code
 
+||| Parse an HTTP response as JSON on a specific status code.
+public export
+expectJson :
+     FromJSON a
+  => HasIO io
+  => (resp : HttpResponse)
+  -> (okStatus : Bits16)
+  -> (errMsg : String)
+  -> io (Either String a)
+expectJson resp okStatus errMsg =
+  expectWith resp okStatus errMsg (decodeEither . .body)
+
 ||| Check an HTTP response for a specific status code without parsing JSON.
-||| Returns `Right ()` on match, otherwise `Left` with an error message.
 public export
 expectOk :
-     HasIO io =>
-     (resp : HttpResponse) ->
-     (okStatus : Bits16) ->
-     (errMsg   : String) ->
-     io (Either String ())
+     HasIO io
+  => (resp : HttpResponse)
+  -> (okStatus : Bits16)
+  -> (errMsg : String)
+  -> io (Either String ())
 expectOk resp okStatus errMsg =
-  pure $ if resp.status.code == okStatus
-           then Right ()
-           else Left $ errMsg ++ " failed with status "
-                         ++ show resp.status.code
+  expectWith resp okStatus errMsg (const $ Right ())
 
 ||| Parse an HTTP response returning raw body on success.
 public export
 expectRaw :
-     HasIO io =>
-     (resp : HttpResponse) ->
-     (okStatus : Bits16) ->
-     (errMsg   : String) ->
-     io (Either String String)
+     HasIO io
+  => (resp : HttpResponse)
+  -> (okStatus : Bits16)
+  -> (errMsg : String)
+  -> io (Either String String)
 expectRaw resp okStatus errMsg =
-  pure $ if resp.status.code == okStatus
-           then Right resp.body
-           else Left $ errMsg ++ " failed with status "
-                         ++ show resp.status.code
+  expectWith resp okStatus errMsg (Right . .body)

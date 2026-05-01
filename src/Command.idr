@@ -296,7 +296,14 @@ data Command : Type where
   CmdDeleteStory : Nat64Id -> Command
 
   -- Write / mutation commands — tasks
-  CmdCreateTask     : String -> String -> Maybe Nat64Id -> Maybe String -> Maybe String -> Maybe Bits64 -> Command
+  CmdCreateTask :
+       String
+    -> String
+    -> Maybe Nat64Id
+    -> Maybe String
+    -> Maybe String
+    -> Maybe Bits64
+    -> Command
   CmdUpdateTask     : Nat64Id -> Maybe String -> Maybe String -> Maybe String -> Version -> Command
   CmdDeleteTask     : Nat64Id -> Command
   CmdWatchTask      : Nat64Id -> Command
@@ -304,7 +311,14 @@ data Command : Type where
   CmdTaskComment    : Nat64Id -> String -> Version -> Command
 
   -- Write / mutation commands — issues
-  CmdCreateIssue : String -> String -> Maybe String -> Maybe String -> Maybe String -> Maybe String -> Command
+  CmdCreateIssue :
+       String
+    -> String
+    -> Maybe String
+    -> Maybe String
+    -> Maybe String
+    -> Maybe String
+    -> Command
   CmdUpdateIssue : Nat64Id -> Maybe String -> Maybe String -> Maybe String -> Maybe String -> Version -> Command
   CmdDeleteIssue : Nat64Id -> Command
 
@@ -336,7 +350,7 @@ private dispatchLogin' :
 dispatchLogin' _ Nothing =
   pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchLogin' creds (Just baseUrl) =
-  Prelude.map (wrapResult encode) (login baseUrl creds)
+  map (wrapResult encode) (login baseUrl creds)
 
 ||| Helper: dispatch refresh (no auth needed, just base URL).
 private dispatchRefresh' :
@@ -345,11 +359,11 @@ private dispatchRefresh' :
 dispatchRefresh' _ Nothing =
   pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
 dispatchRefresh' refreshTok (Just baseUrl) =
-  Prelude.map (wrapResult encode) (refreshToken baseUrl refreshTok)
+  map (wrapResult encode) (refreshToken baseUrl refreshTok)
 
 ||| Helper: decode JSON string into type a, then construct Command.
 private parseCmdArgs : FromJSON a => (a -> Command) -> String -> Either String Command
-parseCmdArgs fn = Prelude.map fn . decodeEither
+parseCmdArgs fn = map fn . decodeEither
 
 private mkRefreshCmd        : RefreshArgs -> Command
 mkRefreshCmd r              = CmdRefresh r.refresh
@@ -412,17 +426,20 @@ private mkCreateEpicCmd     : CreateEpicArgs -> Command
 mkCreateEpicCmd a           = CmdCreateEpic a.project a.subject a.description a.status
 
 private mkUpdateEpicCmd     : UpdateEpicArgs -> Command
-mkUpdateEpicCmd a           = CmdUpdateEpic (MkNat64Id a.id) a.subject a.description a.status (MkVersion a.version)
+mkUpdateEpicCmd a =
+  CmdUpdateEpic (MkNat64Id a.id) a.subject a.description a.status (MkVersion a.version)
 
 private mkDeleteEpicCmd     : Nat64Args -> Command
 mkDeleteEpicCmd a           = CmdDeleteEpic (MkNat64Id a.id)
 
 private mkCreateStoryCmd    : CreateStoryArgs -> Command
-mkCreateStoryCmd a          = CmdCreateStory a.project a.subject a.description (map MkNat64Id a.milestone)
+mkCreateStoryCmd a =
+  CmdCreateStory a.project a.subject a.description (map MkNat64Id a.milestone)
 
 
 private mkUpdateStoryCmd    : UpdateStoryArgs -> Command
-mkUpdateStoryCmd a          = CmdUpdateStory (MkNat64Id a.id) a.subject a.description a.milestone (MkVersion a.version)
+mkUpdateStoryCmd a =
+  CmdUpdateStory (MkNat64Id a.id) a.subject a.description a.milestone (MkVersion a.version)
 
 private mkDeleteStoryCmd    : Nat64Args -> Command
 mkDeleteStoryCmd a          = CmdDeleteStory (MkNat64Id a.id)
@@ -432,7 +449,8 @@ mkCreateTaskCmd a           =
   CmdCreateTask a.project a.subject (map MkNat64Id a.story) a.description a.status a.milestone
 
 private mkUpdateTaskCmd     : UpdateTaskArgs -> Command
-mkUpdateTaskCmd a           = CmdUpdateTask (MkNat64Id a.id) a.subject a.description a.status (MkVersion a.version)
+mkUpdateTaskCmd a =
+  CmdUpdateTask (MkNat64Id a.id) a.subject a.description a.status (MkVersion a.version)
 
 private mkDeleteTaskCmd     : Nat64Args -> Command
 mkDeleteTaskCmd a           = CmdDeleteTask (MkNat64Id a.id)
@@ -447,10 +465,12 @@ private mkTaskCommentCmd    : TaskCommentArgs -> Command
 mkTaskCommentCmd a          = CmdTaskComment (MkNat64Id a.id) a.text (MkVersion a.version)
 
 private mkCreateIssueCmd    : CreateIssueArgs -> Command
-mkCreateIssueCmd a          = CmdCreateIssue a.project a.subject a.description a.priority a.severity a.type
+mkCreateIssueCmd a =
+  CmdCreateIssue a.project a.subject a.description a.priority a.severity a.type
 
 private mkUpdateIssueCmd    : UpdateIssueArgs -> Command
-mkUpdateIssueCmd a          = CmdUpdateIssue (MkNat64Id a.id) a.subject a.description a.type a.status (MkVersion a.version)
+mkUpdateIssueCmd a =
+  CmdUpdateIssue (MkNat64Id a.id) a.subject a.description a.type a.status (MkVersion a.version)
 
 private mkDeleteIssueCmd    : Nat64Args -> Command
 mkDeleteIssueCmd a          = CmdDeleteIssue (MkNat64Id a.id)
@@ -471,14 +491,16 @@ private mkListCommentsCmd   : EntityIdArgs -> Command
 mkListCommentsCmd a         = CmdListComments a.entity (MkNat64Id a.id)
 private mkCreateMilestoneCmd : CreateMilestoneArgs -> Command
 
-mkCreateMilestoneCmd a      = CmdCreateMilestone a.project a.name (toMaybe a.estimated_start) (toMaybe a.estimated_finish)
+mkCreateMilestoneCmd a =
+  CmdCreateMilestone a.project a.name (toMaybe a.estimated_start) (toMaybe a.estimated_finish)
   where
     toMaybe : String -> Maybe String
     toMaybe ""      = Nothing
     toMaybe str     = Just str
 
 private mkUpdateMilestoneCmd : UpdateMilestoneArgs -> Command
-mkUpdateMilestoneCmd a      = CmdUpdateMilestone (MkNat64Id a.id) a.name a.estimated_start a.estimated_finish (MkVersion a.version)
+mkUpdateMilestoneCmd a =
+  CmdUpdateMilestone (MkNat64Id a.id) a.name a.estimated_start a.estimated_finish (MkVersion a.version)
 
 private mkDeleteMilestoneCmd : Nat64Args -> Command
 mkDeleteMilestoneCmd a      = CmdDeleteMilestone (MkNat64Id a.id)
@@ -538,7 +560,7 @@ private dispatchWithEnvHelper :
    => io (Either String a)
   -> (a -> String)
   -> io Response
-dispatchWithEnvHelper action encFn = Prelude.map (wrapResult encFn) action
+dispatchWithEnvHelper action encFn = map (wrapResult encFn) action
 
 private dispatchWithEnv' :
       HasIO io
@@ -548,7 +570,8 @@ private dispatchWithEnv' :
 dispatchWithEnv' command env =
   case command of
         CmdMe                                              => dispatchWithEnvHelper (me env.base env.token) encode
-        CmdListProjects member                             => dispatchWithEnvHelper (listProjects @{env} member Nothing Nothing) encode
+        CmdListProjects member                             =>
+          dispatchWithEnvHelper (listProjects @{env} member Nothing Nothing) encode
         CmdGetProject (Just id) _                          => dispatchWithEnvHelper (getProjectById @{env} id) encode
         CmdGetProject _ (Just slug)                        => dispatchWithEnvHelper (getProjectBySlug @{env} slug) encode
         CmdGetProject Nothing Nothing                      => pure $ Err $ MkErrorResponse False "bad_request" "Must provide id or slug"
@@ -558,7 +581,8 @@ dispatchWithEnv' command env =
         CmdListStories project                             => dispatchWithEnvHelper (listStories @{env} project Nothing Nothing) encode
         CmdGetStory (Just id)                             => dispatchWithEnvHelper (getStory @{env} id) encode
         CmdGetStory Nothing                               => pure $ Err $ MkErrorResponse False "bad_request" "No story ID provided"
-        CmdListTasks project                              => dispatchWithEnvHelper (listTasks @{env} project Nothing Nothing Nothing) encode
+        CmdListTasks project                              =>
+          dispatchWithEnvHelper (listTasks @{env} project Nothing Nothing Nothing Nothing) encode
         CmdGetTask (Just id)                              => dispatchWithEnvHelper (getTask @{env} id) encode
         CmdGetTask Nothing                                => pure $ Err $ MkErrorResponse False "bad_request" "No task ID provided"
         CmdListIssues project                             => dispatchWithEnvHelper (listIssues @{env} project Nothing Nothing) encode
@@ -571,30 +595,33 @@ dispatchWithEnv' command env =
         CmdListUsers project                              => dispatchWithEnvHelper (listUsers @{env} project) encode
         CmdListMemberships project                        => dispatchWithEnvHelper (listMemberships @{env} project) encode
         CmdListRoles project                              => dispatchWithEnvHelper (listRoles @{env} project) encode
-        CmdSearch project text                            => dispatchWithEnvHelper (search @{env} project text) Prelude.id
-        CmdResolve project ref                            => dispatchWithEnvHelper (resolve @{env} project ref) Prelude.id
+        CmdSearch project text                            => dispatchWithEnvHelper (search @{env} project text) id
+        CmdResolve project ref                            => dispatchWithEnvHelper (resolve @{env} project ref) id
         CmdCreateEpic p s d st                            => dispatchWithEnvHelper (createEpic @{env} p s d st) encode
         CmdUpdateEpic id sj d st v                        => dispatchWithEnvHelper (updateEpic @{env} id sj d st v) encode
         CmdDeleteEpic id                                  => dispatchWithEnvHelper (deleteEpic @{env} id) (const "deleted")
         CmdCreateStory p s d m                            => dispatchWithEnvHelper (createStory @{env} p s d m) encode
         CmdUpdateStory id sj d m v                        => dispatchWithEnvHelper (updateStory @{env} id sj d m v) encode
         CmdDeleteStory id                                 => dispatchWithEnvHelper (deleteStory @{env} id) (const "deleted")
-        CmdCreateTask p s st d ss ms                      => dispatchWithEnvHelper (createTask @{env} p s st d ss ms) encode
+        CmdCreateTask p s st d ss ms                      =>
+          dispatchWithEnvHelper (createTask @{env} p s st d ss ms) encode
         CmdUpdateTask id sj d st v                        => dispatchWithEnvHelper (updateTask @{env} id sj d st v) encode
         CmdDeleteTask id                                  => dispatchWithEnvHelper (deleteTask @{env} id) (const "deleted")
         CmdWatchTask tid                                  => dispatchWithEnvHelper (getTask @{env} tid) encode
         CmdChangeTaskStatus tid st v                      => dispatchWithEnvHelper (changeTaskStatus @{env} tid st v) encode
-        CmdTaskComment tid txt v                          => dispatchWithEnvHelper (taskComment @{env} tid txt v) Prelude.id
-        CmdCreateIssue p s d pr sv it                     => dispatchWithEnvHelper (createIssue @{env} p s d pr sv it) encode
+        CmdTaskComment tid txt v                          => dispatchWithEnvHelper (taskComment @{env} tid txt v) id
+        CmdCreateIssue p s d pr sv it                     =>
+          dispatchWithEnvHelper (createIssue @{env} p s d pr sv it) encode
         CmdUpdateIssue id sj d it st v                    => dispatchWithEnvHelper (updateIssue @{env} id sj d it st v) encode
         CmdDeleteIssue id                                 => dispatchWithEnvHelper (deleteIssue @{env} id) (const "deleted")
         CmdCreateWiki p sl c                              => dispatchWithEnvHelper (createWiki @{env} p sl c) encode
         CmdUpdateWiki id c sl v                           => dispatchWithEnvHelper (updateWiki @{env} id c sl v) encode
         CmdDeleteWiki id                                  => dispatchWithEnvHelper (deleteWiki @{env} id) (const "deleted")
-        CmdCreateMilestone p n es ef                      => dispatchWithEnvHelper (createMilestone @{env} p n es ef) encode
+        CmdCreateMilestone p n es ef                      =>
+          dispatchWithEnvHelper (createMilestone @{env} p n es ef) encode
         CmdUpdateMilestone id n es ef v                   => dispatchWithEnvHelper (updateMilestone @{env} id n es ef v) encode
         CmdDeleteMilestone id                             => dispatchWithEnvHelper (deleteMilestone @{env} id) (const "deleted")
-        CmdComment e eid t                                => dispatchWithEnvHelper (addComment @{env} e eid t 0) Prelude.id
+        CmdComment e eid t                                => dispatchWithEnvHelper (addComment @{env} e eid t 0) id
         CmdListComments e eid                             => dispatchWithEnvHelper (listHistory @{env} e eid) encode
         _                                                 => pure $ Err $ MkErrorResponse False "internal" "Unreachable"
 

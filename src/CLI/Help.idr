@@ -5,6 +5,7 @@
 module CLI.Help
 
 import CLI.Args
+import Data.String
 
 ||| Print the full usage message to stdout.
 public export

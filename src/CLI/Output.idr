@@ -33,15 +33,9 @@ ToJSON CmdResult where
 
 encodeCmdResult : CmdResult -> String
 encodeCmdResult cr =
-  let header := encode cr
-      stripped := go (unpack header) ""
-   in "{" ++ stripped ++ ",\"payload\":" ++ cr.payload ++ "}"
-
-  where
-    go : List Char -> String -> String
-    go []        acc = acc
-    go ('}' :: _) acc = acc
-    go (c   :: _) acc = go [] (acc ++ pack [c])
+  "{\"status\":" ++ show cr.status
+    ++ ",\"message\":" ++ JSON.ToJSON.encode cr.message
+    ++ ",\"payload\":" ++ cr.payload ++ "}"
 
 ||| Convenience constructor for success.
 public export

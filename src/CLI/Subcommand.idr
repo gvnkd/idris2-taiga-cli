@@ -35,6 +35,7 @@ import Taiga.History
 import Taiga.Search
 import Taiga.Status
 import Data.List
+import Data.Maybe
 import Data.String
 import System
 
@@ -62,17 +63,6 @@ confirmDelete entityDesc = do
       pure (trim res == "yes")
 
 %language ElabReflection
-
-||| Attempt to parse a string as Bits64.  Returns Nothing on invalid
-||| input.
-private
-readNat : String -> Maybe Bits64
-readNat s =
-  let n := cast {to = Integer} s in
-  if s == "0" then Just 0
-  else if n == 0 then Nothing
-  else if n < 0 then Nothing
-  else Just $ cast n
 
 ||| Description of what the user wants to do.
 public export
@@ -175,35 +165,12 @@ resolveRef ref = do
   env  <- resolveApiEnv
   slug <- getProjectSlug env st
   jsonStr <- liftIOEither $ resolve @{env} slug ref
-  case extractIdFromResolve jsonStr of
-    Nothing   => appFail $ "Ref " ++ ref ++ " not found in project"
-    Just pair => pure pair
-
-  where
-    ||| Extract entity type and numeric ID from a raw resolve JSON response.
-    ||| Ignores the "project" key and returns the first other key-value pair.
-    extractIdFromResolve : String -> Maybe (String, Nat64Id)
-    extractIdFromResolve s =
-      let pairs := forget $ split (== ',') s
-          cleanPairs := map cleanPair pairs
-       in findId cleanPairs
-      where
-        cleanPair : String -> String
-        cleanPair p = trim (pack (filter (\c => c /= '"') (unpack p)))
-
-        findId : List String -> Maybe (String, Nat64Id)
-        findId [] = Nothing
-        findId (p :: ps) =
-          case break (== ':') (unpack p) of
-            (keyChars, ':' :: valChars) =>
-              let key := trim (pack (filter (\c => c /= '{' && c /= '"') keyChars))
-                  val := trim (pack (filter (\c => c /= '}' && c /= '"' && c /= ' ') valChars))
-               in if key == "project"
-                    then findId ps
-                    else case readNat val of
-                           Just n  => Just (key, MkNat64Id n)
-                           Nothing => findId ps
-            _ => findId ps
+  case decodeEither {a = ResolveResponse} jsonStr of
+    Left _    => appFail $ "Invalid resolver response for ref " ++ ref
+    Right res =>
+      case extractEntityFromResolve res of
+        Nothing   => appFail $ "Ref " ++ ref ++ " not found in project"
+        Just pair => pure pair
 
 ||| Fallback: parse a string as a raw database ID.
 private
@@ -225,49 +192,40 @@ resolveToId s =
 ||| Resolve an identifier constrained to a specific entity type.
 ||| If the ref resolves to a different entity type, falls back to raw ID.
 public export
-resolveToIdForType : String -> String -> AppM Nat64Id
-resolveToIdForType expectedType s =
-  catchE
-    (do (entityType, nid) <- resolveRef s
-        if entityType == expectedType
-          then pure nid
-          else fallbackToRawId s)
-    (\_ => fallbackToRawId s)
-
-||| Map user-friendly entity name to the key used by the Taiga resolver API.
-private
-resolverEntityKey : String -> Maybe String
-resolverEntityKey "task"   = Just "task"
-resolverEntityKey "issue"  = Just "issue"
-resolverEntityKey "story"  = Just "us"
-resolverEntityKey "wiki"   = Just "wiki"
-resolverEntityKey _        = Nothing
+resolveToIdForType : EntityKind -> String -> AppM Nat64Id
+resolveToIdForType expectedKind s =
+  let expectedKey = resolverKey expectedKind
+   in catchE
+        (do (entityType, nid) <- resolveRef s
+            if entityType == expectedKey
+              then pure nid
+              else fallbackToRawId s)
+        (\_ => fallbackToRawId s)
 
 ||| Entity-specific resolvers.
-||| Note: the Taiga resolver API uses "us" (not "userstory") for user stories.
 public export
 resolveTaskId      : String -> AppM Nat64Id
-resolveTaskId      = resolveToIdForType "task"
+resolveTaskId      = resolveToIdForType TaskK
 
 public export
 resolveEpicId      : String -> AppM Nat64Id
-resolveEpicId      = resolveToIdForType "epic"
+resolveEpicId      = resolveToIdForType EpicK
 
 public export
 resolveStoryId     : String -> AppM Nat64Id
-resolveStoryId     = resolveToIdForType "us"
+resolveStoryId     = resolveToIdForType StoryK
 
 public export
 resolveIssueId     : String -> AppM Nat64Id
-resolveIssueId     = resolveToIdForType "issue"
+resolveIssueId     = resolveToIdForType IssueK
 
 public export
 resolveWikiId      : String -> AppM Nat64Id
-resolveWikiId      = resolveToIdForType "wiki"
+resolveWikiId      = resolveToIdForType WikiK
 
 public export
 resolveMilestoneId : String -> AppM Nat64Id
-resolveMilestoneId = resolveToIdForType "milestone"
+resolveMilestoneId = resolveToIdForType MilestoneK
 
 ||| Fetch project details for status resolution.
 ||| Uses the cached project if available, otherwise fetches from API.
@@ -367,17 +325,8 @@ handleLogin : String -> Maybe String -> IO (Either String CmdResult)
 private
 loginIO : String -> Maybe String -> IO (Either String CmdResult)
 loginIO user mpass = do
-  password <- case mpass of
-    Just p => do
-      putStrLn ""
-      putStrLn "WARNING: Passing passwords via command line arguments is insecure."
-      putStrLn "         The password may be visible in shell history and process listings."
-      putStrLn "         Consider using: taiga-cli login --user USER"
-      putStrLn "         and typing or piping the password when prompted."
-      putStrLn ""
-      pure p
-    Nothing => readPassword
-  let creds := MkCredentials user password
+  password <- getPassword mpass
+  let creds = MkCredentials user password
   st_e <- loadState
   case st_e of
     Left err  => pure $ Left err
@@ -386,6 +335,18 @@ loginIO user mpass = do
       case result of
         Left err  => pure $ Right $ cmdError ("Login failed: " ++ err)
         Right _   => pure $ Right $ cmdInfo "Authenticated successfully"
+
+  where
+    getPassword : Maybe String -> IO String
+    getPassword (Just p) = do
+      putStrLn ""
+      putStrLn "WARNING: Passing passwords via command line arguments is insecure."
+      putStrLn "         The password may be visible in shell history and process listings."
+      putStrLn "         Consider using: taiga-cli login --user USER"
+      putStrLn "         and typing or piping the password when prompted."
+      putStrLn ""
+      pure p
+    getPassword Nothing = readPassword
 
 handleLogin user mpass = runAppM $ liftIOEither $ loginIO user mpass
 
@@ -408,11 +369,15 @@ handleShow : IO (Either String CmdResult)
 showAux : AppM CmdResult
 showAux = do
   st <- liftIOEither loadState
-  let projId := case st.active_project of
-                   Nothing => "(none)"
-                   Just p  => show p.id
-      msg := "Base URL: " ++ st.base_url ++ "\nActive project: " ++ projId
-  pure $ cmdInfo msg
+  pure $ cmdInfo (formatShow st)
+
+  where
+    formatShow : AppSt -> String
+    formatShow st =
+      let projId := case st.active_project of
+                       Nothing => "(none)"
+                       Just p  => show p.id
+       in "Base URL: " ++ st.base_url ++ "\nActive project: " ++ projId
 
 handleShow = runAppM showAux
 
@@ -435,26 +400,23 @@ findProjectInList env slug = do
   list_e <- listProjects @{env} Nothing Nothing Nothing
   pure $ case list_e of
     Left _   => Nothing
-    Right ps => findId ps
-  where
-    findId : List ProjectSummary -> Maybe Nat64Id
-    findId [] = Nothing
-    findId (p :: ps) = if p.slug.slug == slug then Just p.id else findId ps
+    Right ps => map (.id) $ find (\p => p.slug.slug == slug) ps
 
 ||| Helper: build a detailed error message for project access denial.
 projectAccessError : String -> String
-projectAccessError ident =
-  "Cannot access project '" ++ ident ++ "' by slug.\n" ++
-  "\n" ++
-  "The project exists in your project list, but the slug-based lookup\n" ++
-  "endpoint requires full project membership. You may have only\n" ++
-  "public/view-level access.\n" ++
-  "\n" ++
-  "Try using the numeric project ID instead:\n" ++
-  "  tcli project set <number>\n" ++
-  "\n" ++
-  "To find the numeric ID, run:\n" ++
-  "  tcli project list"
+projectAccessError ident = unlines
+  [ "Cannot access project '" ++ ident ++ "' by slug."
+  , ""
+  , "The project exists in your project list, but the slug-based lookup"
+  , "endpoint requires full project membership. You may have only"
+  , "public/view-level access."
+  , ""
+  , "Try using the numeric project ID instead:"
+  , "  tcli project set <number>"
+  , ""
+  , "To find the numeric ID, run:"
+  , "  tcli project list"
+  ]
 
 ||| Handler for ActProjectSet.
 public export
@@ -515,13 +477,13 @@ handleProjectGet = runAppM projectGetAux
 public export
 handleTaskList : Maybe String -> IO (Either String CmdResult)
 
-taskListAux : AppM CmdResult
-taskListAux = do
+taskListAux : Maybe String -> AppM CmdResult
+taskListAux mStatus = do
   (env, pid) <- getProjectEnv
-  val <- liftIOEither $ listTasks @{env} (Just (show pid.id)) Nothing Nothing Nothing
+  val <- liftIOEither $ listTasks @{env} (Just (show pid.id)) Nothing mStatus Nothing Nothing
   pure $ cmdOk "Tasks" val
 
-handleTaskList maybeStatus = runAppM taskListAux
+handleTaskList maybeStatus = runAppM (taskListAux maybeStatus)
 
 ||| Handler for ActTaskCreate.
 public export
@@ -604,11 +566,11 @@ resolveUpdateStatus env entityType mStatusText mStatusId =
   case mStatusId of
     Just id => pure $ Just id
     Nothing =>
-      case mStatusText of
-        Nothing => pure Nothing
-        Just statusTxt => do
+      traverse
+        (\txt => do
           state <- liftIOEither loadState
-          map Just $ resolveStatus env state entityType statusTxt
+          resolveStatus env state entityType txt)
+        mStatusText
 
 ||| Handler for ActTaskUpdate.
 public export
@@ -619,8 +581,8 @@ taskUpdateAux ident mSubject mDesc mStatusText mStatusId = do
   tid <- resolveTaskId ident
   env  <- resolveApiEnv
   current <- liftIOEither $ getTask @{env} tid
-  let subj := case mSubject of Nothing => current.subject ; Just s => s
-      desc := case mDesc     of Nothing => current.description ; Just d => d
+  let subj = fromMaybe current.subject mSubject
+      desc = fromMaybe current.description mDesc
   stat <- resolveUpdateStatus env "task" mStatusText mStatusId
   val <- liftIOEither $ updateTask @{env} tid (Just subj) (Just desc) (map show stat) current.version
   pure $ cmdOk "Task updated" val
@@ -643,6 +605,43 @@ taskDeleteAux ident = do
       pure $ cmdOk "Task deleted" $ MkDeleteResult "task" tid.id
 
 handleTaskDelete ident = runAppM (taskDeleteAux ident)
+
+||| Handler for ActEpicDelete.
+public export
+handleEpicDelete : String -> IO (Either String CmdResult)
+
+epicDeleteAux : String -> AppM CmdResult
+epicDeleteAux ident = do
+  eid <- resolveEpicId ident
+  env  <- resolveApiEnv
+  confirmed <- liftRawIO $ confirmDelete ("epic " ++ ident)
+  if not confirmed
+    then pure $ cmdInfo "Delete cancelled"
+    else do
+      liftIOEither $ deleteEpic @{env} eid
+      pure $ cmdOk "Epic deleted" $ MkDeleteResult "epic" eid.id
+
+handleEpicDelete ident = runAppM (epicDeleteAux ident)
+
+||| Handler for ActEpicUpdate.
+public export
+handleEpicUpdate : String -> Maybe String -> Maybe String -> Maybe String -> Maybe Bits64 -> IO (Either String CmdResult)
+
+epicUpdateAux : String -> Maybe String -> Maybe String -> Maybe String -> Maybe Bits64 -> AppM CmdResult
+epicUpdateAux ident mSubject mDesc mStatusText mStatusId = do
+  eid <- resolveEpicId ident
+  env  <- resolveApiEnv
+  current <- liftIOEither $ getEpic @{env} eid
+  case current.version of
+    Nothing => appFail "Cannot update epic: no version available"
+    Just ver => do
+      let subj = fromMaybe current.subject mSubject
+          desc = fromMaybe current.description mDesc
+      stat <- resolveUpdateStatus env "epic" mStatusText mStatusId
+      val <- liftIOEither $ updateEpic @{env} eid (Just subj) (Just desc) (map show stat) ver
+      pure $ cmdOk "Epic updated" val
+
+handleEpicUpdate ident mSubject mDesc mStatusText mStatusId = runAppM (epicUpdateAux ident mSubject mDesc mStatusText mStatusId)
 
 ||| Handler for ActEpicList.
 public export
@@ -680,43 +679,6 @@ epicCreateAux subject mDesc mStatus = do
   pure $ cmdOk "Epic created" val
 
 handleEpicCreate subject mDesc mStatus = runAppM (epicCreateAux subject mDesc mStatus)
-
-||| Handler for ActEpicUpdate.
-public export
-handleEpicUpdate : String -> Maybe String -> Maybe String -> Maybe String -> Maybe Bits64 -> IO (Either String CmdResult)
-
-epicUpdateAux : String -> Maybe String -> Maybe String -> Maybe String -> Maybe Bits64 -> AppM CmdResult
-epicUpdateAux ident mSubject mDesc mStatusText mStatusId = do
-  eid <- resolveEpicId ident
-  env  <- resolveApiEnv
-  current <- liftIOEither $ getEpic @{env} eid
-  case current.version of
-    Nothing => appFail "Cannot update epic: no version available"
-    Just ver => do
-      let subj := case mSubject of Nothing => current.subject ; Just s => s
-          desc := case mDesc     of Nothing => current.description ; Just d => d
-      stat <- resolveUpdateStatus env "epic" mStatusText mStatusId
-      val <- liftIOEither $ updateEpic @{env} eid (Just subj) (Just desc) (map show stat) ver
-      pure $ cmdOk "Epic updated" val
-
-handleEpicUpdate ident mSubject mDesc mStatusText mStatusId = runAppM (epicUpdateAux ident mSubject mDesc mStatusText mStatusId)
-
-||| Handler for ActEpicDelete.
-public export
-handleEpicDelete : String -> IO (Either String CmdResult)
-
-epicDeleteAux : String -> AppM CmdResult
-epicDeleteAux ident = do
-  eid <- resolveEpicId ident
-  env  <- resolveApiEnv
-  confirmed <- liftRawIO $ confirmDelete ("epic " ++ ident)
-  if not confirmed
-    then pure $ cmdInfo "Delete cancelled"
-    else do
-      liftIOEither $ deleteEpic @{env} eid
-      pure $ cmdOk "Epic deleted" $ MkDeleteResult "epic" eid.id
-
-handleEpicDelete ident = runAppM (epicDeleteAux ident)
 
 ||| Handler for ActSprintList.
 public export
@@ -794,8 +756,8 @@ issueUpdateAux ident mSubject mDesc mType mStatusText mStatusId = do
   iid <- resolveIssueId ident
   env  <- resolveApiEnv
   current <- liftIOEither $ getIssue @{env} iid
-  let subj := case mSubject of Nothing => current.subject ; Just s => s
-      desc := case mDesc     of Nothing => current.description ; Just d => d
+  let subj = fromMaybe current.subject mSubject
+      desc = fromMaybe current.description mDesc
   stat <- resolveUpdateStatus env "issue" mStatusText mStatusId
   val <- liftIOEither $ updateIssue @{env} iid (Just subj) (Just desc) mType (map show stat) current.version
   pure $ cmdOk "Issue updated" val
@@ -888,7 +850,8 @@ handleStoryCreate : String -> Maybe String -> Maybe String -> IO (Either String 
 storyCreateAux : String -> Maybe String -> Maybe String -> AppM CmdResult
 storyCreateAux subject mDesc mMilestone = do
   (env, pid) <- getProjectEnv
-  val <- liftIOEither $ createStory @{env} (show pid.id) subject mDesc Nothing
+  let mMs = map MkNat64Id $ mMilestone >>= readNat
+  val <- liftIOEither $ createStory @{env} (show pid.id) subject mDesc mMs
   pure $ cmdOk "Story created" val
 
 handleStoryCreate subject mDesc mMilestone = runAppM (storyCreateAux subject mDesc mMilestone)
@@ -902,9 +865,9 @@ storyUpdateAux ident mSubject mDesc mMilestone _ _ = do
   sid <- resolveStoryId ident
   env  <- resolveApiEnv
   current <- liftIOEither $ getStory @{env} sid
-  let subj := case mSubject of Nothing => current.subject ; Just s => s
-      desc := case mDesc     of Nothing => current.description ; Just d => d
-      mMs  := case mMilestone of Nothing => Nothing ; Just ms => Just ms
+  let subj = fromMaybe current.subject mSubject
+      desc = fromMaybe current.description mDesc
+      mMs  = fromMaybe Nothing (map Just mMilestone)
   val <- liftIOEither $ updateStory @{env} sid (Just subj) (Just desc) mMs current.version
   pure $ cmdOk "Story updated" val
 
@@ -1007,29 +970,20 @@ sprintDeleteAux ident = do
 
 handleSprintDelete ident = runAppM (sprintDeleteAux ident)
 
-||| Map user-friendly entity name to Taiga API entity name.
-private
-apiEntityName : String -> Maybe String
-apiEntityName "task"   = Just "task"
-apiEntityName "issue"  = Just "issue"
-apiEntityName "story"  = Just "userstory"
-apiEntityName "wiki"   = Just "wiki"
-apiEntityName _        = Nothing
-
-||| Fetch an entity by type to get its version for comment operations.
+||| Fetch an entity by kind to get its version for comment operations.
 private
 fetchEntityVersion :
      ApiEnv
-  -> String
+  -> EntityKind
   -> Nat64Id
   -> IO (Either String Bits32)
-fetchEntityVersion env entity eid =
-  case entity of
-    "task"   => map (map (\t => t.version.version)) $ getTask @{env} eid
-    "issue"  => map (map (\i => i.version.version)) $ getIssue @{env} eid
-    "userstory" => map (map (\s => s.version.version)) $ getStory @{env} eid
-    "wiki"   => map (map (\w => w.version.version)) $ getWiki @{env} eid
-    _        => pure $ Left $ "Unknown entity type: " ++ entity
+fetchEntityVersion env kind eid =
+  case kind of
+    TaskK  => map (map (\t => t.version.version)) $ getTask @{env} eid
+    IssueK => map (map (\i => i.version.version)) $ getIssue @{env} eid
+    StoryK => map (map (\s => s.version.version)) $ getStory @{env} eid
+    WikiK  => map (map (\w => w.version.version)) $ getWiki @{env} eid
+    _      => pure $ Left "Unknown entity type for comments"
 
 ||| Handler for ActCommentAdd.
 public export
@@ -1037,14 +991,16 @@ handleCommentAdd : String -> String -> String -> IO (Either String CmdResult)
 
 commentAddAux : String -> String -> String -> AppM CmdResult
 commentAddAux entityName ident text = do
-  case (resolverEntityKey entityName, apiEntityName entityName) of
-    (Nothing, _)       => appFail $ "Unknown entity type: " ++ entityName ++ ". Use: task, issue, story, wiki"
-    (_, Nothing)       => appFail $ "Unknown entity type: " ++ entityName ++ ". Use: task, issue, story, wiki"
-    (Just rKey, Just entity) => do
-      eid <- resolveToIdForType rKey ident
+  case parseEntityKind entityName of
+    Nothing =>
+      appFail $ "Unknown entity type: " ++ entityName
+        ++ ". Use: task, issue, story, wiki"
+    Just kind => do
+      eid <- resolveToIdForType kind ident
       env  <- resolveApiEnv
-      ver <- liftIOEither $ fetchEntityVersion env entity eid
-      raw <- liftIOEither $ addComment @{env} entity eid text ver
+      ver <- liftIOEither $ fetchEntityVersion env kind eid
+      raw <- liftIOEither
+        $ addComment @{env} (apiEntityName kind) eid text ver
       pure $ cmdOkRaw "Comment added" raw
 
 handleCommentAdd entityName ident text = runAppM (commentAddAux entityName ident text)
@@ -1055,13 +1011,15 @@ handleCommentList : String -> String -> IO (Either String CmdResult)
 
 commentListAux : String -> String -> AppM CmdResult
 commentListAux entityName ident = do
-  case (resolverEntityKey entityName, apiEntityName entityName) of
-    (Nothing, _)       => appFail $ "Unknown entity type: " ++ entityName ++ ". Use: task, issue, story, wiki"
-    (_, Nothing)       => appFail $ "Unknown entity type: " ++ entityName ++ ". Use: task, issue, story, wiki"
-    (Just rKey, Just entity) => do
-      eid <- resolveToIdForType rKey ident
+  case parseEntityKind entityName of
+    Nothing =>
+      appFail $ "Unknown entity type: " ++ entityName
+        ++ ". Use: task, issue, story, wiki"
+    Just kind => do
+      eid <- resolveToIdForType kind ident
       env  <- resolveApiEnv
-      val <- liftIOEither $ listHistory @{env} entity eid
+      val <- liftIOEither
+        $ listHistory @{env} (apiEntityName kind) eid
       pure $ cmdOk "Comments" val
 
 handleCommentList entityName ident = runAppM (commentListAux entityName ident)
@@ -1078,23 +1036,21 @@ handleStatusList : String -> IO (Either String CmdResult)
 
 statusListAux : String -> AppM CmdResult
 statusListAux entityType = do
-  st   <- liftIOEither loadState
-  pid  <- liftEither $ getActiveProject st
-  env  <- resolveApiEnv
-  proj <- getProjectForStatus env st
-  let statuses := case entityType of
-                     "task"   => proj.task_statuses
-                     "issue"  => proj.issue_statuses
-                     "us"     => proj.us_statuses
-                     "epic"   => proj.epic_statuses
-                     _        => []
-      title := case entityType of
-                   "task"   => "Task statuses"
-                   "issue"  => "Issue statuses"
-                   "us"     => "Story statuses"
-                   "epic"   => "Epic statuses"
-                   _        => "Statuses"
-  pure $ cmdInfo (title ++ ":\n" ++ formatStatusList statuses)
+  case parseEntityKind entityType of
+    Nothing => pure $ cmdInfo "Unknown entity type"
+    Just kind => do
+      st   <- liftIOEither loadState
+      pid  <- liftEither $ getActiveProject st
+      env  <- resolveApiEnv
+      proj <- getProjectForStatus env st
+      let statuses = statusesOf proj kind
+          title = case kind of
+                    TaskK  => "Task statuses"
+                    IssueK => "Issue statuses"
+                    StoryK => "Story statuses"
+                    EpicK  => "Epic statuses"
+                    _      => "Statuses"
+      pure $ cmdInfo (title ++ ":\n" ++ formatStatusList statuses)
 
 handleStatusList entityType = runAppM (statusListAux entityType)
 

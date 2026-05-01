@@ -97,3 +97,86 @@ record EntityRef where
   subject : String
 
 %runElab derive "EntityRef" [Show,Eq,ToJSON,FromJSON]
+
+||| Tagged entity kinds for total dispatch.
+public export
+data EntityKind
+  = TaskK
+  | IssueK
+  | StoryK
+  | EpicK
+  | WikiK
+  | MilestoneK
+
+||| Map a user-friendly entity name to an EntityKind.
+public export
+parseEntityKind : String -> Maybe EntityKind
+parseEntityKind "task"      = Just TaskK
+parseEntityKind "issue"     = Just IssueK
+parseEntityKind "story"     = Just StoryK
+parseEntityKind "epic"      = Just EpicK
+parseEntityKind "wiki"      = Just WikiK
+parseEntityKind "milestone" = Just MilestoneK
+parseEntityKind "sprint"    = Just MilestoneK
+parseEntityKind _           = Nothing
+
+||| Resolver API key for an entity kind.
+public export
+resolverKey : EntityKind -> String
+resolverKey TaskK      = "task"
+resolverKey IssueK     = "issue"
+resolverKey StoryK     = "us"
+resolverKey EpicK      = "epic"
+resolverKey WikiK      = "wiki"
+resolverKey MilestoneK = "milestone"
+
+||| API entity name for an entity kind.
+public export
+apiEntityName : EntityKind -> String
+apiEntityName TaskK      = "task"
+apiEntityName IssueK     = "issue"
+apiEntityName StoryK     = "userstory"
+apiEntityName WikiK      = "wiki"
+apiEntityName MilestoneK = "milestone"
+apiEntityName EpicK      = "epic"
+
+||| Response from the Taiga resolver endpoint.
+public export
+record ResolveResponse where
+  constructor MkResolveResponse
+  project   : Maybe Bits64
+  task      : Maybe Bits64
+  issue     : Maybe Bits64
+  us        : Maybe Bits64
+  wiki      : Maybe Bits64
+  milestone : Maybe Bits64
+
+%runElab derive "ResolveResponse" [Show,Eq,ToJSON,FromJSON]
+
+||| Extract the first non-project entity ID from a resolver response.
+public export
+extractEntityFromResolve : ResolveResponse -> Maybe (String, Nat64Id)
+extractEntityFromResolve r =
+  go
+    [ ("task",)      <$> map MkNat64Id r.task
+    , ("issue",)     <$> map MkNat64Id r.issue
+    , ("story",)     <$> map MkNat64Id r.us
+    , ("wiki",)      <$> map MkNat64Id r.wiki
+    , ("milestone",) <$> map MkNat64Id r.milestone
+    ]
+  where
+    go : List (Maybe (String, Nat64Id)) -> Maybe (String, Nat64Id)
+    go [] = Nothing
+    go (Just p :: _) = Just p
+    go (Nothing :: ps) = go ps
+
+||| Attempt to parse a string as Bits64.
+||| Returns Nothing on invalid input.
+public export
+readNat : String -> Maybe Bits64
+readNat s =
+  let n := cast {to = Integer} s in
+  if s == "0" then Just 0
+  else if n == 0 then Nothing
+  else if n < 0 then Nothing
+  else Just $ cast n

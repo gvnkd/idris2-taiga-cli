@@ -18,18 +18,16 @@ import Data.String
 
 %language ElabReflection
 
-||| Attempt to parse a string as Bits64.  Returns Nothing on invalid input.
-private
-readNat : String -> Maybe Bits64
-readNat s =
-  let n := cast {to = Integer} s in
-  if s == "0" then Just 0
-  else if n == 0 then Nothing
-  else if n < 0 then Nothing
-  else Just $ cast n
+||| Get the status list for a given entity kind from a project.
+public export
+statusesOf : Project -> EntityKind -> List StatusInfo
+statusesOf p TaskK  = p.task_statuses
+statusesOf p IssueK = p.issue_statuses
+statusesOf p StoryK = p.us_statuses
+statusesOf p EpicK  = p.epic_statuses
+statusesOf _ _      = []
 
 ||| Resolve a status text (name or slug) to a numeric ID for a given entity type.
-||| The entity type should be one of: "task", "issue", "us", "epic".
 public export
 resolveStatusText :
      (env : ApiEnv)
@@ -38,20 +36,19 @@ resolveStatusText :
   -> (statusText : String)
   -> Either String Bits64
 resolveStatusText env project entityType statusText =
-  let statuses := case entityType of
-                    "task"  => project.task_statuses
-                    "issue" => project.issue_statuses
-                    "us"    => project.us_statuses
-                    "epic"  => project.epic_statuses
-                    _       => []
-      search := toLower statusText
-   in case find (\s => toLower s.name == search || toLower s.slug == search) statuses of
-        Just s  => Right s.id
-        Nothing =>
-          -- If the text is numeric, allow it as a raw ID
-          case readNat statusText of
-            Just n  => Right n
-            Nothing => Left $ "Status '" ++ statusText ++ "' not found for " ++ entityType
+  case parseEntityKind entityType of
+    Nothing =>
+      Left $ "Unknown entity type: " ++ entityType
+    Just kind =>
+      let statuses := statusesOf project kind
+          search := toLower statusText
+       in case find (\s => toLower s.name == search || toLower s.slug == search) statuses of
+           Just s  => Right s.id
+           Nothing =>
+             case readNat statusText of
+               Just n  => Right n
+               Nothing =>
+                 Left $ "Status '" ++ statusText ++ "' not found for " ++ entityType
 
 ||| Lookup a status name from an ID for display purposes.
 public export
@@ -61,10 +58,7 @@ lookupStatusName :
   -> (statusId : Bits64)
   -> Maybe String
 lookupStatusName project entityType statusId =
-  let statuses := case entityType of
-                    "task"  => project.task_statuses
-                    "issue" => project.issue_statuses
-                    "us"    => project.us_statuses
-                    "epic"  => project.epic_statuses
-                    _       => []
-   in map (.name) $ find (\s => s.id == statusId) statuses
+  case parseEntityKind entityType of
+    Nothing => Nothing
+    Just kind =>
+      map (.name) $ find (\s => s.id == statusId) (statusesOf project kind)

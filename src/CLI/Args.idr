@@ -71,7 +71,7 @@ data CLIArgs : Type where
 
   -- Comments / history
   ArgComment       : String -> Nat64Id -> String -> CLIArgs
-   ArgListComments  : String -> Nat64Id -> CLIArgs
+  ArgListComments  : String -> Nat64Id -> CLIArgs
 
   -- Task management
   ArgWatchTask     : Nat64Id -> CLIArgs
