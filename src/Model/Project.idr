@@ -2,7 +2,12 @@
 module Model.Project
 
 import JSON.Derive
+import JSON.ToJSON
+import JSON.FromJSON
+import JSON.Encoder
 import Model.Common
+import Model.Status
+import Data.List
 
 %language ElabReflection
 
@@ -16,6 +21,10 @@ record Project where
   description : String
   is_private : Bool
   created_date : DateTime
+  task_statuses : List StatusInfo
+  issue_statuses : List StatusInfo
+  us_statuses : List StatusInfo
+  epic_statuses : List StatusInfo
 
 %runElab derive "Project" [Show,Eq,ToJSON,FromJSON]
 

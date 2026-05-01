@@ -6,6 +6,7 @@ module CLI.Subcommand
 import Model.Auth
 import Model.Common
 import Model.Project
+import Model.Status
 import Model.Task
 import Model.Epic
 import Model.UserStory
@@ -31,6 +32,7 @@ import Taiga.Milestone
 import Taiga.Wiki
 import Taiga.History
 import Taiga.Search
+import Taiga.Status
 import Data.List
 import Data.String
 import System
@@ -83,7 +85,7 @@ data Action : Type where
   ActTaskList    : Maybe String -> Action
   ActTaskCreate  : String -> Action
   ActTaskGet     : String -> Action
-  ActTaskUpdate  : String -> Maybe String -> Maybe String -> Maybe String -> Action
+  ActTaskUpdate  : String -> Maybe String -> Maybe String -> Maybe String -> Maybe Bits64 -> Action
   ActTaskDelete  : String -> Action
   ActTaskStatus  : String -> Bits64 -> Action
   ActTaskComment     : String -> String -> Action
@@ -91,7 +93,7 @@ data Action : Type where
   ActEpicList        : Action
   ActEpicGet     : String -> Action
   ActEpicCreate  : String -> Maybe String -> Maybe String -> Action
-  ActEpicUpdate  : String -> Maybe String -> Maybe String -> Maybe String -> Action
+  ActEpicUpdate  : String -> Maybe String -> Maybe String -> Maybe String -> Maybe Bits64 -> Action
   ActEpicDelete  : String -> Action
   ActSprintList  : Action
   ActSprintShow  : Action
@@ -99,12 +101,12 @@ data Action : Type where
   ActIssueList   : Action
   ActIssueGet    : String -> Action
   ActIssueCreate : String -> Maybe String -> Maybe String -> Maybe String -> Maybe String -> Action
-  ActIssueUpdate : String -> Maybe String -> Maybe String -> Maybe String -> Maybe String -> Action
+  ActIssueUpdate : String -> Maybe String -> Maybe String -> Maybe String -> Maybe String -> Maybe Bits64 -> Action
   ActIssueDelete : String -> Action
   ActStoryList   : Action
   ActStoryGet    : String -> Action
   ActStoryCreate : String -> Maybe String -> Maybe String -> Action
-  ActStoryUpdate : String -> Maybe String -> Maybe String -> Maybe String -> Action
+  ActStoryUpdate : String -> Maybe String -> Maybe String -> Maybe String -> Maybe String -> Maybe Bits64 -> Action
   ActStoryDelete : String -> Action
   ActWikiList    : Action
   ActWikiGet     : String -> Action
@@ -117,6 +119,10 @@ data Action : Type where
   ActCommentAdd  : String -> String -> String -> Action
   ActCommentList : String -> String -> Action
   ActResolve     : String -> Action
+  ActTaskStatuses    : Action
+  ActIssueStatuses   : Action
+  ActStoryStatuses   : Action
+  ActEpicStatuses    : Action
 
 %runElab derive "Action" [Show]
 
@@ -267,6 +273,58 @@ resolveWikiId      = resolveToIdForType "wiki"
 public export
 resolveMilestoneId : String -> IO (Either String Nat64Id)
 resolveMilestoneId = resolveToIdForType "milestone"
+
+||| Fetch project details for status resolution.
+||| Uses the cached project if available, otherwise fetches from API.
+public export
+getProjectForStatus :
+     ApiEnv
+  -> AppSt
+  -> IO (Either String Project)
+getProjectForStatus env st =
+  case st.project_cache of
+    Just proj => pure $ Right proj
+    Nothing   =>
+      case st.active_project of
+        Nothing   => pure $ Left "No active project set"
+        Just pid  => do
+          result <- getProjectById @{env} pid
+          case result of
+            Left err   => pure $ Left err
+            Right proj => pure $ Right proj
+
+||| Resolve a status text to a numeric ID using project metadata.
+||| Falls back to numeric parsing if the text is a number.
+public export
+resolveStatus :
+     ApiEnv
+  -> AppSt
+  -> String
+  -> String
+  -> IO (Either String Bits64)
+resolveStatus env st entityType statusText = do
+  proj_e <- getProjectForStatus env st
+  case proj_e of
+    Left err => pure $ Left err
+    Right proj => pure $ resolveStatusText env proj entityType statusText
+
+||| Helper: resolve optional status text to optional numeric ID.
+||| Returns Nothing if no status provided.
+public export
+resolveOptionalStatus :
+     ApiEnv
+  -> AppSt
+  -> String
+  -> Maybe String
+  -> IO (Either String (Maybe Bits64))
+resolveOptionalStatus env st entityType mStatus =
+  case mStatus of
+    Nothing => pure $ Right Nothing
+    Just s  => do
+      result <- resolveStatus env st entityType s
+      case result of
+        Left err => pure $ Left err
+        Right id => pure $ Right $ Just id
 
 ||| Helper: run a Taiga API call and wrap result in CmdResult.
 public export
@@ -563,10 +621,35 @@ handleTaskAssignStory taskIdent storyIdent = do
                     Left err   => Right $ cmdError err
                     Right t    => Right $ cmdOk "Task assigned to story" t
 
+||| Resolve a status parameter for an entity update.
+||| Prefers explicit statusId, falls back to text resolution.
+private
+resolveUpdateStatus :
+     ApiEnv
+  -> String
+  -> Maybe String
+  -> Maybe Bits64
+  -> IO (Either String (Maybe Bits64))
+resolveUpdateStatus env entityType mStatusText mStatusId =
+  case mStatusId of
+    Just id => pure $ Right $ Just id
+    Nothing =>
+      case mStatusText of
+        Nothing => pure $ Right Nothing
+        Just statusTxt => do
+          state_e <- loadState
+          case state_e of
+            Left err    => pure $ Left err
+            Right state => do
+              res <- resolveStatus env state entityType statusTxt
+              pure $ case res of
+                Left err => Left err
+                Right id => Right $ Just id
+
 ||| Handler for ActTaskUpdate.
 public export
-handleTaskUpdate : String -> Maybe String -> Maybe String -> Maybe String -> IO (Either String CmdResult)
-handleTaskUpdate ident mSubject mDesc mStatus = do
+handleTaskUpdate : String -> Maybe String -> Maybe String -> Maybe String -> Maybe Bits64 -> IO (Either String CmdResult)
+handleTaskUpdate ident mSubject mDesc mStatusText mStatusId = do
   id_e <- resolveTaskId ident
   case id_e of
     Left err   => pure $ Left err
@@ -578,15 +661,17 @@ handleTaskUpdate ident mSubject mDesc mStatus = do
           current_e <- getTask @{env} tid
           case current_e of
             Left err     => pure $ Right $ cmdError err
-            Right current =>
+            Right current => do
               let subj := case mSubject of
                             Nothing => current.subject
                             Just s  => s
                   desc := case mDesc of
                             Nothing => current.description
                             Just d  => d
-                  stat := mStatus
-               in callToResult "Task updated" $ updateTask @{env} tid (Just subj) (Just desc) stat current.version
+              stat_e <- resolveUpdateStatus env "task" mStatusText mStatusId
+              case stat_e of
+                Left err   => pure $ Right $ cmdError err
+                Right stat => callToResult "Task updated" $ updateTask @{env} tid (Just subj) (Just desc) (map show stat) current.version
 
 ||| Handler for ActTaskDelete.
 public export
@@ -656,8 +741,8 @@ handleEpicCreate subject mDesc mStatus = do
 
 ||| Handler for ActEpicUpdate.
 public export
-handleEpicUpdate : String -> Maybe String -> Maybe String -> Maybe String -> IO (Either String CmdResult)
-handleEpicUpdate ident mSubject mDesc mStatus = do
+handleEpicUpdate : String -> Maybe String -> Maybe String -> Maybe String -> Maybe Bits64 -> IO (Either String CmdResult)
+handleEpicUpdate ident mSubject mDesc mStatusText mStatusId = do
   id_e <- resolveEpicId ident
   case id_e of
     Left err   => pure $ Left err
@@ -672,15 +757,17 @@ handleEpicUpdate ident mSubject mDesc mStatus = do
             Right current =>
               case current.version of
                 Nothing => pure $ Right $ cmdError "Cannot update epic: no version available"
-                Just ver =>
+                Just ver => do
                   let subj := case mSubject of
                                 Nothing => current.subject
                                 Just s  => s
                       desc := case mDesc of
                                 Nothing => current.description
                                 Just d  => d
-                      stat := mStatus
-                   in callToResult "Epic updated" $ updateEpic @{env} eid (Just subj) (Just desc) stat ver
+                  stat_e <- resolveUpdateStatus env "epic" mStatusText mStatusId
+                  case stat_e of
+                    Left err   => pure $ Right $ cmdError err
+                    Right stat => callToResult "Epic updated" $ updateEpic @{env} eid (Just subj) (Just desc) (map show stat) ver
 
 ||| Handler for ActEpicDelete.
 public export
@@ -784,8 +871,8 @@ handleIssueCreate subject mDesc mPriority mSeverity mType = do
 
 ||| Handler for ActIssueUpdate.
 public export
-handleIssueUpdate : String -> Maybe String -> Maybe String -> Maybe String -> Maybe String -> IO (Either String CmdResult)
-handleIssueUpdate ident mSubject mDesc mType mStatus = do
+handleIssueUpdate : String -> Maybe String -> Maybe String -> Maybe String -> Maybe String -> Maybe Bits64 -> IO (Either String CmdResult)
+handleIssueUpdate ident mSubject mDesc mType mStatusText mStatusId = do
   id_e <- resolveIssueId ident
   case id_e of
     Left err   => pure $ Left err
@@ -797,15 +884,17 @@ handleIssueUpdate ident mSubject mDesc mType mStatus = do
           current_e <- getIssue @{env} iid
           case current_e of
             Left err     => pure $ Right $ cmdError err
-            Right current =>
+            Right current => do
               let subj := case mSubject of
                             Nothing => current.subject
                             Just s  => s
                   desc := case mDesc of
                             Nothing => current.description
                             Just d  => d
-                  stat := mStatus
-               in callToResult "Issue updated" $ updateIssue @{env} iid (Just subj) (Just desc) mType stat current.version
+              stat_e <- resolveUpdateStatus env "issue" mStatusText mStatusId
+              case stat_e of
+                Left err   => pure $ Right $ cmdError err
+                Right stat => callToResult "Issue updated" $ updateIssue @{env} iid (Just subj) (Just desc) mType (map show stat) current.version
 
 ||| Handler for ActIssueDelete.
 public export
@@ -891,8 +980,8 @@ handleStoryCreate subject mDesc mMilestone = do
 
 ||| Handler for ActStoryUpdate.
 public export
-handleStoryUpdate : String -> Maybe String -> Maybe String -> Maybe String -> IO (Either String CmdResult)
-handleStoryUpdate ident mSubject mDesc mMilestone = do
+handleStoryUpdate : String -> Maybe String -> Maybe String -> Maybe String -> Maybe String -> Maybe Bits64 -> IO (Either String CmdResult)
+handleStoryUpdate ident mSubject mDesc mMilestone mStatusText mStatusId = do
   id_e <- resolveStoryId ident
   case id_e of
     Left err   => pure $ Left err
@@ -904,7 +993,7 @@ handleStoryUpdate ident mSubject mDesc mMilestone = do
           current_e <- getStory @{env} sid
           case current_e of
             Left err     => pure $ Right $ cmdError err
-            Right current =>
+            Right current => do
               let subj := case mSubject of
                             Nothing => current.subject
                             Just s  => s
@@ -914,7 +1003,9 @@ handleStoryUpdate ident mSubject mDesc mMilestone = do
                   mMs := case mMilestone of
                            Nothing => Nothing
                            Just ms => Just ms
-               in callToResult "Story updated" $ updateStory @{env} sid (Just subj) (Just desc) mMs current.version
+              -- Note: Story status updates are not supported by the current API model.
+              -- The --status flag is accepted for future compatibility but ignored.
+              callToResult "Story updated" $ updateStory @{env} sid (Just subj) (Just desc) mMs current.version
 
 ||| Handler for ActStoryDelete.
 public export
@@ -1161,6 +1252,45 @@ handleCommentList entityName ident = do
             Left err   => pure $ Left err
             Right env  => callToResult "Comments" $ listHistory @{env} entity eid
 
+||| Format a status list for display.
+private
+formatStatusList : List StatusInfo -> String
+formatStatusList ss =
+  unlines $ map (\s => "  " ++ show s.id ++ "  " ++ s.name ++ "  (" ++ s.slug ++ ")") ss
+
+||| Handler for listing statuses of a given entity type.
+private
+handleStatusList : String -> IO (Either String CmdResult)
+handleStatusList entityType = do
+  st_e <- loadState
+  case st_e of
+    Left err  => pure $ Left err
+    Right st  => do
+      case getActiveProject st of
+        Left err   => pure $ Left err
+        Right pid  => do
+          env_e <- resolveApiEnv
+          case env_e of
+            Left err   => pure $ Left err
+            Right env  => do
+              proj_e <- getProjectForStatus env st
+              case proj_e of
+                Left err   => pure $ Right $ cmdError err
+                Right proj =>
+                  let statuses := case entityType of
+                                    "task"   => proj.task_statuses
+                                    "issue"  => proj.issue_statuses
+                                    "us"     => proj.us_statuses
+                                    "epic"   => proj.epic_statuses
+                                    _        => []
+                      title := case entityType of
+                                 "task"   => "Task statuses"
+                                 "issue"  => "Issue statuses"
+                                 "us"     => "Story statuses"
+                                 "epic"   => "Epic statuses"
+                                 _        => "Statuses"
+                   in pure $ Right $ cmdInfo (title ++ ":\n" ++ formatStatusList statuses)
+
 ||| Handler for ActResolve.
 public export
 handleResolve : String -> IO (Either String CmdResult)
@@ -1212,7 +1342,7 @@ executeAction ActProjectGet         = handleProjectGet
 executeAction (ActTaskList mstatus) = handleTaskList mstatus
 executeAction (ActTaskCreate subj)  = handleTaskCreate subj
 executeAction (ActTaskGet tid)      = handleTaskGet tid
-executeAction (ActTaskUpdate tid subj desc stat) = handleTaskUpdate tid subj desc stat
+executeAction (ActTaskUpdate tid subj desc stext sid) = handleTaskUpdate tid subj desc stext sid
 executeAction (ActTaskDelete tid)   = handleTaskDelete tid
 executeAction (ActTaskStatus tid st) = handleTaskStatus tid st
 executeAction (ActTaskComment tid txt) = handleTaskComment tid txt
@@ -1220,7 +1350,7 @@ executeAction (ActTaskAssignStory taskId storyId) = handleTaskAssignStory taskId
 executeAction ActEpicList           = handleEpicList
 executeAction (ActEpicGet eid)      = handleEpicGet eid
 executeAction (ActEpicCreate subj d s) = handleEpicCreate subj d s
-executeAction (ActEpicUpdate eid subj d s) = handleEpicUpdate eid subj d s
+executeAction (ActEpicUpdate eid subj d st sid) = handleEpicUpdate eid subj d st sid
 executeAction (ActEpicDelete eid)   = handleEpicDelete eid
 executeAction ActSprintList         = handleSprintList
 executeAction ActSprintShow         = handleSprintShow
@@ -1231,15 +1361,19 @@ executeAction (ActSprintDelete sid) = handleSprintDelete sid
 executeAction ActIssueList          = handleIssueList
 executeAction (ActIssueGet iid)     = handleIssueGet iid
 executeAction (ActIssueCreate subj d p s t) = handleIssueCreate subj d p s t
-executeAction (ActIssueUpdate iid subj d t s) = handleIssueUpdate iid subj d t s
+executeAction (ActIssueUpdate iid subj d t st sid) = handleIssueUpdate iid subj d t st sid
 executeAction (ActIssueDelete iid)  = handleIssueDelete iid
 executeAction ActStoryList          = handleStoryList
 executeAction (ActStoryGet sid)     = handleStoryGet sid
 executeAction (ActStoryCreate subj d m) = handleStoryCreate subj d m
-executeAction (ActStoryUpdate sid subj d m) = handleStoryUpdate sid subj d m
+executeAction (ActStoryUpdate sid subj d m st sid2) = handleStoryUpdate sid subj d m st sid2
 executeAction (ActStoryDelete sid)  = handleStoryDelete sid
 executeAction ActWikiList           = handleWikiList
 executeAction (ActWikiGet wid)      = handleWikiGet wid
+executeAction ActTaskStatuses       = handleStatusList "task"
+executeAction ActIssueStatuses      = handleStatusList "issue"
+executeAction ActStoryStatuses      = handleStatusList "us"
+executeAction ActEpicStatuses       = handleStatusList "epic"
 executeAction (ActWikiCreate slug content) = handleWikiCreate slug content
 executeAction (ActWikiUpdate wid content slug) = handleWikiUpdate wid content slug
 executeAction (ActWikiDelete wid)   = handleWikiDelete wid

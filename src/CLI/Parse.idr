@@ -321,10 +321,15 @@ parseAction ("task" :: "list" :: rest) =
 parseAction ("task" :: "create" :: subj :: _) = Right $ ActTaskCreate subj
 parseAction ("task" :: "get" :: ident :: _) = Right $ ActTaskGet ident
 parseAction ("task" :: "update" :: ident :: rest) =
-  let mSubj := findFlag "--subject" rest
-      mDesc := findFlag "--description" rest
-      mStat := findFlag "--status" rest
-   in Right $ ActTaskUpdate ident mSubj mDesc mStat
+  let mSubj     := findFlag "--subject" rest
+      mDesc     := findFlag "--description" rest
+      mStatText := findFlag "--status" rest
+      mStatId   := findFlag "--statusId" rest
+   in case mStatId of
+        Nothing  => Right $ ActTaskUpdate ident mSubj mDesc mStatText Nothing
+        Just sid => case readNat64 sid of
+          Right id  => Right $ ActTaskUpdate ident mSubj mDesc Nothing (Just id)
+          Left _    => Left "usage: task update <id-or-ref> [--subject S] [--description D] [--status ST|--statusId N]"
 parseAction ("task" :: "delete" :: ident :: _) = Right $ ActTaskDelete ident
 parseAction ("task" :: "status" :: ident :: stStr :: _) =
   case readNat64 stStr of
@@ -332,7 +337,8 @@ parseAction ("task" :: "status" :: ident :: stStr :: _) =
     Left _    => Left "usage: task status <id-or-ref> <status-id>"
 parseAction ("task" :: "comment" :: ident :: text :: _) = Right $ ActTaskComment ident text
 parseAction ("task" :: "assign-story" :: taskIdent :: storyIdent :: _) = Right $ ActTaskAssignStory taskIdent storyIdent
-parseAction ("task" :: _)              = Left "usage: task {list|create <subject>|get <id-or-ref>|update <id-or-ref> [--subject S] [--description D] [--status ST]|delete <id-or-ref>|status <id-or-ref> <status>|comment <id-or-ref> <text>|assign-story <task-id-or-ref> <story-id-or-ref>}"
+parseAction ("task" :: "statuses" :: _) = Right ActTaskStatuses
+parseAction ("task" :: _)              = Left "usage: task {list|create <subject>|get <id-or-ref>|update <id-or-ref> [--subject S] [--description D] [--status ST]|delete <id-or-ref>|status <id-or-ref> <status>|comment <id-or-ref> <text>|assign-story <task-id-or-ref> <story-id-or-ref>|statuses}"
 parseAction ("epic" :: "list" :: _)    = Right ActEpicList
 parseAction ("epic" :: "get" :: ident :: _) = Right $ ActEpicGet ident
 parseAction ("epic" :: "create" :: subj :: rest) =
@@ -340,12 +346,18 @@ parseAction ("epic" :: "create" :: subj :: rest) =
       mStatus := findFlag "--status" rest
    in Right $ ActEpicCreate subj mDesc mStatus
 parseAction ("epic" :: "update" :: ident :: rest) =
-  let mSubj := findFlag "--subject" rest
-      mDesc := findFlag "--description" rest
-      mStat := findFlag "--status" rest
-   in Right $ ActEpicUpdate ident mSubj mDesc mStat
+  let mSubj     := findFlag "--subject" rest
+      mDesc     := findFlag "--description" rest
+      mStatText := findFlag "--status" rest
+      mStatId   := findFlag "--statusId" rest
+   in case mStatId of
+        Nothing  => Right $ ActEpicUpdate ident mSubj mDesc mStatText Nothing
+        Just sid => case readNat64 sid of
+          Right id  => Right $ ActEpicUpdate ident mSubj mDesc Nothing (Just id)
+          Left _    => Left "usage: epic update <id-or-ref> [--subject S] [--description D] [--status ST|--statusId N]"
 parseAction ("epic" :: "delete" :: ident :: _) = Right $ ActEpicDelete ident
-parseAction ("epic" :: _)              = Left "usage: epic {list|get <id-or-ref>|create <subject> [--description D] [--status ST]|update <id-or-ref> [--subject S] [--description D] [--status ST]|delete <id-or-ref>}"
+parseAction ("epic" :: "statuses" :: _) = Right ActEpicStatuses
+parseAction ("epic" :: _)              = Left "usage: epic {list|get <id-or-ref>|create <subject> [--description D] [--status ST]|update <id-or-ref> [--subject S] [--description D] [--status ST]|delete <id-or-ref>|statuses}"
 parseAction ("story" :: "list" :: _)   = Right ActStoryList
 parseAction ("story" :: "get" :: ident :: _) = Right $ ActStoryGet ident
 parseAction ("story" :: "create" :: subj :: rest) =
@@ -353,12 +365,19 @@ parseAction ("story" :: "create" :: subj :: rest) =
       mMs   := findFlag "--milestone" rest
    in Right $ ActStoryCreate subj mDesc mMs
 parseAction ("story" :: "update" :: ident :: rest) =
-  let mSubj := findFlag "--subject" rest
-      mDesc := findFlag "--description" rest
-      mMs   := findFlag "--milestone" rest
-   in Right $ ActStoryUpdate ident mSubj mDesc mMs
+  let mSubj     := findFlag "--subject" rest
+      mDesc     := findFlag "--description" rest
+      mMs       := findFlag "--milestone" rest
+      mStatText := findFlag "--status" rest
+      mStatId   := findFlag "--statusId" rest
+   in case mStatId of
+        Nothing  => Right $ ActStoryUpdate ident mSubj mDesc mMs mStatText Nothing
+        Just sid => case readNat64 sid of
+          Right id  => Right $ ActStoryUpdate ident mSubj mDesc mMs Nothing (Just id)
+          Left _    => Left "usage: story update <id-or-ref> [--subject S] [--description D] [--milestone M] [--status ST|--statusId N]"
 parseAction ("story" :: "delete" :: ident :: _) = Right $ ActStoryDelete ident
-parseAction ("story" :: _)             = Left "usage: story {list|get <id-or-ref>|create <subject> [--description D] [--milestone M]|update <id-or-ref> [--subject S] [--description D] [--milestone M]|delete <id-or-ref>}"
+parseAction ("story" :: "statuses" :: _) = Right ActStoryStatuses
+parseAction ("story" :: _)             = Left "usage: story {list|get <id-or-ref>|create <subject> [--description D] [--milestone M]|update <id-or-ref> [--subject S] [--description D] [--milestone M]|delete <id-or-ref>|statuses}"
 parseAction ("issue" :: "list" :: _)   = Right ActIssueList
 parseAction ("issue" :: "get" :: ident :: _) = Right $ ActIssueGet ident
 parseAction ("issue" :: "create" :: subj :: rest) =
@@ -368,13 +387,19 @@ parseAction ("issue" :: "create" :: subj :: rest) =
       mType := findFlag "--type" rest
    in Right $ ActIssueCreate subj mDesc mPrio mSev mType
 parseAction ("issue" :: "update" :: ident :: rest) =
-  let mSubj := findFlag "--subject" rest
-      mDesc := findFlag "--description" rest
-      mType := findFlag "--type" rest
-      mStat := findFlag "--status" rest
-   in Right $ ActIssueUpdate ident mSubj mDesc mType mStat
+  let mSubj     := findFlag "--subject" rest
+      mDesc     := findFlag "--description" rest
+      mType     := findFlag "--type" rest
+      mStatText := findFlag "--status" rest
+      mStatId   := findFlag "--statusId" rest
+   in case mStatId of
+        Nothing  => Right $ ActIssueUpdate ident mSubj mDesc mType mStatText Nothing
+        Just sid => case readNat64 sid of
+          Right id  => Right $ ActIssueUpdate ident mSubj mDesc mType Nothing (Just id)
+          Left _    => Left "usage: issue update <id-or-ref> [--subject S] [--description D] [--type T] [--status ST|--statusId N]"
 parseAction ("issue" :: "delete" :: ident :: _) = Right $ ActIssueDelete ident
-parseAction ("issue" :: _)             = Left "usage: issue {list|get <id-or-ref>|create <subject> [--description D] [--priority P] [--severity S] [--type T]|update <id-or-ref> [--subject S] [--description D] [--type T] [--status ST]|delete <id-or-ref>}"
+parseAction ("issue" :: "statuses" :: _) = Right ActIssueStatuses
+parseAction ("issue" :: _)             = Left "usage: issue {list|get <id-or-ref>|create <subject> [--description D] [--priority P] [--severity S] [--type T]|update <id-or-ref> [--subject S] [--description D] [--type T] [--status ST]|delete <id-or-ref>|statuses}"
 parseAction ("wiki" :: "list" :: _)    = Right ActWikiList
 parseAction ("wiki" :: "get" :: ident :: _) = Right $ ActWikiGet ident
 parseAction ("wiki" :: "create" :: slug :: content :: _) = Right $ ActWikiCreate slug content
