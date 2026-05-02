@@ -115,7 +115,7 @@ runSubcommand rawArgs = do
     Left err =>
       if wantJson
         then do
-          putStrLn $ encodeCmdResult (cmdError err)
+          ignore $ fPutStrLn stderr ("error: " ++ err)
           exitWith (ExitFailure 1)
         else do
           putStrLn $ "error: " ++ err
@@ -126,12 +126,14 @@ runSubcommand rawArgs = do
         Left err =>
           if wantJson
             then do
-              putStrLn $ encodeCmdResult (cmdError err)
+              ignore $ fPutStrLn stderr ("error: " ++ err)
               exitWith (ExitFailure 1)
             else do
               putStrLn $ "error: " ++ err
               exitWith (ExitFailure 1)
-        Right cr => putStrLn $ renderCmdResult fmt cr
+        Right cr => do
+          putStrLn $ renderCmdResult fmt cr
+          exitWith ExitSuccess
 
 ||| Check if args look like legacy flags (start with --).
 looksLikeFlags : List String -> Bool

@@ -273,11 +273,11 @@ resolveOptionalStatus env st entityType mStatus =
 public export
 callToResult :
      ToJSON a
-  => String
+  => (a -> String)
   -> AppM a
   -> AppM CmdResult
-callToResult msg action =
-  map (cmdOk msg) action
+callToResult fmt action =
+  map (\val => cmdOk (fmt val) val) action
     `catchE` \err => pure (cmdError err)
 
 ||| Generic handler for listing entities in the active project.
@@ -285,27 +285,29 @@ public export
 handleEntityList :
      ToJSON a
   => String
+  -> (List a -> String)
   -> (ApiEnv -> String -> IO (Either String (List a)))
   -> IO (Either String CmdResult)
-handleEntityList name listFn = runAppM $ do
+handleEntityList name fmt listFn = runAppM $ do
   (env, pid) <- getProjectEnv
   val <- liftIOEither $ listFn env (show pid.id)
-  pure $ cmdOk (name ++ "s") val
+  pure $ cmdOk (fmt val) val
 
 ||| Generic handler for getting an entity by identifier.
 public export
 handleEntityGet :
      ToJSON a
   => String
+  -> (a -> String)
   -> (String -> AppM Nat64Id)
   -> (ApiEnv -> Nat64Id -> IO (Either String a))
   -> String
   -> IO (Either String CmdResult)
-handleEntityGet name resolveId getFn ident = runAppM $ do
+handleEntityGet name fmt resolveId getFn ident = runAppM $ do
   eid <- resolveId ident
   env  <- resolveApiEnv
   val <- liftIOEither $ getFn env eid
-  pure $ cmdOk name val
+  pure $ cmdOk (fmt val) val
 
 ||| Generic handler for deleting an entity by identifier.
 public export
@@ -323,7 +325,8 @@ handleEntityDelete name resolveId deleteFn ident = runAppM $ do
     then pure $ cmdInfo "Delete cancelled"
     else do
       liftIOEither $ deleteFn env eid
-      pure $ cmdOk (name ++ " deleted") $ MkDeleteResult name eid.id
+      let dr := MkDeleteResult name eid.id
+      pure $ cmdOk (formatDeleteResult dr) dr
 
 ------------------------------------------------------------------------------
 -- Action Handlers
@@ -434,7 +437,7 @@ projectListAux : AppM CmdResult
 projectListAux = do
   env  <- resolveApiEnv
   val <- liftIOEither $ listProjects @{env} Nothing Nothing Nothing
-  pure $ cmdOk "Projects" val
+  pure $ cmdOk (formatProjectSummaries val) val
 
 handleProjectList = runAppM projectListAux
 
@@ -475,7 +478,7 @@ projectSetById env pid = do
     Left err'  => pure $ Right $ cmdError ("Failed to get project: " ++ err')
     Right proj => do
       _ <- runAppM $ setActiveProjectCached proj
-      pure $ Right $ cmdOk ("Active project set to: " ++ proj.name) proj
+      pure $ Right $ cmdOk ("Active project set to: " ++ proj.name ++ "\n" ++ formatProject proj) proj
 
 private
 projectSetFallbackChain : String -> ApiEnv -> IO (Either String CmdResult)
@@ -495,7 +498,7 @@ projectSetIO ident env = do
   case slugRes of
     Right proj => do
       _ <- runAppM $ setActiveProjectCached proj
-      pure $ Right $ cmdOk ("Active project set to: " ++ proj.name) proj
+      pure $ Right $ cmdOk ("Active project set to: " ++ proj.name ++ "\n" ++ formatProject proj) proj
     Left _ => projectSetFallbackChain ident env
 
 projectSetAux : String -> AppM CmdResult
@@ -514,7 +517,7 @@ projectGetAux : AppM CmdResult
 projectGetAux = do
   (env, pid) <- getProjectEnv
   val <- liftIOEither $ getProjectById @{env} pid
-  pure $ cmdOk "Project" val
+  pure $ cmdOk (formatProject val) val
 
 handleProjectGet = runAppM projectGetAux
 
@@ -526,7 +529,7 @@ taskListAux : Maybe String -> AppM CmdResult
 taskListAux mStatus = do
   (env, pid) <- getProjectEnv
   val <- liftIOEither $ listTasks @{env} (Just (show pid.id)) Nothing mStatus Nothing Nothing
-  pure $ cmdOk "Tasks" val
+  pure $ cmdOk (formatTaskSummaries val) val
 
 handleTaskList maybeStatus = runAppM (taskListAux maybeStatus)
 
@@ -538,7 +541,7 @@ taskCreateAux : String -> AppM CmdResult
 taskCreateAux subject = do
   (env, pid) <- getProjectEnv
   val <- liftIOEither $ createTask @{env} (show pid.id) subject Nothing Nothing Nothing Nothing
-  pure $ cmdOk "Task created" val
+  pure $ cmdOk ("Task created\n" ++ formatTask val) val
 
 handleTaskCreate subject = runAppM (taskCreateAux subject)
 
@@ -551,7 +554,7 @@ taskGetAux ident = do
   tid <- resolveTaskId ident
   env  <- resolveApiEnv
   val <- liftIOEither $ getTask @{env} tid
-  pure $ cmdOk "Task" val
+  pure $ cmdOk (formatTask val) val
 
 handleTaskGet ident = runAppM (taskGetAux ident)
 
@@ -565,7 +568,7 @@ taskStatusAux ident statusId = do
   env  <- resolveApiEnv
   task <- liftIOEither $ getTask @{env} tid
   val <- liftIOEither $ changeTaskStatus @{env} tid statusId task.version
-  pure $ cmdOk "Status changed" val
+  pure $ cmdOk ("Status changed\n" ++ formatTask val) val
 
 handleTaskStatus ident statusId = runAppM (taskStatusAux ident statusId)
 
@@ -594,7 +597,7 @@ taskAssignStoryAux taskIdent storyIdent = do
   env  <- resolveApiEnv
   task <- liftIOEither $ getTask @{env} tid
   val <- liftIOEither $ assignTaskToStory @{env} tid (Just sid) task.version
-  pure $ cmdOk "Task assigned to story" val
+  pure $ cmdOk ("Task assigned to story\n" ++ formatTask val) val
 
 handleTaskAssignStory taskIdent storyIdent = runAppM (taskAssignStoryAux taskIdent storyIdent)
 
@@ -630,7 +633,7 @@ taskUpdateAux ident mSubject mDesc mStatusText mStatusId = do
       desc = fromMaybe current.description mDesc
   stat <- resolveUpdateStatus env "task" mStatusText mStatusId
   val <- liftIOEither $ updateTask @{env} tid (Just subj) (Just desc) (map show stat) current.version
-  pure $ cmdOk "Task updated" val
+  pure $ cmdOk ("Task updated\n" ++ formatTask val) val
 
 handleTaskUpdate ident mSubject mDesc mStatusText mStatusId = runAppM (taskUpdateAux ident mSubject mDesc mStatusText mStatusId)
 
@@ -660,19 +663,19 @@ epicUpdateAux ident mSubject mDesc mStatusText mStatusId = do
           desc = fromMaybe current.description mDesc
       stat <- resolveUpdateStatus env "epic" mStatusText mStatusId
       val <- liftIOEither $ updateEpic @{env} eid (Just subj) (Just desc) (map show stat) ver
-      pure $ cmdOk "Epic updated" val
+      pure $ cmdOk ("Epic updated\n" ++ formatEpic val) val
 
 handleEpicUpdate ident mSubject mDesc mStatusText mStatusId = runAppM (epicUpdateAux ident mSubject mDesc mStatusText mStatusId)
 
 ||| Handler for ActEpicList.
 public export
 handleEpicList : IO (Either String CmdResult)
-handleEpicList = handleEntityList "Epic" (\e, p => listEpics @{e} p Nothing Nothing)
+handleEpicList = handleEntityList "Epic" formatEpicSummaries (\e, p => listEpics @{e} p Nothing Nothing)
 
 ||| Handler for ActEpicGet.
 public export
 handleEpicGet : String -> IO (Either String CmdResult)
-handleEpicGet = handleEntityGet "Epic" resolveEpicId (\e, i => getEpic @{e} i)
+handleEpicGet = handleEntityGet "Epic" formatEpic resolveEpicId (\e, i => getEpic @{e} i)
 
 ||| Handler for ActEpicCreate.
 public export
@@ -682,14 +685,14 @@ epicCreateAux : String -> Maybe String -> Maybe String -> AppM CmdResult
 epicCreateAux subject mDesc mStatus = do
   (env, pid) <- getProjectEnv
   val <- liftIOEither $ createEpic @{env} (show pid.id) subject mDesc mStatus
-  pure $ cmdOk "Epic created" val
+  pure $ cmdOk ("Epic created\n" ++ formatEpic val) val
 
 handleEpicCreate subject mDesc mStatus = runAppM (epicCreateAux subject mDesc mStatus)
 
 ||| Handler for ActSprintList.
 public export
 handleSprintList : IO (Either String CmdResult)
-handleSprintList = handleEntityList "Sprint" (\e, p => listMilestones @{e} p Nothing Nothing)
+handleSprintList = handleEntityList "Sprint" formatMilestoneSummaries (\e, p => listMilestones @{e} p Nothing Nothing)
 
 ||| Handler for ActSprintShow.
 public export
@@ -699,17 +702,17 @@ handleSprintShow = handleSprintList
 ||| Handler for ActSprintSet.
 public export
 handleSprintSet : String -> IO (Either String CmdResult)
-handleSprintSet = handleEntityGet "Sprint" resolveMilestoneId (\e, i => getMilestone @{e} i)
+handleSprintSet = handleEntityGet "Sprint" formatMilestone resolveMilestoneId (\e, i => getMilestone @{e} i)
 
 ||| Handler for ActIssueList.
 public export
 handleIssueList : IO (Either String CmdResult)
-handleIssueList = handleEntityList "Issue" (\e, p => listIssues @{e} p Nothing Nothing)
+handleIssueList = handleEntityList "Issue" formatIssueSummaries (\e, p => listIssues @{e} p Nothing Nothing)
 
 ||| Handler for ActIssueGet.
 public export
 handleIssueGet : String -> IO (Either String CmdResult)
-handleIssueGet = handleEntityGet "Issue" resolveIssueId (\e, i => getIssue @{e} i)
+handleIssueGet = handleEntityGet "Issue" formatIssue resolveIssueId (\e, i => getIssue @{e} i)
 
 ||| Handler for ActIssueCreate.
 public export
@@ -719,7 +722,7 @@ issueCreateAux : String -> Maybe String -> Maybe String -> Maybe String -> Maybe
 issueCreateAux subject mDesc mPriority mSeverity mType = do
   (env, pid) <- getProjectEnv
   val <- liftIOEither $ createIssue @{env} (show pid.id) subject mDesc mPriority mSeverity mType
-  pure $ cmdOk "Issue created" val
+  pure $ cmdOk ("Issue created\n" ++ formatIssue val) val
 
 handleIssueCreate subject mDesc mPriority mSeverity mType = runAppM (issueCreateAux subject mDesc mPriority mSeverity mType)
 
@@ -736,7 +739,7 @@ issueUpdateAux ident mSubject mDesc mType mStatusText mStatusId = do
       desc = fromMaybe current.description mDesc
   stat <- resolveUpdateStatus env "issue" mStatusText mStatusId
   val <- liftIOEither $ updateIssue @{env} iid (Just subj) (Just desc) mType (map show stat) current.version
-  pure $ cmdOk "Issue updated" val
+  pure $ cmdOk ("Issue updated\n" ++ formatIssue val) val
 
 handleIssueUpdate ident mSubject mDesc mType mStatusText mStatusId = runAppM (issueUpdateAux ident mSubject mDesc mType mStatusText mStatusId)
 
@@ -748,22 +751,22 @@ handleIssueDelete = handleEntityDelete "issue" resolveIssueId (\e, i => deleteIs
 ||| Handler for ActStoryList.
 public export
 handleStoryList : IO (Either String CmdResult)
-handleStoryList = handleEntityList "Story" (\e, p => listStories @{e} p Nothing Nothing)
+handleStoryList = handleEntityList "Story" formatStorySummaries (\e, p => listStories @{e} p Nothing Nothing)
 
 ||| Handler for ActStoryGet.
 public export
 handleStoryGet : String -> IO (Either String CmdResult)
-handleStoryGet = handleEntityGet "Story" resolveStoryId (\e, i => getStory @{e} i)
+handleStoryGet = handleEntityGet "Story" formatStory resolveStoryId (\e, i => getStory @{e} i)
 
 ||| Handler for ActWikiList.
 public export
 handleWikiList : IO (Either String CmdResult)
-handleWikiList = handleEntityList "Wiki page" (\e, p => listWiki @{e} p Nothing Nothing)
+handleWikiList = handleEntityList "Wiki page" formatWikiPageSummaries (\e, p => listWiki @{e} p Nothing Nothing)
 
 ||| Handler for ActWikiGet.
 public export
 handleWikiGet : String -> IO (Either String CmdResult)
-handleWikiGet = handleEntityGet "Wiki page" resolveWikiId (\e, i => getWiki @{e} i)
+handleWikiGet = handleEntityGet "Wiki page" formatWikiPage resolveWikiId (\e, i => getWiki @{e} i)
 
 ||| Handler for ActWikiCreate.
 public export
@@ -773,7 +776,7 @@ wikiCreateAux : String -> String -> AppM CmdResult
 wikiCreateAux slug content = do
   (env, pid) <- getProjectEnv
   val <- liftIOEither $ createWiki @{env} (show pid.id) slug content
-  pure $ cmdOk "Wiki page created" val
+  pure $ cmdOk ("Wiki page created\n" ++ formatWikiPage val) val
 
 handleWikiCreate slug content = runAppM (wikiCreateAux slug content)
 
@@ -786,7 +789,7 @@ storyCreateAux subject mDesc mMilestone = do
   (env, pid) <- getProjectEnv
   let mMs = map MkNat64Id $ mMilestone >>= readNat
   val <- liftIOEither $ createStory @{env} (show pid.id) subject mDesc mMs
-  pure $ cmdOk "Story created" val
+  pure $ cmdOk ("Story created\n" ++ formatStory val) val
 
 handleStoryCreate subject mDesc mMilestone = runAppM (storyCreateAux subject mDesc mMilestone)
 
@@ -803,7 +806,7 @@ storyUpdateAux ident mSubject mDesc mMilestone _ _ = do
       desc = fromMaybe current.description mDesc
       mMs  = fromMaybe Nothing (map Just mMilestone)
   val <- liftIOEither $ updateStory @{env} sid (Just subj) (Just desc) mMs current.version
-  pure $ cmdOk "Story updated" val
+  pure $ cmdOk ("Story updated\n" ++ formatStory val) val
 
 handleStoryUpdate ident mSubject mDesc mMilestone mStatusText mStatusId = runAppM (storyUpdateAux ident mSubject mDesc mMilestone mStatusText mStatusId)
 
@@ -824,7 +827,7 @@ wikiUpdateAux ident mContent mSlug = do
   let content := case mContent of Nothing => current.content ; Just c => c
       slug    := case mSlug     of Nothing => current.slug.slug ; Just s => s
   val <- liftIOEither $ updateWiki @{env} wid (Just content) (Just slug) current.version
-  pure $ cmdOk "Wiki page updated" val
+  pure $ cmdOk ("Wiki page updated\n" ++ formatWikiPage val) val
 
 handleWikiUpdate ident mContent mSlug = runAppM (wikiUpdateAux ident mContent mSlug)
 
@@ -841,7 +844,7 @@ sprintCreateAux : String -> Maybe String -> Maybe String -> AppM CmdResult
 sprintCreateAux name mStart mEnd = do
   (env, pid) <- getProjectEnv
   val <- liftIOEither $ createMilestone @{env} (show pid.id) name mStart mEnd
-  pure $ cmdOk "Sprint created" val
+  pure $ cmdOk ("Sprint created\n" ++ formatMilestone val) val
 
 handleSprintCreate name mStart mEnd = runAppM (sprintCreateAux name mStart mEnd)
 
@@ -859,7 +862,7 @@ sprintUpdateAux ident mName mStart mEnd ver = do
       start := mStart
       end   := mEnd
   val <- liftIOEither $ updateMilestone @{env} sid (Just name) start end (MkVersion $ cast ver)
-  pure $ cmdOk "Sprint updated" val
+  pure $ cmdOk ("Sprint updated\n" ++ formatMilestone val) val
 
 handleSprintUpdate ident mName mStart mEnd ver = runAppM (sprintUpdateAux ident mName mStart mEnd ver)
 
@@ -918,7 +921,7 @@ commentListAux entityName ident = do
       env  <- resolveApiEnv
       val <- liftIOEither
         $ listHistory @{env} (apiEntityName kind) eid
-      pure $ cmdOk "Comments" val
+      pure $ cmdOk (formatHistoryEntries val) val
 
 handleCommentList entityName ident = runAppM (commentListAux entityName ident)
 
@@ -981,8 +984,8 @@ handleResolve ref = runAppM (resolveAndLookup ref)
             ]
       catchE
         (do (name, json) <- firstSuccessNamed getters
-            pure $ cmdOk ("Resolved ref " ++ ref ++ " to " ++ name ++ " id=" ++ show nid.id) json)
-        (\_ => pure $ cmdOk ("Resolved ref " ++ ref ++ " to id " ++ show nid.id) nid)
+            pure $ cmdOkRaw ("Resolved ref " ++ ref ++ " to " ++ name ++ " id=" ++ show nid.id) json)
+         (\_ => pure $ cmdOk ("Resolved ref " ++ ref ++ " to id " ++ show nid.id) nid)
 
 ------------------------------------------------------------------------------
 -- Dispatch

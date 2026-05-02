@@ -350,7 +350,7 @@ class TestStateful:
             cwd=str(workspace),
         )
         assert proc.returncode == 0
-        assert "[OK]" in proc.stdout
+        # Text mode no longer uses [OK] prefix
 
         # List sprints in active project
         proc = subprocess.run(
@@ -359,7 +359,7 @@ class TestStateful:
             cwd=str(workspace),
         )
         assert proc.returncode == 0
-        assert "[OK]" in proc.stdout
+        # Text mode no longer uses [OK] prefix
 
 
 class TestRefResolution:
@@ -423,7 +423,7 @@ class TestRefResolution:
                 cwd=str(workspace),
             )
             assert proc.returncode == 0, f"issue get by ref failed: {proc.stdout}{proc.stderr}"
-            data = json.loads(proc.stdout)["payload"]
+            data = json.loads(proc.stdout)
             assert data["id"] == iid
             assert data["ref"] == ref
         finally:
@@ -444,7 +444,7 @@ class TestRefResolution:
                 cwd=str(workspace),
             )
             assert proc.returncode == 0, f"issue get by db id failed: {proc.stdout}{proc.stderr}"
-            data = json.loads(proc.stdout)["payload"]
+            data = json.loads(proc.stdout)
             assert data["id"] == iid
             assert data["ref"] == ref
         finally:
@@ -465,7 +465,7 @@ class TestRefResolution:
                 cwd=str(workspace),
             )
             assert proc.returncode == 0, f"task get by ref failed: {proc.stdout}{proc.stderr}"
-            data = json.loads(proc.stdout)["payload"]
+            data = json.loads(proc.stdout)
             assert data["id"] == tid
             assert data["ref"] == ref
         finally:
@@ -535,7 +535,7 @@ class TestSubcommandCRUD:
                 cwd=str(workspace),
             )
             assert proc.returncode == 0, f"task update failed: {proc.stdout}{proc.stderr}"
-            data = json.loads(proc.stdout)["payload"]
+            data = json.loads(proc.stdout)
             assert data["subject"] == f"updated task {ts}"
         finally:
             client.delete_task(tid)
@@ -576,7 +576,7 @@ class TestSubcommandCRUD:
             cwd=str(workspace),
         )
         assert proc.returncode == 0, f"epic create failed: {proc.stdout}{proc.stderr}"
-        data = json.loads(proc.stdout)["payload"]
+        data = json.loads(proc.stdout)
         assert data["subject"] == f"subcmd epic {ts}"
         assert data["description"] == "test desc"
 
@@ -595,7 +595,7 @@ class TestSubcommandCRUD:
                 cwd=str(workspace),
             )
             assert proc.returncode == 0, f"epic update failed: {proc.stdout}{proc.stderr}"
-            data = json.loads(proc.stdout)["payload"]
+            data = json.loads(proc.stdout)
             assert data["subject"] == f"updated epic {ts}"
         finally:
             client.delete_epic(eid)
@@ -635,7 +635,7 @@ class TestSubcommandCRUD:
             cwd=str(workspace),
         )
         assert proc.returncode == 0, f"story create failed: {proc.stdout}{proc.stderr}"
-        data = json.loads(proc.stdout)["payload"]
+        data = json.loads(proc.stdout)
         assert data["subject"] == f"subcmd story {ts}"
 
     def test_story_update(self, workspace, client):
@@ -653,7 +653,7 @@ class TestSubcommandCRUD:
                 cwd=str(workspace),
             )
             assert proc.returncode == 0, f"story update failed: {proc.stdout}{proc.stderr}"
-            data = json.loads(proc.stdout)["payload"]
+            data = json.loads(proc.stdout)
             assert data["subject"] == f"updated story {ts}"
         finally:
             client.delete_story(sid)
@@ -693,7 +693,7 @@ class TestSubcommandCRUD:
             cwd=str(workspace),
         )
         assert proc.returncode == 0, f"issue create failed: {proc.stdout}{proc.stderr}"
-        data = json.loads(proc.stdout)["payload"]
+        data = json.loads(proc.stdout)
         assert data["subject"] == f"subcmd issue {ts}"
 
     def test_issue_update(self, workspace, client):
@@ -711,7 +711,7 @@ class TestSubcommandCRUD:
                 cwd=str(workspace),
             )
             assert proc.returncode == 0, f"issue update failed: {proc.stdout}{proc.stderr}"
-            data = json.loads(proc.stdout)["payload"]
+            data = json.loads(proc.stdout)
             assert data["subject"] == f"updated issue {ts}"
         finally:
             client.delete_issue(iid)
@@ -800,7 +800,7 @@ class TestCommentsSubcommand:
                 cwd=str(workspace),
             )
             assert proc.returncode == 0, f"comment add failed: {proc.stdout}{proc.stderr}"
-            assert "[OK]" in proc.stdout
+            # Text mode no longer uses [OK] prefix
 
             # List comments
             proc = subprocess.run(
@@ -809,7 +809,7 @@ class TestCommentsSubcommand:
                 cwd=str(workspace),
             )
             assert proc.returncode == 0, f"comment list failed: {proc.stdout}{proc.stderr}"
-            data = json.loads(proc.stdout)["payload"]
+            data = json.loads(proc.stdout)
             assert isinstance(data, list)
         finally:
             client.delete_task(tid)
@@ -829,7 +829,7 @@ class TestCommentsSubcommand:
                 cwd=str(workspace),
             )
             assert proc.returncode == 0, f"comment add failed: {proc.stdout}{proc.stderr}"
-            assert "[OK]" in proc.stdout
+            # Text mode no longer uses [OK] prefix
         finally:
             client.delete_issue(iid)
 
@@ -895,7 +895,7 @@ class TestOutputFormat:
         assert proc.returncode == 0
 
     def test_text_mode_no_json_payload(self, workspace):
-        """Text mode should print only a status line, no JSON."""
+        """Text mode should print formatted text, no JSON."""
         self._login(workspace)
         self._set_project(workspace)
 
@@ -905,13 +905,12 @@ class TestOutputFormat:
             cwd=str(workspace),
         )
         assert proc.returncode == 0
-        assert "[OK]" in proc.stdout
-        # Should NOT contain JSON braces
+        # Should show formatted text (task list) not JSON
         assert "{" not in proc.stdout
         assert "}" not in proc.stdout
 
     def test_json_mode_pure_json(self, workspace):
-        """JSON mode should print ONLY a valid JSON object."""
+        """JSON mode should print ONLY a valid JSON object (no envelope)."""
         self._login(workspace)
         self._set_project(workspace)
 
@@ -924,13 +923,13 @@ class TestOutputFormat:
         # Should be valid JSON (no [OK] prefix)
         assert "[OK]" not in proc.stdout
         data = json.loads(proc.stdout)
-        assert "status" in data
-        assert "message" in data
-        assert "payload" in data
-        assert isinstance(data["payload"], list)
+        # No envelope — direct payload
+        assert "status" not in data
+        assert "message" not in data
+        assert isinstance(data, list)
 
     def test_json_mode_pipeable_to_jq(self, workspace):
-        """JSON mode output must be pipeable to jq."""
+        """JSON mode output must be pipeable to jq (no envelope)."""
         self._login(workspace)
         self._set_project(workspace)
 
@@ -941,9 +940,9 @@ class TestOutputFormat:
         )
         assert proc.returncode == 0
         data = json.loads(proc.stdout)
-        # jq '.payload.id' equivalent in Python
-        assert "payload" in data
-        assert data["payload"]["id"] == int(PROJECT_ID)
+        # Direct project object — jq '.id' works
+        assert "id" in data
+        assert data["id"] == int(PROJECT_ID)
 
     def test_error_text_mode_no_json(self, workspace):
         """Error in text mode should show only text, no JSON."""
@@ -952,18 +951,18 @@ class TestOutputFormat:
             capture_output=True, text=True, timeout=30,
             cwd=str(workspace),
         )
-        assert proc.returncode != 0 or "[ERR]" in proc.stdout
-        if "[ERR]" in proc.stdout:
-            assert "{" not in proc.stdout
+        assert proc.returncode != 0
+        assert "error:" in proc.stdout
+        assert "{" not in proc.stdout
 
-    def test_error_json_mode_valid_json(self, workspace):
-        """Error in JSON mode should still be valid JSON."""
+    def test_error_json_mode_stderr(self, workspace):
+        """Error in JSON mode should print to stderr and exit non-zero."""
         proc = subprocess.run(
             [BIN, "--json", "task", "get", "99999"],
             capture_output=True, text=True, timeout=30,
             cwd=str(workspace),
         )
-        # Exit code may be non-zero, but stdout must be valid JSON
-        data = json.loads(proc.stdout)
-        assert "status" in data
-        assert data["status"] != 0
+        assert proc.returncode != 0
+        assert "error:" in proc.stderr
+        # stdout should be empty (nothing to pipe to jq)
+        assert proc.stdout.strip() == ""
