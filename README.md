@@ -36,21 +36,6 @@ build
 
 This drops you into a development shell with Idris 2 and all dependencies, then builds the project.
 
-The devShell also includes browsable documentation for all Idris 2 dependencies:
-
-```shell
-# List available package docs
-nix develop --command doc-browser list
-#   json
-#   http2
-
-# View a package index
-nix develop --command doc-browser show json
-
-# View a specific module
-nix develop --command doc-browser show json JSON.Encoder
-```
-
 ### Without Nix
 
 ```shell

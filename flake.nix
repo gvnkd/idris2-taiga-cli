@@ -28,9 +28,9 @@
         selectedLibs = with idris2-withpkgs.packages.${system}; [ json http2 ];
 
         # Wrapped idris2 with all registry deps on IDRIS2_PACKAGE_PATH
-        idris2Wrapped = idris2-withpkgs.lib.${system}.withPackages (p: [
-          p.json
-          p.http2
+        idris2Wrapped = idris2-withpkgs.lib.${system}.withPackages (p: with p; [
+          json
+          http2
         ]);
 
         pkg = pkgs.idris2Packages.buildIdris {
