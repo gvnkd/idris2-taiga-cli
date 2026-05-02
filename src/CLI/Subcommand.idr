@@ -189,35 +189,62 @@ resolveRef ref = do
         Nothing   => appFail $ "Ref " ++ ref ++ " not found in project"
         Just pair => pure pair
 
-||| Fallback: parse a string as a raw database ID.
+||| Check whether a user-supplied identifier starts with '#'.
 private
-fallbackToRawId : String -> AppM Nat64Id
-fallbackToRawId s =
+hasHashPrefix : String -> Bool
+hasHashPrefix s =
+  case unpack s of
+    '#' :: _ => True
+    _        => False
+
+||| Strip a leading '#' from a user-supplied identifier.
+private
+stripHash : String -> String
+stripHash s =
+  case unpack s of
+    '#' :: rest => pack rest
+    _           => s
+
+||| Parse a string as a raw database ID (no ref resolution).
+private
+parseRawId : String -> AppM Nat64Id
+parseRawId s =
   case readNat s of
     Nothing => appFail $ "Invalid identifier: " ++ s
     Just n  => pure $ MkNat64Id n
 
+||| Resolve a '#' prefixed identifier as a ref. Never falls back to raw ID.
+private
+resolveAsRef : String -> AppM Nat64Id
+resolveAsRef s = do
+  (_, nid) <- resolveRef (stripHash s)
+  pure nid
+
 ||| Convert a user-provided identifier string to a database Nat64Id.
-||| First tries to resolve as a project ref (any entity type).
-||| If ref resolution fails, falls back to treating the input as a raw
-||| database ID for backward compatibility with scripts.
+||| Bare numbers are treated as raw database IDs. '#' prefixed strings
+||| (e.g. "#389") are resolved via the Taiga resolver API only — if no
+||| such ref exists, an error is returned with no fallback.
 public export
 resolveToId : String -> AppM Nat64Id
 resolveToId s =
-  catchE (snd <$> resolveRef s) (\_ => fallbackToRawId s)
+  if hasHashPrefix s
+    then resolveAsRef s
+    else parseRawId s
 
 ||| Resolve an identifier constrained to a specific entity type.
-||| If the ref resolves to a different entity type, falls back to raw ID.
+||| Bare numbers are treated as raw database IDs. '#' prefixed strings
+||| are resolved as refs of the expected kind only.
 public export
 resolveToIdForType : EntityKind -> String -> AppM Nat64Id
 resolveToIdForType expectedKind s =
-  let expectedKey = resolverKey expectedKind
-   in catchE
-        (do (entityType, nid) <- resolveRef s
-            if entityType == expectedKey
-              then pure nid
-              else fallbackToRawId s)
-        (\_ => fallbackToRawId s)
+  let bare      := stripHash s
+      expectedKey := resolverKey expectedKind
+   in if hasHashPrefix s
+        then do (entityType, nid) <- resolveRef bare
+                if entityType == expectedKey
+                  then pure nid
+                  else appFail $ "Identifier " ++ s ++ " resolved to wrong entity type"
+        else parseRawId s
 
 ||| Entity-specific resolvers.
 public export

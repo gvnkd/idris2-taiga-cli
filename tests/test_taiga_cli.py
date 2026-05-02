@@ -418,7 +418,7 @@ class TestRefResolution:
         iid, ref = created["id"], created["ref"]
         try:
             proc = subprocess.run(
-                [BIN, "--json", "issue", "get", str(ref)],
+                [BIN, "--json", "issue", "get", "#" + str(ref)],
                 capture_output=True, text=True, timeout=30,
                 cwd=str(workspace),
             )
@@ -460,7 +460,7 @@ class TestRefResolution:
         tid, ref = created["id"], created["ref"]
         try:
             proc = subprocess.run(
-                [BIN, "--json", "task", "get", str(ref)],
+                [BIN, "--json", "task", "get", "#" + str(ref)],
                 capture_output=True, text=True, timeout=30,
                 cwd=str(workspace),
             )
@@ -530,7 +530,7 @@ class TestSubcommandCRUD:
         tid, ref = created["id"], created["ref"]
         try:
             proc = subprocess.run(
-                [BIN, "--json", "task", "update", str(ref), "--subject", f"updated task {ts}"],
+                [BIN, "--json", "task", "update", "#" + str(ref), "--subject", f"updated task {ts}"],
                 capture_output=True, text=True, timeout=30,
                 cwd=str(workspace),
             )
@@ -550,7 +550,7 @@ class TestSubcommandCRUD:
         tid, ref = created["id"], created["ref"]
 
         proc = subprocess.run(
-            [BIN, "task", "delete", str(ref)],
+            [BIN, "task", "delete", "#" + str(ref)],
             input="yes\n",
             capture_output=True, text=True, timeout=30,
             cwd=str(workspace),
@@ -590,7 +590,7 @@ class TestSubcommandCRUD:
         eid, ref = created["id"], created["ref"]
         try:
             proc = subprocess.run(
-                [BIN, "--json", "epic", "update", str(ref), "--subject", f"updated epic {ts}"],
+                [BIN, "--json", "epic", "update", "#" + str(ref), "--subject", f"updated epic {ts}"],
                 capture_output=True, text=True, timeout=30,
                 cwd=str(workspace),
             )
@@ -610,7 +610,7 @@ class TestSubcommandCRUD:
         eid, ref = created["id"], created["ref"]
 
         proc = subprocess.run(
-            [BIN, "epic", "delete", str(ref)],
+            [BIN, "epic", "delete", "#" + str(ref)],
             input="yes\n",
             capture_output=True, text=True, timeout=30,
             cwd=str(workspace),
@@ -648,7 +648,7 @@ class TestSubcommandCRUD:
         sid, ref = created["id"], created["ref"]
         try:
             proc = subprocess.run(
-                [BIN, "--json", "story", "update", str(ref), "--subject", f"updated story {ts}"],
+                [BIN, "--json", "story", "update", "#" + str(ref), "--subject", f"updated story {ts}"],
                 capture_output=True, text=True, timeout=30,
                 cwd=str(workspace),
             )
@@ -668,7 +668,7 @@ class TestSubcommandCRUD:
         sid, ref = created["id"], created["ref"]
 
         proc = subprocess.run(
-            [BIN, "story", "delete", str(ref)],
+            [BIN, "story", "delete", "#" + str(ref)],
             input="yes\n",
             capture_output=True, text=True, timeout=30,
             cwd=str(workspace),
@@ -706,7 +706,7 @@ class TestSubcommandCRUD:
         iid, ref = created["id"], created["ref"]
         try:
             proc = subprocess.run(
-                [BIN, "--json", "issue", "update", str(ref), "--subject", f"updated issue {ts}"],
+                [BIN, "--json", "issue", "update", "#" + str(ref), "--subject", f"updated issue {ts}"],
                 capture_output=True, text=True, timeout=30,
                 cwd=str(workspace),
             )
@@ -726,7 +726,7 @@ class TestSubcommandCRUD:
         iid, ref = created["id"], created["ref"]
 
         proc = subprocess.run(
-            [BIN, "issue", "delete", str(ref)],
+            [BIN, "issue", "delete", "#" + str(ref)],
             input="yes\n",
             capture_output=True, text=True, timeout=30,
             cwd=str(workspace),
@@ -795,7 +795,7 @@ class TestCommentsSubcommand:
         try:
             # Add comment
             proc = subprocess.run(
-                [BIN, "comment", "add", "task", str(ref), f"test comment {ts}"],
+                [BIN, "comment", "add", "task", "#" + str(ref), f"test comment {ts}"],
                 capture_output=True, text=True, timeout=30,
                 cwd=str(workspace),
             )
@@ -804,7 +804,7 @@ class TestCommentsSubcommand:
 
             # List comments
             proc = subprocess.run(
-                [BIN, "--json", "comment", "list", "task", str(ref)],
+                [BIN, "--json", "comment", "list", "task", "#" + str(ref)],
                 capture_output=True, text=True, timeout=30,
                 cwd=str(workspace),
             )
@@ -824,7 +824,7 @@ class TestCommentsSubcommand:
         iid, ref = created["id"], created["ref"]
         try:
             proc = subprocess.run(
-                [BIN, "comment", "add", "issue", str(ref), f"issue comment {ts}"],
+                [BIN, "comment", "add", "issue", "#" + str(ref), f"issue comment {ts}"],
                 capture_output=True, text=True, timeout=30,
                 cwd=str(workspace),
             )
