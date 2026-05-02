@@ -113,7 +113,7 @@ parameters {auto env : ApiEnv}
     -> io (Either String (List TaskSummary, PaginationMeta))
   listTasks project story mstatus page pageSize = do
     let opts := concat $ catMaybes
-                   [ map (\p => [("project", p)]) project
+                   [ map (\p => [("project__id", p)]) project
                    , map (\s => [("userstory", showId s)]) story
                    , map (\s => [("status", s)]) mstatus
                    , map (\p => [("page", show p)]) page

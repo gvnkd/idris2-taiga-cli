@@ -76,7 +76,7 @@ parameters {auto env : ApiEnv}
    let opts   := concat $ catMaybes
                     [ map (\p => [("page", show p)]) page
                     , map (\s => [("page_size", show s)]) pageSize
-                    , map (\p => [("project", p)]) mproject ]
+                    , map (\p => [("project__id", p)]) mproject ]
     in fetchStoryList (buildUrl ["userstories"] opts env.base)
 
   ||| Get a user story by its ID.

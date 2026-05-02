@@ -64,7 +64,7 @@ parameters {auto env : ApiEnv}
     let opts   := concat $ catMaybes
                      [ map (\p => [("page", show p)]) page
                      , map (\s => [("page_size", show s)]) pageSize
-                     , map (\p => [("project", p)]) mproject ]
+                     , map (\p => [("project__id", p)]) mproject ]
         url    := buildUrl ["epics"] opts env.base
     resp <- authGet env url
     expectJsonWithMeta resp 200 "list epics"
