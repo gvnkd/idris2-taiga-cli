@@ -6,3 +6,4 @@ main = Main
 executable = taiga-cli
 
 depends = json
+        , http

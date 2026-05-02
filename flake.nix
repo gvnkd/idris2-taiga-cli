@@ -24,13 +24,12 @@
         docBrowser = idris2-withpkgs.packages.${system}.doc-browser;
 
         # Registry packages available as idris2-withpkgs.packages.${system}.<name>
-        # Note: ipkg depends on http2, not http
-        selectedLibs = with idris2-withpkgs.packages.${system}; [ json http2 ];
+        selectedLibs = with idris2-withpkgs.packages.${system}; [ json http ];
 
         # Wrapped idris2 with all registry deps on IDRIS2_PACKAGE_PATH
         idris2Wrapped = idris2-withpkgs.lib.${system}.withPackages (p: with p; [
           json
-          http2
+          http
         ]);
 
         pkg = pkgs.idris2Packages.buildIdris {
@@ -47,7 +46,7 @@
           let
             docsPkgs = with idris2-withpkgs.packages.${system}; [
               json-docs
-              http2-docs
+              http-docs
             ];
             linkCommands = map (docsPkg: ''
               if [ -d ${docsPkg}/share/doc ]; then
