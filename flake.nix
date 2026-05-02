@@ -23,13 +23,27 @@
         mkdocs = idris2-withpkgs.packages.${system}.idris2-mkdoc-md;
         docBrowser = idris2-withpkgs.packages.${system}.doc-browser;
 
+        # Vendored http library with local patches
+        httpVendored = pkgs.idris2Packages.buildIdris {
+          src = ./deps/http;
+          ipkgName = "http";
+          version = "0.0.1";
+          idrisLibraries = with idris2-withpkgs.packages.${system}; [
+            base64
+            elab-util
+            sop
+            tls
+          ];
+        };
+        httpVendoredLib = httpVendored.library {};
+
         # Registry packages available as idris2-withpkgs.packages.${system}.<name>
-        selectedLibs = with idris2-withpkgs.packages.${system}; [ json http ];
+        selectedLibs = with idris2-withpkgs.packages.${system}; [ json httpVendoredLib ];
 
         # Wrapped idris2 with all registry deps on IDRIS2_PACKAGE_PATH
-        idris2Wrapped = idris2-withpkgs.lib.${system}.withPackages (p: with p; [
-          json
-          http
+        idris2Wrapped = idris2-withpkgs.lib.${system}.withPackages (p: [
+          p.json
+          httpVendoredLib
         ]);
 
         pkg = pkgs.idris2Packages.buildIdris {
@@ -46,7 +60,6 @@
           let
             docsPkgs = with idris2-withpkgs.packages.${system}; [
               json-docs
-              http-docs
             ];
             linkCommands = map (docsPkg: ''
               if [ -d ${docsPkg}/share/doc ]; then
@@ -109,19 +122,9 @@
           ]);
 
           shellHook = ''
-            export IDRIS2_PACKAGE_PATH="${idris2Wrapped}/lib/idris2-${idris2.version}:''${IDRIS2_PACKAGE_PATH:-}"
-            echo "taiga-cli devShell"
-            echo ""
-            echo "Commands:"
-            echo "  build       - Build the project"
-            echo "  run         - Build and run taiga-cli"
-            echo "  tcli        - Run the built executable"
-            echo "  docs        - List browsable package docs"
-            echo "  doc-browser - Browse docs interactively"
-            echo ""
-            echo "  doc-browser list              - List all packages"
-            echo "  doc-browser show json         - View json package index"
-            echo "  doc-browser show json JSON    - View JSON.Encoder module"
+            #export IDRIS2_PACKAGE_PATH="${idris2Wrapped}/lib/idris2-${idris2.version}:''${IDRIS2_PACKAGE_PATH:-}"
+            export LD_LIBRARY_PATH="${idris2Wrapped}/lib''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+            export IDRIS2_LIBS="${idris2Wrapped}/lib''${IDRIS2_LIBS:+:$IDRIS2_LIBS}"
           '';
         };
       }

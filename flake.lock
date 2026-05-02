@@ -117,11 +117,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1777728895,
-        "narHash": "sha256-lO0xd83N7Q2z1A1p/q6KrYY+lsGPXPcjIejvUzuM86U=",
+        "lastModified": 1777738983,
+        "narHash": "sha256-ooo/oRUe8MGcrzGFvIYhEu+20Kl/SgJ8FUSANAFGyKk=",
         "owner": "gvnkd",
         "repo": "flake-idris2-withPackages",
-        "rev": "8a530b825a01c87f8f38b90ec5a5a211ffe1e63d",
+        "rev": "80bb28d3a307a37a4df8fa4ccea2c62be022f9ec",
         "type": "github"
       },
       "original": {

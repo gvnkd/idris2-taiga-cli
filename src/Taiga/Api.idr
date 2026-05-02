@@ -1,16 +1,27 @@
-||| HTTP client wrapper — delegates to curl subprocess.
+||| HTTP client wrapper — now using the native Idris2 `http` library.
 |||
 ||| Provides typed GET / POST / PUT / PATCH / DELETE helpers
 ||| that handle JSON bodies and Bearer-token authentication.
 module Taiga.Api
 
 import JSON.Derive
-import System.File
-import System.File.Process
 import System
 import Data.String
+import Data.List
+import Data.Maybe
+import Taiga.HttpClient
+import Network.HTTP.Client
+import Network.TLS.Verify
 
 %language ElabReflection
+
+||| Create a lightweight HTTP client without loading system certificates.
+||| Uses `certificate_ignore_check` since we connect to localhost HTTP
+||| where TLS is not used; this avoids the expensive cert loading that
+||| `new_client_default` performs eagerly.
+private
+mkClient : IO (HttpClient ())
+mkClient = new_client certificate_ignore_check 25 5 True True
 
 ||| HTTP status code.
 public export
@@ -20,74 +31,86 @@ record StatusCode where
 
 %runElab derive "StatusCode" [Show,Eq]
 
-||| Result of an HTTP request: status code and response body.
+||| Parsed pagination metadata from response headers.
+public export
+record PaginationMeta where
+  constructor MkPaginationMeta
+  totalCount  : Maybe Bits64
+  currentPage : Maybe Bits32
+  nextUrl     : Maybe String
+  prevUrl     : Maybe String
+
+||| Result of an HTTP request: status code, response body, and headers.
 public export
 record HttpResponse where
   constructor MkHttpResponse
-  status : StatusCode
-  body : String
+  status  : StatusCode
+  body    : String
+  headers : List (String, String)
 
 %runElab derive "HttpResponse" [Show]
 
-||| Parse curl output into HttpResponse.
-||| Curl output format: <body>\n<status_code>
-parseHttpResponse : String -> HttpResponse
-parseHttpResponse text =
-  case reverse (lines text) of
-    []       => MkHttpResponse (MkStatusCode 0) ""
-    [single] => MkHttpResponse (MkStatusCode 0) single
-    (statusLine :: bodyLines) =>
-      let body := concat $ map (\l => l ++ "\n") (reverse bodyLines)
-          code := cast statusLine
-       in MkHttpResponse (MkStatusCode code) body
+||| Parse a header line into (key, value) pair.
+parseHeaderLine : String -> Maybe (String, String)
+parseHeaderLine line =
+  case forget (split (== ':') line) of
+    (key :: valueParts) =>
+      let val := trim (concat (intersperse ":" valueParts))
+       in Just (trim (toLower key), val)
+    _ => Nothing
 
-||| Build the Authorization header flag for curl.
-private buildAuthFlag : Maybe String -> String
-buildAuthFlag Nothing    = ""
-buildAuthFlag (Just tok) = "--header \"Authorization: Bearer " ++ tok ++ "\""
+||| Try to parse a String into a Bits64.
+private
+parseBits64 : String -> Maybe Bits64
+parseBits64 s =
+  case parseInteger {a = Integer} s of
+    Just n => if n >= 0 then Just (cast n) else Nothing
+    Nothing => Nothing
 
-||| Build curl command string for a GET request.
-buildCurlGet : (url : String) -> (auth : Maybe String) -> String
-buildCurlGet url auth =
-  "curl -s -w \"\\n%{http_code}\" " ++ buildAuthFlag auth ++ " \"" ++ url ++ "\""
+||| Try to parse a String into a Bits32.
+private
+parseBits32 : String -> Maybe Bits32
+parseBits32 s =
+  case parseInteger {a = Integer} s of
+    Just n => if n >= 0 then Just (cast n) else Nothing
+    Nothing => Nothing
 
-||| Run curl via popen, read all output, close pipe, return HttpResponse.
-runCurlCmdIO : HasIO io => String -> io HttpResponse
-runCurlCmdIO cmd'
-  = do res <- popen (cmd' ++ " 2>&1") Read
-       case res of
-         Left  _     => pure (MkHttpResponse (MkStatusCode 1) "")
-         Right f     => do body <- fRead f
-                           pc <- pclose f
-                           case body of
-                             Left  _     => pure (MkHttpResponse (MkStatusCode 1) "")
-                             Right text => pure (parseHttpResponse text)
+||| Extract pagination metadata from response headers.
+public export
+extractPagination : HttpResponse -> PaginationMeta
+extractPagination resp =
+  MkPaginationMeta
+    (join $ parseBits64 <$> lookup "x-pagination-count" resp.headers)
+    (join $ parseBits32 <$> lookup "x-pagination-current" resp.headers)
+    (lookup "x-pagination-next" resp.headers)
+    (lookup "x-pagination-prev" resp.headers)
 
-||| Perform a GET request and return the response body.
+||| Convert library Response to our HttpResponse.
+private
+fromLibResponse : Taiga.HttpClient.Response -> HttpResponse
+fromLibResponse r = MkHttpResponse (MkStatusCode r.status) r.body r.headers
+
+||| Build the Authorization header.
+private
+buildAuthHeader : Maybe String -> List (String, String)
+buildAuthHeader Nothing    = []
+buildAuthHeader (Just tok) = [("Authorization", "Bearer " ++ tok)]
+
+||| Perform a GET request.
 public export
 httpGet :
      HasIO io
   => (url : String)
   -> (auth : Maybe String)
   -> io HttpResponse
-httpGet url auth = runCurlCmdIO (buildCurlGet url auth)
+httpGet url auth = do
+  client <- liftIO mkClient
+  result <- liftIO $ httpGet client url (buildAuthHeader auth)
+  liftIO $ close client
 
-||| Build curl command for a POST request (body passed separately).
-buildCurlPost : (url : String) -> (auth : Maybe String) -> String
-buildCurlPost url auth =
-  "curl -s -w \"\\n%{http_code}\" -X POST " ++ buildAuthFlag auth ++ " \"" ++ url ++ "\""
-
-||| Run curl with a request body passed via temporary file.
-||| Avoids shell injection of backticks, single quotes, etc.
-runCurlWithBody : HasIO io => String -> String -> io HttpResponse
-runCurlWithBody cmd' body = do
-  let tmpPath = "/tmp/taiga_cli_body.json"
-  Right () <- writeFile tmpPath body
-    | Left _ => pure (MkHttpResponse (MkStatusCode 1) "")
-  let cmdWithData = cmd' ++ " --header \"Content-Type: application/json\" --data @" ++ tmpPath
-  result <- runCurlCmdIO cmdWithData
-  _ <- system $ "rm -f " ++ tmpPath
-  pure result
+  case result of
+    Left err  => pure (MkHttpResponse (MkStatusCode 0) ("HTTP error: " ++ err) [])
+    Right resp => pure (fromLibResponse resp)
 
 ||| Perform a POST request with a JSON body.
 public export
@@ -97,16 +120,14 @@ httpPost :
    -> (auth : Maybe String)
    -> (body : String)
    -> io HttpResponse
-httpPost url auth body = runCurlWithBody (buildCurlPost url auth) body
+httpPost url auth body = do
+  client <- liftIO mkClient
+  result <- liftIO $ httpPost client url (buildAuthHeader auth) body
+  liftIO $ close client
 
-||| Build curl command for a generic HTTP method (body passed separately).
-buildCurlMethod :
-     (method : String)
-  -> (url : String)
-  -> (auth : Maybe String)
-  -> String
-buildCurlMethod method url auth =
-  "curl -s -w \"\\n%{http_code}\" -X " ++ method ++ " " ++ buildAuthFlag auth ++ " \"" ++ url ++ "\""
+  case result of
+    Left err  => pure (MkHttpResponse (MkStatusCode 0) ("HTTP error: " ++ err) [])
+    Right resp => pure (fromLibResponse resp)
 
 ||| Perform a PUT request with a JSON body.
 public export
@@ -116,7 +137,14 @@ httpPut :
    -> (auth : Maybe String)
    -> (body : String)
    -> io HttpResponse
-httpPut url auth body = runCurlWithBody (buildCurlMethod "PUT" url auth) body
+httpPut url auth body = do
+  client <- liftIO mkClient
+  result <- liftIO $ httpPut client url (buildAuthHeader auth) body
+  liftIO $ close client
+
+  case result of
+    Left err  => pure (MkHttpResponse (MkStatusCode 0) ("HTTP error: " ++ err) [])
+    Right resp => pure (fromLibResponse resp)
 
 ||| Perform a PATCH request with a JSON body.
 public export
@@ -126,7 +154,14 @@ httpPatch :
    -> (auth : Maybe String)
    -> (body : String)
    -> io HttpResponse
-httpPatch url auth body = runCurlWithBody (buildCurlMethod "PATCH" url auth) body
+httpPatch url auth body = do
+  client <- liftIO mkClient
+  result <- liftIO $ httpPatch client url (buildAuthHeader auth) body
+  liftIO $ close client
+
+  case result of
+    Left err  => pure (MkHttpResponse (MkStatusCode 0) ("HTTP error: " ++ err) [])
+    Right resp => pure (fromLibResponse resp)
 
 ||| Perform a DELETE request.
 public export
@@ -135,4 +170,11 @@ httpDelete :
    => (url : String)
    -> (auth : Maybe String)
    -> io HttpResponse
-httpDelete url auth = runCurlCmdIO (buildCurlMethod "DELETE" url auth)
+httpDelete url auth = do
+  client <- liftIO mkClient
+  result <- liftIO $ httpDelete client url (buildAuthHeader auth)
+  liftIO $ close client
+
+  case result of
+    Left err  => pure (MkHttpResponse (MkStatusCode 0) ("HTTP error: " ++ err) [])
+    Right resp => pure (fromLibResponse resp)
