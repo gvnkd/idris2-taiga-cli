@@ -55,17 +55,17 @@ parameters {auto env : ApiEnv}
   ||| List epics in a project.
   public export
   listEpics :
-       (project : String)
+       (project : Maybe String)
     -> (page : Maybe Bits32)
     -> (pageSize : Maybe Bits32)
     -> {auto _ : HasIO io}
     -> io (Either String (List EpicSummary))
-  listEpics project page pageSize = do
+  listEpics mproject page pageSize = do
     let opts   := concat $ catMaybes
                      [ map (\p => [("page", show p)]) page
-                     , map (\s => [("page_size", show s)]) pageSize ]
-        params := [("project", project)] ++ opts
-        url    := buildUrl ["epics"] params env.base
+                     , map (\s => [("page_size", show s)]) pageSize
+                     , map (\p => [("project", p)]) mproject ]
+        url    := buildUrl ["epics"] opts env.base
     resp <- authGet env url
     expectJson resp 200 "list epics"
 

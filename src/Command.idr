@@ -78,6 +78,36 @@ record MaybeStringArgs where
 
 %runElab derive "MaybeStringArgs" [Show,FromJSON]
 
+||| Arguments for list commands with pagination and filters.
+public export
+record ListArgs where
+  constructor MkListArgs
+  project     : Maybe String
+  page        : Maybe Bits32
+  pageSize    : Maybe Bits32
+  status      : Maybe String
+  assignedTo  : Maybe String
+  milestone   : Maybe String
+  listArgsTag : String
+
+%runElab derive "ListArgs" [Show,ToJSON]
+
+||| Custom FromJSON: backward-compatible with old StringArgs format
+||| and lenient with missing pagination/filter fields.
+public export
+FromJSON ListArgs where
+  fromJSON =
+    withObject "ListArgs" $ \o =>
+      [| MkListArgs
+           (fieldMaybe o "project")
+           (fieldMaybe o "page")
+           (fieldMaybe o "pageSize")
+           (fieldMaybe o "status")
+           (fieldMaybe o "assignedTo")
+           (fieldMaybe o "milestone")
+           (fromMaybe "" <$> fieldMaybe o "listArgsTag")
+      |]
+
 ||| Simple wrapper holding an optional entity ID.
 record MaybeNat64Args where
   constructor MkMaybeNat64Args
@@ -268,17 +298,17 @@ data Command : Type where
   -- Read-only / list commands
   CmdListProjects     : Maybe String -> Command
   CmdGetProject       : Maybe Nat64Id -> Maybe Slug -> Command
-  CmdListEpics        : String -> Command
+  CmdListEpics        : ListArgs -> Command
   CmdGetEpic          : Maybe Nat64Id -> Command
-  CmdListStories      : String -> Command
+  CmdListStories      : ListArgs -> Command
   CmdGetStory         : Maybe Nat64Id -> Command
-  CmdListTasks        : Maybe String -> Command
+  CmdListTasks        : ListArgs -> Command
   CmdGetTask          : Maybe Nat64Id -> Command
-  CmdListIssues       : String -> Command
+  CmdListIssues       : ListArgs -> Command
   CmdGetIssue         : Maybe Nat64Id -> Command
-  CmdListWiki         : String -> Command
+  CmdListWiki         : ListArgs -> Command
   CmdGetWiki          : Maybe Nat64Id -> Command
-  CmdListMilestones   : String -> Command
+  CmdListMilestones   : ListArgs -> Command
   CmdListUsers        : String -> Command
   CmdListMemberships  : String -> Command
   CmdListRoles        : String -> Command
@@ -374,38 +404,38 @@ mkListProjectsCmd a         = CmdListProjects a.member
 private mkGetProjectCmd     : GetProjectArgs -> Command
 mkGetProjectCmd a           = CmdGetProject (map MkNat64Id a.id) (map MkSlug a.slug)
 
-private mkListEpicsCmd      : StringArgs -> Command
-mkListEpicsCmd a            = CmdListEpics a.project
+private mkListEpicsCmd      : ListArgs -> Command
+mkListEpicsCmd a            = CmdListEpics a
 
 private mkGetEpicCmd        : MaybeNat64Args -> Command
 mkGetEpicCmd a              = CmdGetEpic (map MkNat64Id a.id)
 
-private mkListStoriesCmd    : StringArgs -> Command
-mkListStoriesCmd a          = CmdListStories a.project
+private mkListStoriesCmd    : ListArgs -> Command
+mkListStoriesCmd a          = CmdListStories a
 
 private mkGetStoryCmd       : MaybeNat64Args -> Command
 mkGetStoryCmd a             = CmdGetStory (map MkNat64Id a.id)
 
-private mkListTasksCmd      : MaybeStringArgs -> Command
-mkListTasksCmd a            = CmdListTasks a.project
+private mkListTasksCmd      : ListArgs -> Command
+mkListTasksCmd a            = CmdListTasks a
 
 private mkGetTaskCmd        : MaybeNat64Args -> Command
 mkGetTaskCmd a              = CmdGetTask (map MkNat64Id a.id)
 
-private mkListIssuesCmd     : StringArgs -> Command
-mkListIssuesCmd a           = CmdListIssues a.project
+private mkListIssuesCmd     : ListArgs -> Command
+mkListIssuesCmd a           = CmdListIssues a
 
 private mkGetIssueCmd       : MaybeNat64Args -> Command
 mkGetIssueCmd a             = CmdGetIssue (map MkNat64Id a.id)
 
-private mkListWikiCmd       : StringArgs -> Command
-mkListWikiCmd a             = CmdListWiki a.project
+private mkListWikiCmd       : ListArgs -> Command
+mkListWikiCmd a             = CmdListWiki a
 
 private mkGetWikiCmd        : MaybeNat64Args -> Command
 mkGetWikiCmd a              = CmdGetWiki (map MkNat64Id a.id)
 
-private mkListMilestonesCmd : StringArgs -> Command
-mkListMilestonesCmd a       = CmdListMilestones a.project
+private mkListMilestonesCmd : ListArgs -> Command
+mkListMilestonesCmd a       = CmdListMilestones a
 
 private mkListUsersCmd      : StringArgs -> Command
 mkListUsersCmd a            = CmdListUsers a.project
@@ -575,23 +605,23 @@ dispatchWithEnv' command env =
         CmdGetProject (Just id) _                          => dispatchWithEnvHelper (getProjectById @{env} id) encode
         CmdGetProject _ (Just slug)                        => dispatchWithEnvHelper (getProjectBySlug @{env} slug) encode
         CmdGetProject Nothing Nothing                      => pure $ Err $ MkErrorResponse False "bad_request" "Must provide id or slug"
-        CmdListEpics project                               => dispatchWithEnvHelper (listEpics @{env} project Nothing Nothing) encode
+        CmdListEpics args                               => dispatchWithEnvHelper (listEpics @{env} args.project args.page args.pageSize) encode
         CmdGetEpic (Just id)                              => dispatchWithEnvHelper (getEpic @{env} id) encode
         CmdGetEpic Nothing                                => pure $ Err $ MkErrorResponse False "bad_request" "No epic ID provided"
-        CmdListStories project                             => dispatchWithEnvHelper (listStories @{env} project Nothing Nothing) encode
+        CmdListStories args                             => dispatchWithEnvHelper (listStories @{env} args.project args.page args.pageSize) encode
         CmdGetStory (Just id)                             => dispatchWithEnvHelper (getStory @{env} id) encode
         CmdGetStory Nothing                               => pure $ Err $ MkErrorResponse False "bad_request" "No story ID provided"
-        CmdListTasks project                              =>
-          dispatchWithEnvHelper (listTasks @{env} project Nothing Nothing Nothing Nothing) encode
+        CmdListTasks args                              =>
+          dispatchWithEnvHelper (listTasks @{env} args.project Nothing args.status args.page args.pageSize) encode
         CmdGetTask (Just id)                              => dispatchWithEnvHelper (getTask @{env} id) encode
         CmdGetTask Nothing                                => pure $ Err $ MkErrorResponse False "bad_request" "No task ID provided"
-        CmdListIssues project                             => dispatchWithEnvHelper (listIssues @{env} project Nothing Nothing) encode
+        CmdListIssues args                             => dispatchWithEnvHelper (listIssues @{env} args.project args.page args.pageSize) encode
         CmdGetIssue (Just id)                             => dispatchWithEnvHelper (getIssue @{env} id) encode
         CmdGetIssue Nothing                               => pure $ Err $ MkErrorResponse False "bad_request" "No issue ID provided"
-        CmdListWiki project                               => dispatchWithEnvHelper (listWiki @{env} project Nothing Nothing) encode
+        CmdListWiki args                               => dispatchWithEnvHelper (listWiki @{env} args.project args.page args.pageSize) encode
         CmdGetWiki (Just id)                              => dispatchWithEnvHelper (getWiki @{env} id) encode
         CmdGetWiki Nothing                                => pure $ Err $ MkErrorResponse False "bad_request" "No wiki ID provided"
-        CmdListMilestones project                         => dispatchWithEnvHelper (listMilestones @{env} project Nothing Nothing) encode
+        CmdListMilestones args                         => dispatchWithEnvHelper (listMilestones @{env} args.project args.page args.pageSize) encode
         CmdListUsers project                              => dispatchWithEnvHelper (listUsers @{env} project) encode
         CmdListMemberships project                        => dispatchWithEnvHelper (listMemberships @{env} project) encode
         CmdListRoles project                              => dispatchWithEnvHelper (listRoles @{env} project) encode

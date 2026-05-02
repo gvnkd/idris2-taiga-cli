@@ -8,6 +8,7 @@ module CLI.Args
 import Model.Auth
 import Model.Common
 import Command
+import Data.Maybe
 
 ||| Parsed CLI flags — one variant per sub-command or flag group.
 public export
@@ -95,17 +96,17 @@ toCommand (ArgLogin u p)           = CmdLogin $ MkCredentials u p
 toCommand ArgMe                    = CmdMe
 toCommand (ArgListProjects m)      = CmdListProjects m
 toCommand (ArgGetProject mid ms)   = CmdGetProject mid ms
-toCommand (ArgListEpics p)         = CmdListEpics p
+toCommand (ArgListEpics p)         = CmdListEpics (MkListArgs (Just p) Nothing Nothing Nothing Nothing Nothing "")
 toCommand (ArgGetEpic mid)         = CmdGetEpic mid
-toCommand (ArgListStories p)       = CmdListStories p
+toCommand (ArgListStories p)       = CmdListStories (MkListArgs (Just p) Nothing Nothing Nothing Nothing Nothing "")
 toCommand (ArgGetStory mid)        = CmdGetStory mid
-toCommand (ArgListTasks p)         = CmdListTasks p
+toCommand (ArgListTasks p)         = CmdListTasks (MkListArgs p Nothing Nothing Nothing Nothing Nothing "")
 toCommand (ArgGetTask mid)         = CmdGetTask mid
-toCommand (ArgListIssues p)        = CmdListIssues p
+toCommand (ArgListIssues p)        = CmdListIssues (MkListArgs (Just p) Nothing Nothing Nothing Nothing Nothing "")
 toCommand (ArgGetIssue mid)        = CmdGetIssue mid
-toCommand (ArgListWiki p)          = CmdListWiki p
+toCommand (ArgListWiki p)          = CmdListWiki (MkListArgs (Just p) Nothing Nothing Nothing Nothing Nothing "")
 toCommand (ArgGetWiki mid)         = CmdGetWiki mid
-toCommand (ArgListMilestones p)    = CmdListMilestones p
+toCommand (ArgListMilestones p)    = CmdListMilestones (MkListArgs (Just p) Nothing Nothing Nothing Nothing Nothing "")
 toCommand (ArgListUsers p)         = CmdListUsers p
 toCommand (ArgListMemberships p)   = CmdListMemberships p
 toCommand (ArgListRoles p)         = CmdListRoles p

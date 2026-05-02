@@ -67,17 +67,17 @@ parameters {auto env : ApiEnv}
   ||| List user stories in a project.
   public export
   listStories :
-       (project : String)
+       (project : Maybe String)
     -> (page : Maybe Bits32)
     -> (pageSize : Maybe Bits32)
     -> {auto _ : HasIO io}
     -> io (Either String (List UserStorySummary))
-  listStories project page pageSize =
+  listStories mproject page pageSize =
    let opts   := concat $ catMaybes
                     [ map (\p => [("page", show p)]) page
-                    , map (\s => [("page_size", show s)]) pageSize ]
-       params := [("project", project)] ++ opts
-    in fetchStoryList (buildUrl ["userstories"] params env.base)
+                    , map (\s => [("page_size", show s)]) pageSize
+                    , map (\p => [("project", p)]) mproject ]
+    in fetchStoryList (buildUrl ["userstories"] opts env.base)
 
   ||| Get a user story by its ID.
   public export

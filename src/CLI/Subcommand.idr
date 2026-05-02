@@ -695,7 +695,7 @@ handleEpicUpdate ident mSubject mDesc mStatusText mStatusId = runAppM (epicUpdat
 ||| Handler for ActEpicList.
 public export
 handleEpicList : IO (Either String CmdResult)
-handleEpicList = handleEntityList "Epic" formatEpicSummaries (\e, p => listEpics @{e} p Nothing (Just 1000))
+handleEpicList = handleEntityList "Epic" formatEpicSummaries (\e, p => listEpics @{e} (Just p) Nothing (Just 1000))
 
 ||| Handler for ActEpicGet.
 public export
@@ -717,7 +717,7 @@ handleEpicCreate subject mDesc mStatus = runAppM (epicCreateAux subject mDesc mS
 ||| Handler for ActSprintList.
 public export
 handleSprintList : IO (Either String CmdResult)
-handleSprintList = handleEntityList "Sprint" formatMilestoneSummaries (\e, p => listMilestones @{e} p Nothing (Just 1000))
+handleSprintList = handleEntityList "Sprint" formatMilestoneSummaries (\e, p => listMilestones @{e} (Just p) Nothing (Just 1000))
 
 ||| Handler for ActSprintShow.
 public export
@@ -732,7 +732,7 @@ handleSprintSet = handleEntityGet "Sprint" (\_, m => formatMilestone m) resolveM
 ||| Handler for ActIssueList.
 public export
 handleIssueList : IO (Either String CmdResult)
-handleIssueList = handleEntityList "Issue" formatIssueSummaries (\e, p => listIssues @{e} p Nothing (Just 1000))
+handleIssueList = handleEntityList "Issue" formatIssueSummaries (\e, p => listIssues @{e} (Just p) Nothing (Just 1000))
 
 ||| Handler for ActIssueGet.
 public export
@@ -777,7 +777,7 @@ handleIssueDelete = handleEntityDelete "issue" resolveIssueId (\e, i => deleteIs
 ||| Handler for ActStoryList.
 public export
 handleStoryList : IO (Either String CmdResult)
-handleStoryList = handleEntityList "Story" formatStorySummaries (\e, p => listStories @{e} p Nothing (Just 1000))
+handleStoryList = handleEntityList "Story" formatStorySummaries (\e, p => listStories @{e} (Just p) Nothing (Just 1000))
 
 ||| Handler for ActStoryGet.
 public export
@@ -787,7 +787,7 @@ handleStoryGet = handleEntityGet "Story" formatStory resolveStoryId (\e, i => ge
 ||| Handler for ActWikiList.
 public export
 handleWikiList : IO (Either String CmdResult)
-handleWikiList = handleEntityList "Wiki page" formatWikiPageSummaries (\e, p => listWiki @{e} p Nothing (Just 1000))
+handleWikiList = handleEntityList "Wiki page" formatWikiPageSummaries (\e, p => listWiki @{e} (Just p) Nothing (Just 1000))
 
 ||| Handler for ActWikiGet.
 public export
