@@ -150,19 +150,38 @@ record ResolveResponse where
   us        : Maybe Bits64
   wiki      : Maybe Bits64
   milestone : Maybe Bits64
+  epic      : Maybe Bits64
 
-%runElab derive "ResolveResponse" [Show,Eq,ToJSON,FromJSON]
+%runElab derive "ResolveResponse" [Show,Eq,ToJSON]
+
+||| Custom FromJSON: the resolver API omits absent fields instead of
+||| returning null, so we must treat missing keys as Nothing.
+public export
+FromJSON ResolveResponse where
+  fromJSON =
+    withObject "ResolveResponse" $ \o =>
+      [| MkResolveResponse
+           (fieldMaybe o "project")
+           (fieldMaybe o "task")
+           (fieldMaybe o "issue")
+           (fieldMaybe o "us")
+           (fieldMaybe o "wiki")
+           (fieldMaybe o "milestone")
+           (fieldMaybe o "epic")
+      |]
 
 ||| Extract the first non-project entity ID from a resolver response.
+||| Keys must match `resolverKey` for each EntityKind.
 public export
 extractEntityFromResolve : ResolveResponse -> Maybe (String, Nat64Id)
 extractEntityFromResolve r =
   go
     [ ("task",)      <$> map MkNat64Id r.task
     , ("issue",)     <$> map MkNat64Id r.issue
-    , ("story",)     <$> map MkNat64Id r.us
+    , ("us",)        <$> map MkNat64Id r.us
     , ("wiki",)      <$> map MkNat64Id r.wiki
     , ("milestone",) <$> map MkNat64Id r.milestone
+    , ("epic",)      <$> map MkNat64Id r.epic
     ]
   where
     go : List (Maybe (String, Nat64Id)) -> Maybe (String, Nat64Id)

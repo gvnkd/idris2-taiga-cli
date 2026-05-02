@@ -112,15 +112,25 @@ runSubcommand rawArgs = do
   let (args, wantJson) := stripJsonFlag rawArgs
   fmt <- if wantJson then pure JsonFmt else resolveOutputFormat
   case parseAction args of
-    Left err => do
-      putStrLn $ "error: " ++ err
-      exitWith (ExitFailure 1)
+    Left err =>
+      if wantJson
+        then do
+          putStrLn $ encodeCmdResult (cmdError err)
+          exitWith (ExitFailure 1)
+        else do
+          putStrLn $ "error: " ++ err
+          exitWith (ExitFailure 1)
     Right action => do
       result <- executeAction action
       case result of
-        Left err => do
-          putStrLn $ "error: " ++ err
-          exitWith (ExitFailure 1)
+        Left err =>
+          if wantJson
+            then do
+              putStrLn $ encodeCmdResult (cmdError err)
+              exitWith (ExitFailure 1)
+            else do
+              putStrLn $ "error: " ++ err
+              exitWith (ExitFailure 1)
         Right cr => putStrLn $ renderCmdResult fmt cr
 
 ||| Check if args look like legacy flags (start with --).
@@ -134,10 +144,11 @@ looksLikeFlags (x::_) = Data.String.isPrefixOf "--" x
 main : IO ()
 main = do
   args <- getArgs
-  let args' := drop 1 args
+  let args'    := drop 1 args
+      (argsNoJson, _) := stripJsonFlag args'
   case args' of
     []    => putStrLn usage
     _     =>
-      if looksLikeFlags args'
+      if looksLikeFlags argsNoJson
         then runCLI args'
         else runSubcommand args'

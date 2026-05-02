@@ -418,13 +418,12 @@ class TestRefResolution:
         iid, ref = created["id"], created["ref"]
         try:
             proc = subprocess.run(
-                [BIN, "issue", "get", str(ref)],
+                [BIN, "--json", "issue", "get", str(ref)],
                 capture_output=True, text=True, timeout=30,
                 cwd=str(workspace),
             )
             assert proc.returncode == 0, f"issue get by ref failed: {proc.stdout}{proc.stderr}"
-            assert "[OK]" in proc.stdout
-            data = json.loads(proc.stdout.split("\n", 1)[1])
+            data = json.loads(proc.stdout)["payload"]
             assert data["id"] == iid
             assert data["ref"] == ref
         finally:
@@ -440,13 +439,12 @@ class TestRefResolution:
         iid, ref = created["id"], created["ref"]
         try:
             proc = subprocess.run(
-                [BIN, "issue", "get", str(iid)],
+                [BIN, "--json", "issue", "get", str(iid)],
                 capture_output=True, text=True, timeout=30,
                 cwd=str(workspace),
             )
             assert proc.returncode == 0, f"issue get by db id failed: {proc.stdout}{proc.stderr}"
-            assert "[OK]" in proc.stdout
-            data = json.loads(proc.stdout.split("\n", 1)[1])
+            data = json.loads(proc.stdout)["payload"]
             assert data["id"] == iid
             assert data["ref"] == ref
         finally:
@@ -462,13 +460,12 @@ class TestRefResolution:
         tid, ref = created["id"], created["ref"]
         try:
             proc = subprocess.run(
-                [BIN, "task", "get", str(ref)],
+                [BIN, "--json", "task", "get", str(ref)],
                 capture_output=True, text=True, timeout=30,
                 cwd=str(workspace),
             )
             assert proc.returncode == 0, f"task get by ref failed: {proc.stdout}{proc.stderr}"
-            assert "[OK]" in proc.stdout
-            data = json.loads(proc.stdout.split("\n", 1)[1])
+            data = json.loads(proc.stdout)["payload"]
             assert data["id"] == tid
             assert data["ref"] == ref
         finally:
@@ -533,13 +530,12 @@ class TestSubcommandCRUD:
         tid, ref = created["id"], created["ref"]
         try:
             proc = subprocess.run(
-                [BIN, "task", "update", str(ref), "--subject", f"updated task {ts}"],
+                [BIN, "--json", "task", "update", str(ref), "--subject", f"updated task {ts}"],
                 capture_output=True, text=True, timeout=30,
                 cwd=str(workspace),
             )
             assert proc.returncode == 0, f"task update failed: {proc.stdout}{proc.stderr}"
-            assert "[OK]" in proc.stdout
-            data = json.loads(proc.stdout.split("\n", 1)[1])
+            data = json.loads(proc.stdout)["payload"]
             assert data["subject"] == f"updated task {ts}"
         finally:
             client.delete_task(tid)
@@ -575,13 +571,12 @@ class TestSubcommandCRUD:
 
         ts = _ts()
         proc = subprocess.run(
-            [BIN, "epic", "create", f"subcmd epic {ts}", "--description", "test desc"],
+            [BIN, "--json", "epic", "create", f"subcmd epic {ts}", "--description", "test desc"],
             capture_output=True, text=True, timeout=30,
             cwd=str(workspace),
         )
         assert proc.returncode == 0, f"epic create failed: {proc.stdout}{proc.stderr}"
-        assert "[OK]" in proc.stdout
-        data = json.loads(proc.stdout.split("\n", 1)[1])
+        data = json.loads(proc.stdout)["payload"]
         assert data["subject"] == f"subcmd epic {ts}"
         assert data["description"] == "test desc"
 
@@ -595,13 +590,12 @@ class TestSubcommandCRUD:
         eid, ref = created["id"], created["ref"]
         try:
             proc = subprocess.run(
-                [BIN, "epic", "update", str(ref), "--subject", f"updated epic {ts}"],
+                [BIN, "--json", "epic", "update", str(ref), "--subject", f"updated epic {ts}"],
                 capture_output=True, text=True, timeout=30,
                 cwd=str(workspace),
             )
             assert proc.returncode == 0, f"epic update failed: {proc.stdout}{proc.stderr}"
-            assert "[OK]" in proc.stdout
-            data = json.loads(proc.stdout.split("\n", 1)[1])
+            data = json.loads(proc.stdout)["payload"]
             assert data["subject"] == f"updated epic {ts}"
         finally:
             client.delete_epic(eid)
@@ -636,13 +630,12 @@ class TestSubcommandCRUD:
 
         ts = _ts()
         proc = subprocess.run(
-            [BIN, "story", "create", f"subcmd story {ts}", "--description", "test desc"],
+            [BIN, "--json", "story", "create", f"subcmd story {ts}", "--description", "test desc"],
             capture_output=True, text=True, timeout=30,
             cwd=str(workspace),
         )
         assert proc.returncode == 0, f"story create failed: {proc.stdout}{proc.stderr}"
-        assert "[OK]" in proc.stdout
-        data = json.loads(proc.stdout.split("\n", 1)[1])
+        data = json.loads(proc.stdout)["payload"]
         assert data["subject"] == f"subcmd story {ts}"
 
     def test_story_update(self, workspace, client):
@@ -655,13 +648,12 @@ class TestSubcommandCRUD:
         sid, ref = created["id"], created["ref"]
         try:
             proc = subprocess.run(
-                [BIN, "story", "update", str(ref), "--subject", f"updated story {ts}"],
+                [BIN, "--json", "story", "update", str(ref), "--subject", f"updated story {ts}"],
                 capture_output=True, text=True, timeout=30,
                 cwd=str(workspace),
             )
             assert proc.returncode == 0, f"story update failed: {proc.stdout}{proc.stderr}"
-            assert "[OK]" in proc.stdout
-            data = json.loads(proc.stdout.split("\n", 1)[1])
+            data = json.loads(proc.stdout)["payload"]
             assert data["subject"] == f"updated story {ts}"
         finally:
             client.delete_story(sid)
@@ -696,13 +688,12 @@ class TestSubcommandCRUD:
 
         ts = _ts()
         proc = subprocess.run(
-            [BIN, "issue", "create", f"subcmd issue {ts}", "--description", "test desc"],
+            [BIN, "--json", "issue", "create", f"subcmd issue {ts}", "--description", "test desc"],
             capture_output=True, text=True, timeout=30,
             cwd=str(workspace),
         )
         assert proc.returncode == 0, f"issue create failed: {proc.stdout}{proc.stderr}"
-        assert "[OK]" in proc.stdout
-        data = json.loads(proc.stdout.split("\n", 1)[1])
+        data = json.loads(proc.stdout)["payload"]
         assert data["subject"] == f"subcmd issue {ts}"
 
     def test_issue_update(self, workspace, client):
@@ -715,13 +706,12 @@ class TestSubcommandCRUD:
         iid, ref = created["id"], created["ref"]
         try:
             proc = subprocess.run(
-                [BIN, "issue", "update", str(ref), "--subject", f"updated issue {ts}"],
+                [BIN, "--json", "issue", "update", str(ref), "--subject", f"updated issue {ts}"],
                 capture_output=True, text=True, timeout=30,
                 cwd=str(workspace),
             )
             assert proc.returncode == 0, f"issue update failed: {proc.stdout}{proc.stderr}"
-            assert "[OK]" in proc.stdout
-            data = json.loads(proc.stdout.split("\n", 1)[1])
+            data = json.loads(proc.stdout)["payload"]
             assert data["subject"] == f"updated issue {ts}"
         finally:
             client.delete_issue(iid)
@@ -814,13 +804,12 @@ class TestCommentsSubcommand:
 
             # List comments
             proc = subprocess.run(
-                [BIN, "comment", "list", "task", str(ref)],
+                [BIN, "--json", "comment", "list", "task", str(ref)],
                 capture_output=True, text=True, timeout=30,
                 cwd=str(workspace),
             )
             assert proc.returncode == 0, f"comment list failed: {proc.stdout}{proc.stderr}"
-            assert "[OK]" in proc.stdout
-            data = json.loads(proc.stdout.split("\n", 1)[1])
+            data = json.loads(proc.stdout)["payload"]
             assert isinstance(data, list)
         finally:
             client.delete_task(tid)
@@ -857,3 +846,124 @@ class TestUsersMembershipsRoles:
     def test_list_roles(self, client):
         roles = client.list_roles()
         assert isinstance(roles, list)
+
+
+class TestOutputFormat:
+    """Verify text vs JSON output formatting in subcommand mode."""
+
+    BASE = "http://127.0.0.1:8000/api/v1"
+
+    @staticmethod
+    def _token_file():
+        home = os.path.expanduser("~")
+        return os.path.join(home, ".local", "share", "taiga-cli", "tokens",
+                            "http___127.0.0.1_8000_api_v1.json")
+
+    @pytest.fixture
+    def workspace(self, tmp_path):
+        tf = self._token_file()
+        if os.path.exists(tf):
+            os.remove(tf)
+
+        proc = subprocess.run(
+            [BIN, "init", self.BASE],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(tmp_path),
+        )
+        assert proc.returncode == 0, f"init failed: {proc.stdout}{proc.stderr}"
+
+        yield tmp_path
+
+        if os.path.exists(tf):
+            os.remove(tf)
+
+    def _login(self, workspace):
+        proc = subprocess.run(
+            [BIN, "login", "--user", "rune"],
+            input="rune-secret-42\n",
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0
+
+    def _set_project(self, workspace):
+        proc = subprocess.run(
+            [BIN, "project", "set", PROJECT_ID],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0
+
+    def test_text_mode_no_json_payload(self, workspace):
+        """Text mode should print only a status line, no JSON."""
+        self._login(workspace)
+        self._set_project(workspace)
+
+        proc = subprocess.run(
+            [BIN, "task", "list"],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0
+        assert "[OK]" in proc.stdout
+        # Should NOT contain JSON braces
+        assert "{" not in proc.stdout
+        assert "}" not in proc.stdout
+
+    def test_json_mode_pure_json(self, workspace):
+        """JSON mode should print ONLY a valid JSON object."""
+        self._login(workspace)
+        self._set_project(workspace)
+
+        proc = subprocess.run(
+            [BIN, "--json", "task", "list"],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0
+        # Should be valid JSON (no [OK] prefix)
+        assert "[OK]" not in proc.stdout
+        data = json.loads(proc.stdout)
+        assert "status" in data
+        assert "message" in data
+        assert "payload" in data
+        assert isinstance(data["payload"], list)
+
+    def test_json_mode_pipeable_to_jq(self, workspace):
+        """JSON mode output must be pipeable to jq."""
+        self._login(workspace)
+        self._set_project(workspace)
+
+        proc = subprocess.run(
+            [BIN, "--json", "project", "get"],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0
+        data = json.loads(proc.stdout)
+        # jq '.payload.id' equivalent in Python
+        assert "payload" in data
+        assert data["payload"]["id"] == int(PROJECT_ID)
+
+    def test_error_text_mode_no_json(self, workspace):
+        """Error in text mode should show only text, no JSON."""
+        proc = subprocess.run(
+            [BIN, "task", "get", "99999"],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode != 0 or "[ERR]" in proc.stdout
+        if "[ERR]" in proc.stdout:
+            assert "{" not in proc.stdout
+
+    def test_error_json_mode_valid_json(self, workspace):
+        """Error in JSON mode should still be valid JSON."""
+        proc = subprocess.run(
+            [BIN, "--json", "task", "get", "99999"],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        # Exit code may be non-zero, but stdout must be valid JSON
+        data = json.loads(proc.stdout)
+        assert "status" in data
+        assert data["status"] != 0
