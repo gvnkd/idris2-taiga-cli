@@ -8,3 +8,5 @@ result
 .opencode/
 tests/__pycache__/
 .taiga/
+test_sync.idr
+taiga-cli.ss.html

@@ -11,7 +11,7 @@ A command-line tool written in [Idris 2](https://github.com/idris-lang/Idris2) t
 - **Rich text output** — list views show status names, assignments, and closed state at a glance
 - **Text-based status resolution** — use human-readable status names (`New`, `Closed`, `In progress`) instead of numeric IDs
 - **Status discovery** — list available statuses per entity type with `task statuses`, `issue statuses`, etc.
-- Ref-first identifiers — all entity lookups accept user-facing ref IDs (not just internal DB IDs)
+- Strict ID semantics — bare numbers are database IDs, `#` prefixed values resolve via ref lookup
 - Entity-type-aware resolution — prevents ref collisions across different entity types
 - Comment management via the Taiga history API
 - Global project search and entity resolution by slug/ref
@@ -114,6 +114,29 @@ $ tcli --json task get 99999
 tcl> error: get task failed with status 404
 ```
 
+## Identifiers
+
+Entity IDs can be specified in two ways:
+
+| Syntax | Meaning | Example |
+|--------|---------|---------|
+| Bare number | Raw database ID (no ref lookup) | `397` → looks up entity at DB row 397 |
+| `#` prefixed | Ref ID resolved via Taiga resolver API | `#359` → resolves ref 359 to its DB ID |
+
+```shell
+# Look up task by database ID (bypasses ref resolution)
+tcli task get 397
+
+# Look up task by ref (uses Taiga resolver API)
+tcli task get "#359"
+
+# Non-existent ref fails — no fallback to DB ID lookup
+tcli task get "#99999"
+error: Ref 99999 not found in project
+```
+
+This distinction prevents ambiguity when a ref number happens to match an unrelated database ID.
+
 ## Usage
 
 ### Subcommand Mode (Stateful)
@@ -121,7 +144,7 @@ tcl> error: get task failed with status 404
 The subcommand mode maintains workspace state in `./.taiga/` and authenticates via `~/.local/share/taiga-cli/`.
 
 All entity commands operate on the **active project** set via `project set`.
-All entity lookups accept **ref IDs** (user-facing numbers from the Taiga UI) or raw database IDs.
+All entity lookups accept **ref IDs** (prefixed with `#`) or raw database IDs.
 
 ```shell
 # Initialize workspace state
@@ -249,7 +272,9 @@ Project context:
   project set <slug|id>         Switch active project
   project get                   Show active project details
 
-Entity operations (on active project, id = ref-id or db-id):
+Entity operations (on active project):
+  id = bare number              Raw database ID, e.g. "397"
+  id = #N                       Ref ID, resolved via Taiga resolver API, e.g. "#359"
 
   task list [--status S]                List tasks (text table with status names)
   task create <subject>                 Create task
@@ -384,7 +409,7 @@ Taiga uses numeric status IDs internally, but `taiga-cli` lets you use **human-r
 
 ```shell
 # Close a task by name
-$ tcli task update 330 --status "Closed"
+$ tcli task update #330 --status "Closed"
 Task #330: Fix auth bug
 ----------------------------------------
 ID:      330
@@ -393,7 +418,7 @@ Story:   #42
 Closed:  Yes
 
 # Reopen an issue
-$ tcli issue update 124 --status "New"
+$ tcli issue update #124 --status "New"
 Issue #124: Auth bug on login
 ----------------------------------------
 ID:      124
@@ -406,21 +431,21 @@ Discover available statuses for the active project:
 ```shell
 $ tcli task statuses
 Task statuses:
-  41  New  (new)
-  42  In progress  (in-progress)
-  43  Ready for test  (ready-for-test)
-  44  Closed  (closed)
-  45  Needs Info  (needs-info)
+  36  New  (new)
+  37  In progress  (in-progress)
+  38  Ready for test  (ready-for-test)
+  39  Closed  (closed)
+  40  Needs Info  (needs-info)
 
 $ tcli issue statuses
 Issue statuses:
-  57  New  (new)
-  58  In progress  (in-progress)
-  59  Ready for test  (ready-for-test)
-  60  Closed  (closed)
-  61  Needs Info  (needs-info)
-  62  Rejected  (rejected)
-  63  Postponed  (postponed)
+  50  New  (new)
+  51  In progress  (in-progress)
+  52  Ready for test  (ready-for-test)
+  53  Closed  (closed)
+  54  Needs Info  (needs-info)
+  55  Rejected  (rejected)
+  56  Postponed  (postponed)
 ```
 
 Status names are resolved **dynamically** from the project endpoint, so custom statuses created in the Taiga web UI work automatically. Matching is case-insensitive and accepts both display names and slugs.
@@ -442,6 +467,8 @@ This prevents accidentally creating orphaned entities with `project: null`.
 
 | Issue | Fix |
 |-------|-----|
+| **Entity list filter** | All entity list endpoints now use `project__id` query parameter instead of `project`, correctly filtering by numeric project ID rather than treating it as a slug. Newly created entities appear in lists immediately. |
+| **Strict ID resolution** | Bare numbers are raw database IDs (no ref lookup). `#` prefixed identifiers resolve via the Taiga resolver API only — if no such ref exists, an error is returned with no fallback to DB ID lookup. This prevents ambiguity when a ref number coincides with an unrelated database ID. |
 | **Output format** | Text mode now shows formatted data (tables, field lists) instead of a bare status line. JSON mode emits pure payload with no envelope, directly pipeable to `jq`. Errors in JSON mode go to stderr. |
 | **Status name resolution** | Text mode resolves status IDs to human-readable names using cached project metadata. Task/epic/issue/story lists show "Closed" instead of raw ID 39. |
 | **#356** | Entity-type-aware ref resolution — `resolveToId` now validates the resolved entity type matches the expected type. If a task ref collides with an issue ref, it falls back to treating the input as a raw database ID. |
@@ -501,7 +528,7 @@ src/
 
 ## Dependencies
 
-Managed via Nix flakes. Key Idris 2 libraries:
+Managed via Nix flakes. Idris 2 packages are pulled from the [flake-idris2-withPackages](https://github.com/gvnkd/flake-idris2-withPackages) registry which handles transitive dependency resolution automatically. Key libraries:
 
 | Library              | Usage                                        |
 |----------------------|----------------------------------------------|
