@@ -53,7 +53,7 @@ Show Version where
 
 public export
 Show DateTime where
-  show (MkDateTime s) = "DateTime " ++ show s
+  show (MkDateTime s) = s
 
 ||| Deserialize common types as bare JSON values.
 public export

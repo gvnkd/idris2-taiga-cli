@@ -38,6 +38,7 @@ record UpdateStoryBody where
   subject     : Maybe String
   description : Maybe String
   milestone   : Maybe Bits64
+  status      : Maybe Bits64
   version     : Version
 
 public export
@@ -47,6 +48,7 @@ ToJSON UpdateStoryBody where
       [ omitNothing "subject" b.subject
       , omitNothing "description" b.description
       , omitNothing "milestone" b.milestone
+      , omitNothing "status" b.status
       , Just $ jpair "version" b.version
       ]
 
@@ -110,14 +112,15 @@ parameters {auto env : ApiEnv}
     -> (subject : Maybe String)
     -> (description : Maybe String)
     -> (milestone : Maybe String)
+    -> (status : Maybe String)
     -> (version : Version)
     -> {auto _ : HasIO io}
     -> io (Either String UserStory)
-  updateStory id subj desc mstone ver = do
-   let body := encode $ MkUpdateStoryBody subj desc (map parseBits64 mstone) ver
-       url  := buildUrl ["userstories", showId id] [] env.base
-   resp <- authPatch env url body
-   expectJson resp 200 "update story"
+  updateStory id subj desc mstone stat ver = do
+    let body := encode $ MkUpdateStoryBody subj desc (map parseBits64 mstone) (map parseBits64 stat) ver
+        url  := buildUrl ["userstories", showId id] [] env.base
+    resp <- authPatch env url body
+    expectJson resp 200 "update story"
 
   ||| Delete a user story.
   public export

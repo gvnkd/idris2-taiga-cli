@@ -437,7 +437,7 @@ handleShow : IO (Either String CmdResult)
 showAux : AppM CmdResult
 showAux = do
   st <- liftIOEither loadState
-  pure $ cmdInfo (formatShow st)
+  pure $ cmdOk (formatShow st) st
 
   where
     formatShow : AppSt -> String
@@ -548,7 +548,7 @@ handleTaskList : Maybe String -> IO (Either String CmdResult)
 taskListAux : Maybe String -> AppM CmdResult
 taskListAux mStatus = do
   (env, pid, mProj) <- getProjectEnvFull
-  val <- liftIOEither $ listTasks @{env} (Just (show pid.id)) Nothing mStatus Nothing Nothing
+  val <- liftIOEither $ listTasks @{env} (Just (show pid.id)) Nothing mStatus Nothing (Just 1000)
   pure $ cmdOk (formatTaskSummaries mProj val) val
 
 handleTaskList maybeStatus = runAppM (taskListAux maybeStatus)
@@ -695,7 +695,7 @@ handleEpicUpdate ident mSubject mDesc mStatusText mStatusId = runAppM (epicUpdat
 ||| Handler for ActEpicList.
 public export
 handleEpicList : IO (Either String CmdResult)
-handleEpicList = handleEntityList "Epic" formatEpicSummaries (\e, p => listEpics @{e} p Nothing Nothing)
+handleEpicList = handleEntityList "Epic" formatEpicSummaries (\e, p => listEpics @{e} p Nothing (Just 1000))
 
 ||| Handler for ActEpicGet.
 public export
@@ -717,7 +717,7 @@ handleEpicCreate subject mDesc mStatus = runAppM (epicCreateAux subject mDesc mS
 ||| Handler for ActSprintList.
 public export
 handleSprintList : IO (Either String CmdResult)
-handleSprintList = handleEntityList "Sprint" formatMilestoneSummaries (\e, p => listMilestones @{e} p Nothing Nothing)
+handleSprintList = handleEntityList "Sprint" formatMilestoneSummaries (\e, p => listMilestones @{e} p Nothing (Just 1000))
 
 ||| Handler for ActSprintShow.
 public export
@@ -732,7 +732,7 @@ handleSprintSet = handleEntityGet "Sprint" (\_, m => formatMilestone m) resolveM
 ||| Handler for ActIssueList.
 public export
 handleIssueList : IO (Either String CmdResult)
-handleIssueList = handleEntityList "Issue" formatIssueSummaries (\e, p => listIssues @{e} p Nothing Nothing)
+handleIssueList = handleEntityList "Issue" formatIssueSummaries (\e, p => listIssues @{e} p Nothing (Just 1000))
 
 ||| Handler for ActIssueGet.
 public export
@@ -777,7 +777,7 @@ handleIssueDelete = handleEntityDelete "issue" resolveIssueId (\e, i => deleteIs
 ||| Handler for ActStoryList.
 public export
 handleStoryList : IO (Either String CmdResult)
-handleStoryList = handleEntityList "Story" formatStorySummaries (\e, p => listStories @{e} p Nothing Nothing)
+handleStoryList = handleEntityList "Story" formatStorySummaries (\e, p => listStories @{e} p Nothing (Just 1000))
 
 ||| Handler for ActStoryGet.
 public export
@@ -787,7 +787,7 @@ handleStoryGet = handleEntityGet "Story" formatStory resolveStoryId (\e, i => ge
 ||| Handler for ActWikiList.
 public export
 handleWikiList : IO (Either String CmdResult)
-handleWikiList = handleEntityList "Wiki page" formatWikiPageSummaries (\e, p => listWiki @{e} p Nothing Nothing)
+handleWikiList = handleEntityList "Wiki page" formatWikiPageSummaries (\e, p => listWiki @{e} p Nothing (Just 1000))
 
 ||| Handler for ActWikiGet.
 public export
@@ -824,7 +824,7 @@ public export
 handleStoryUpdate : String -> Maybe String -> Maybe String -> Maybe String -> Maybe String -> Maybe Bits64 -> IO (Either String CmdResult)
 
 storyUpdateAux : String -> Maybe String -> Maybe String -> Maybe String -> Maybe String -> Maybe Bits64 -> AppM CmdResult
-storyUpdateAux ident mSubject mDesc mMilestone _ _ = do
+storyUpdateAux ident mSubject mDesc mMilestone mStatusText mStatusId = do
   sid <- resolveStoryId ident
   env  <- resolveApiEnv
   mProj <- getCachedProject
@@ -832,7 +832,8 @@ storyUpdateAux ident mSubject mDesc mMilestone _ _ = do
   let subj = fromMaybe current.subject mSubject
       desc = fromMaybe current.description mDesc
       mMs  = fromMaybe Nothing (map Just mMilestone)
-  val <- liftIOEither $ updateStory @{env} sid (Just subj) (Just desc) mMs current.version
+  stat <- resolveUpdateStatus env "story" mStatusText mStatusId
+  val <- liftIOEither $ updateStory @{env} sid (Just subj) (Just desc) mMs (map show stat) current.version
   pure $ cmdOk ("Story updated\n" ++ formatStory mProj val) val
 
 handleStoryUpdate ident mSubject mDesc mMilestone mStatusText mStatusId = runAppM (storyUpdateAux ident mSubject mDesc mMilestone mStatusText mStatusId)
@@ -870,9 +871,15 @@ handleSprintCreate : String -> Maybe String -> Maybe String -> IO (Either String
 
 sprintCreateAux : String -> Maybe String -> Maybe String -> AppM CmdResult
 sprintCreateAux name mStart mEnd = do
-  (env, pid, mProj) <- getProjectEnvFull
-  val <- liftIOEither $ createMilestone @{env} (show pid.id) name mStart mEnd
-  pure $ cmdOk ("Sprint created\n" ++ formatMilestone val) val
+  case (mStart, mEnd) of
+    (Nothing, _) =>
+      appFail "sprint create requires --start DATE and --end DATE"
+    (_, Nothing) =>
+      appFail "sprint create requires --start DATE and --end DATE"
+    (Just start, Just end) => do
+      (env, pid, mProj) <- getProjectEnvFull
+      val <- liftIOEither $ createMilestone @{env} (show pid.id) name (Just start) (Just end)
+      pure $ cmdOk ("Sprint created\n" ++ formatMilestone val) val
 
 handleSprintCreate name mStart mEnd = runAppM (sprintCreateAux name mStart mEnd)
 

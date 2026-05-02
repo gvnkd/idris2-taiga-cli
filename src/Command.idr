@@ -601,7 +601,7 @@ dispatchWithEnv' command env =
         CmdUpdateEpic id sj d st v                        => dispatchWithEnvHelper (updateEpic @{env} id sj d st v) encode
         CmdDeleteEpic id                                  => dispatchWithEnvHelper (deleteEpic @{env} id) (const "deleted")
         CmdCreateStory p s d m                            => dispatchWithEnvHelper (createStory @{env} p s d m) encode
-        CmdUpdateStory id sj d m v                        => dispatchWithEnvHelper (updateStory @{env} id sj d m v) encode
+        CmdUpdateStory id sj d m v                        => dispatchWithEnvHelper (updateStory @{env} id sj d m Nothing v) encode
         CmdDeleteStory id                                 => dispatchWithEnvHelper (deleteStory @{env} id) (const "deleted")
         CmdCreateTask p s st d ss ms                      =>
           dispatchWithEnvHelper (createTask @{env} p s st d ss ms) encode

@@ -106,23 +106,19 @@ stripJsonFlag args = go args False
       let (rest, flag) = go xs acc
        in (x :: rest, flag)
 
+||| Check if args contain --help or -h.
+hasHelpFlag : List String -> Bool
+hasHelpFlag args = any (\x => x == "--help" || x == "-h") args
+
 ||| Run the new subcommand path.
 runSubcommand : List String -> IO ()
 runSubcommand rawArgs = do
   let (args, wantJson) := stripJsonFlag rawArgs
-  fmt <- if wantJson then pure JsonFmt else resolveOutputFormat
-  case parseAction args of
-    Left err =>
-      if wantJson
-        then do
-          ignore $ fPutStrLn stderr ("error: " ++ err)
-          exitWith (ExitFailure 1)
-        else do
-          putStrLn $ "error: " ++ err
-          exitWith (ExitFailure 1)
-    Right action => do
-      result <- executeAction action
-      case result of
+  if hasHelpFlag args
+    then putStrLn usage
+    else do
+      fmt <- if wantJson then pure JsonFmt else resolveOutputFormat
+      case parseAction args of
         Left err =>
           if wantJson
             then do
@@ -131,9 +127,20 @@ runSubcommand rawArgs = do
             else do
               putStrLn $ "error: " ++ err
               exitWith (ExitFailure 1)
-        Right cr => do
-          putStrLn $ renderCmdResult fmt cr
-          exitWith ExitSuccess
+        Right action => do
+          result <- executeAction action
+          case result of
+            Left err =>
+              if wantJson
+                then do
+                  ignore $ fPutStrLn stderr ("error: " ++ err)
+                  exitWith (ExitFailure 1)
+                else do
+                  putStrLn $ "error: " ++ err
+                  exitWith (ExitFailure 1)
+            Right cr => do
+              putStrLn $ renderCmdResult fmt cr
+              exitWith ExitSuccess
 
 ||| Check if args look like legacy flags (start with --).
 looksLikeFlags : List String -> Bool
