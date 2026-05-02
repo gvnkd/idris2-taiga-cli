@@ -1,7 +1,7 @@
-||| HTTP Client wrapper using the native Idris2 `http` library.
+||| HTTP Client wrapper using the native Idris2 `http` library (synchronous path).
 |||
-||| Replaces curl subprocess with a native HTTP client supporting
-||| TLS, connection pooling, and inline header extraction.
+||| Uses `requestSync` for one-shot requests, bypassing connection pooling
+||| and worker threads entirely.
 module Taiga.HttpClient
 
 import Network.HTTP.Client as HC
@@ -11,8 +11,7 @@ import Network.HTTP.URL as HU
 import Network.HTTP.Error as HE
 import Network.HTTP.Status as HS
 import Network.TLS as TLS
-import Network.TLS.Certificate.System as TLS
-import Utils.Streaming as US
+import Network.TLS.Verify as TLS
 import Data.String
 import Data.List
 import Data.Maybe
@@ -45,22 +44,15 @@ formatHttpError (UnknownTransferEncoding t)   = "Unknown transfer encoding: " ++
 formatHttpError (DecompressionError d)        = "Decompression error: " ++ d
 formatHttpError (OtherReason _)               = "Other error"
 
-||| Consume a byte stream and return the body as a String.
-streamToString : US.Stream (US.Of Bits8) IO () -> IO (Either String String)
-streamToString stream = do
-  bytes <- US.toList_ stream
-  pure (Right (bits8ListToString bytes))
-
-||| Perform an HTTP request using the native http client.
-httpRequest :
-     {e : _}
-  -> HC.HttpClient e
-  -> HM.Method
+||| Perform a synchronous HTTP request.
+private
+httpRequestSync :
+     HM.Method
   -> String
   -> List (String, String)
   -> Maybe String
   -> IO (Either String Response)
-httpRequest client method urlStr headers mBody =
+httpRequestSync method urlStr headers mBody =
   case HU.url_from_string urlStr of
     Left err => pure (Left ("Invalid URL: " ++ urlStr ++ " (" ++ err ++ ")"))
     Right url => do
@@ -68,10 +60,8 @@ httpRequest client method urlStr headers mBody =
           headers' := case mBody of
                         Nothing => headers
                         Just _  => ("Content-Type", "application/json") :: headers
-      let action : EitherT (HE.HttpError e) IO (HM.HttpResponse, List Bits8) = do
-            (libResp, bodyStream) <- HC.request client method url headers' payload
-            bytes <- US.toList_ bodyStream
-            pure (libResp, bytes)
+      let action : EitherT (HE.HttpError ()) IO (HM.HttpResponse, List Bits8) =
+            HC.requestSync TLS.certificate_ignore_check method url headers' payload
       result <- runEitherT action
       case result of
         Left err => pure (Left ("HTTP request failed: " ++ formatHttpError err))
@@ -84,52 +74,42 @@ httpRequest client method urlStr headers mBody =
 ||| Convenience: GET request.
 public export
 httpGet :
-     {e : _}
-  -> HC.HttpClient e
-  -> String
+     String
   -> List (String, String)
   -> IO (Either String Response)
-httpGet client url headers = httpRequest client HM.GET url headers Nothing
+httpGet url headers = httpRequestSync HM.GET url headers Nothing
 
-||| Convenience: POST request.
+||| Convenience: POST request with a JSON body.
 public export
 httpPost :
-     {e : _}
-  -> HC.HttpClient e
-  -> String
+     String
   -> List (String, String)
   -> String
   -> IO (Either String Response)
-httpPost client url headers body = httpRequest client HM.POST url headers (Just body)
+httpPost url headers body = httpRequestSync HM.POST url headers (Just body)
 
-||| Convenience: PUT request.
+||| Convenience: PUT request with a JSON body.
 public export
 httpPut :
-     {e : _}
-  -> HC.HttpClient e
-  -> String
+     String
   -> List (String, String)
   -> String
   -> IO (Either String Response)
-httpPut client url headers body = httpRequest client HM.PUT url headers (Just body)
+httpPut url headers body = httpRequestSync HM.PUT url headers (Just body)
 
-||| Convenience: PATCH request.
+||| Convenience: PATCH request with a JSON body.
 public export
 httpPatch :
-     {e : _}
-  -> HC.HttpClient e
-  -> String
+     String
   -> List (String, String)
   -> String
   -> IO (Either String Response)
-httpPatch client url headers body = httpRequest client HM.PATCH url headers (Just body)
+httpPatch url headers body = httpRequestSync HM.PATCH url headers (Just body)
 
 ||| Convenience: DELETE request.
 public export
 httpDelete :
-     {e : _}
-  -> HC.HttpClient e
-  -> String
+     String
   -> List (String, String)
   -> IO (Either String Response)
-httpDelete client url headers = httpRequest client HM.DELETE url headers Nothing
+httpDelete url headers = httpRequestSync HM.DELETE url headers Nothing

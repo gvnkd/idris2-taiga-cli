@@ -6,6 +6,7 @@ import JSON.Derive
 import JSON.FromJSON
 import JSON.ToJSON
 import Data.SortedMap
+import Data.List
 
 %language ElabReflection
 
@@ -140,6 +141,16 @@ apiEntityName WikiK      = "wiki"
 apiEntityName MilestoneK = "milestone"
 apiEntityName EpicK      = "epic"
 
+||| Human-readable entity type name.
+public export
+entityTypeName : EntityKind -> String
+entityTypeName TaskK      = "Task"
+entityTypeName IssueK     = "Issue"
+entityTypeName StoryK     = "Story"
+entityTypeName EpicK      = "Epic"
+entityTypeName WikiK      = "Wiki"
+entityTypeName MilestoneK = "Sprint"
+
 ||| Response from the Taiga resolver endpoint.
 public export
 record ResolveResponse where
@@ -175,7 +186,7 @@ FromJSON ResolveResponse where
 public export
 extractEntityFromResolve : ResolveResponse -> Maybe (String, Nat64Id)
 extractEntityFromResolve r =
-  go
+  head' $ catMaybes
     [ ("task",)      <$> map MkNat64Id r.task
     , ("issue",)     <$> map MkNat64Id r.issue
     , ("us",)        <$> map MkNat64Id r.us
@@ -183,11 +194,6 @@ extractEntityFromResolve r =
     , ("milestone",) <$> map MkNat64Id r.milestone
     , ("epic",)      <$> map MkNat64Id r.epic
     ]
-  where
-    go : List (Maybe (String, Nat64Id)) -> Maybe (String, Nat64Id)
-    go [] = Nothing
-    go (Just p :: _) = Just p
-    go (Nothing :: ps) = go ps
 
 ||| Attempt to parse a string as Bits64.
 ||| Returns Nothing on invalid input.

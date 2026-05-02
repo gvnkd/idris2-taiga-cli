@@ -15,7 +15,6 @@ public export
 data CLIArgs : Type where
   -- Help and meta
   ArgHelp   : CLIArgs
-  ArgVersion : CLIArgs
   ArgStdin   : CLIArgs
 
   -- Global options (always available)
@@ -84,29 +83,33 @@ data CLIArgs : Type where
   ArgUpdateMilestone   : Nat64Id -> Maybe String -> Maybe String -> Maybe String -> Version -> CLIArgs
   ArgDeleteMilestone   : Nat64Id -> CLIArgs
 
+||| Build a ListArgs with only the project field set.
+private
+listArgs : Maybe String -> ListArgs
+listArgs project = MkListArgs project Nothing Nothing Nothing Nothing Nothing ""
+
 ||| Convert parsed CLI args into the unified Command type.
 ||| Authentication and base URL are resolved separately by the caller.
 public export
 toCommand : CLIArgs -> Command
 toCommand ArgHelp                    = CmdMe
-toCommand ArgVersion                = CmdMe
 toCommand ArgStdin                 = CmdMe
 toCommand (ArgBase _)              = CmdMe
 toCommand (ArgLogin u p)           = CmdLogin $ MkCredentials u p
 toCommand ArgMe                    = CmdMe
 toCommand (ArgListProjects m)      = CmdListProjects m
 toCommand (ArgGetProject mid ms)   = CmdGetProject mid ms
-toCommand (ArgListEpics p)         = CmdListEpics (MkListArgs (Just p) Nothing Nothing Nothing Nothing Nothing "")
+toCommand (ArgListEpics p)         = CmdListEpics (listArgs (Just p))
 toCommand (ArgGetEpic mid)         = CmdGetEpic mid
-toCommand (ArgListStories p)       = CmdListStories (MkListArgs (Just p) Nothing Nothing Nothing Nothing Nothing "")
+toCommand (ArgListStories p)       = CmdListStories (listArgs (Just p))
 toCommand (ArgGetStory mid)        = CmdGetStory mid
-toCommand (ArgListTasks p)         = CmdListTasks (MkListArgs p Nothing Nothing Nothing Nothing Nothing "")
+toCommand (ArgListTasks p)         = CmdListTasks (listArgs p)
 toCommand (ArgGetTask mid)         = CmdGetTask mid
-toCommand (ArgListIssues p)        = CmdListIssues (MkListArgs (Just p) Nothing Nothing Nothing Nothing Nothing "")
+toCommand (ArgListIssues p)        = CmdListIssues (listArgs (Just p))
 toCommand (ArgGetIssue mid)        = CmdGetIssue mid
-toCommand (ArgListWiki p)          = CmdListWiki (MkListArgs (Just p) Nothing Nothing Nothing Nothing Nothing "")
+toCommand (ArgListWiki p)          = CmdListWiki (listArgs (Just p))
 toCommand (ArgGetWiki mid)         = CmdGetWiki mid
-toCommand (ArgListMilestones p)    = CmdListMilestones (MkListArgs (Just p) Nothing Nothing Nothing Nothing Nothing "")
+toCommand (ArgListMilestones p)    = CmdListMilestones (listArgs (Just p))
 toCommand (ArgListUsers p)         = CmdListUsers p
 toCommand (ArgListMemberships p)   = CmdListMemberships p
 toCommand (ArgListRoles p)         = CmdListRoles p

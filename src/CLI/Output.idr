@@ -125,6 +125,11 @@ padR n s =
   let len := length s
    in if len >= n then s else s ++ pack (replicate (minus n len) ' ')
 
+||| Horizontal rule for text output.
+private
+separator : String
+separator = replicate 40 '-'
+
 -- ---------------------------------------------------------------------------
 -- Text formatters for model types
 -- ---------------------------------------------------------------------------
@@ -168,7 +173,7 @@ formatTask mProj t =
   let ss := taskStatuses mProj
    in unlines
         [ "Task #" ++ show t.ref ++ ": " ++ t.subject
-        , replicate 40 '-'
+        , separator
         , "ID:      " ++ show t.id.id
         , "Status:  " ++ lookupStatusName ss t.status
         , "Story:   " ++ maybe "-" (\us => "#" ++ show us.id) t.user_story
@@ -195,7 +200,7 @@ formatEpic mProj e =
   let ss := epicStatuses mProj
    in unlines
         [ "Epic #" ++ show e.ref ++ ": " ++ e.subject
-        , replicate 40 '-'
+        , separator
         , "ID:      " ++ show e.id.id
         , "Status:  " ++ lookupStatusName ss e.status
         ]
@@ -221,7 +226,7 @@ formatIssue mProj i =
   let ss := issueStatuses mProj
    in unlines
         [ "Issue #" ++ show i.ref ++ ": " ++ i.subject
-        , replicate 40 '-'
+        , separator
         , "ID:      " ++ show i.id.id
         , "Status:  " ++ lookupStatusName ss i.status
         , "Priority: " ++ maybe "-" show i.priority
@@ -248,7 +253,7 @@ formatStory mProj s =
   let ss := storyStatuses mProj
    in unlines
         [ "Story #" ++ show s.ref ++ ": " ++ s.subject
-        , replicate 40 '-'
+        , separator
         , "ID:      " ++ show s.id.id
         , "Status:  " ++ lookupStatusName ss s.status
         , "Sprint:  " ++ maybe "-" (\m => "#" ++ show m.id) s.milestone
@@ -270,7 +275,7 @@ formatMilestone : Milestone -> String
 formatMilestone m =
   unlines
     [ "Sprint: " ++ m.name
-    , replicate 40 '-'
+    , separator
     , "ID:      " ++ show m.id.id
     , "Slug:    " ++ m.slug.slug
     , "Start:   " ++ maybe "-" show m.estimated_start
@@ -289,16 +294,10 @@ formatWikiPage : WikiPage -> String
 formatWikiPage w =
   unlines
     [ "Wiki: " ++ w.slug.slug
-    , replicate 40 '-'
+    , separator
     , "ID:      " ++ show w.id.id
     , "Version: " ++ show w.version
     ]
-
-||| Format a list of comments.
-public export
-formatCommentSummaries : List CommentSummary -> String
-formatCommentSummaries cs =
-  unlines (map (\c => c.author ++ " (" ++ c.created_at ++ "): " ++ c.text) cs)
 
 ||| Format a list of history entries.
 public export

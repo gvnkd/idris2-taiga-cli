@@ -145,7 +145,7 @@ runSubcommand rawArgs = do
 ||| Check if args look like legacy flags (start with --).
 looksLikeFlags : List String -> Bool
 looksLikeFlags []     = False
-looksLikeFlags (x::_) = Data.String.isPrefixOf "--" x
+looksLikeFlags (x :: _) = Data.String.isPrefixOf "--" x
 
 ||| Top-level entry point.
 |||

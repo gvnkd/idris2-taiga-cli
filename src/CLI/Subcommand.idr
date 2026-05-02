@@ -499,7 +499,7 @@ projectSetById env pid = do
     Left err'  => pure $ Right $ cmdError ("Failed to get project: " ++ err')
     Right proj => do
       _ <- runAppM $ setActiveProjectCached proj
-      pure $ Right $ cmdOk ("Active project set to: " ++ proj.name ++ "\n" ++ formatProject proj) proj
+      pure $ Right $ cmdOk (unlines ["Active project set to: " ++ proj.name, formatProject proj]) proj
 
 private
 projectSetFallbackChain : String -> ApiEnv -> IO (Either String CmdResult)
@@ -519,7 +519,7 @@ projectSetIO ident env = do
   case slugRes of
     Right proj => do
       _ <- runAppM $ setActiveProjectCached proj
-      pure $ Right $ cmdOk ("Active project set to: " ++ proj.name ++ "\n" ++ formatProject proj) proj
+      pure $ Right $ cmdOk (unlines ["Active project set to: " ++ proj.name, formatProject proj]) proj
     Left _ => projectSetFallbackChain ident env
 
 projectSetAux : String -> AppM CmdResult
@@ -982,12 +982,7 @@ statusListAux entityType = do
       env  <- resolveApiEnv
       proj <- getProjectForStatus env st
       let statuses = statusesOf proj kind
-          title = case kind of
-                    TaskK  => "Task statuses"
-                    IssueK => "Issue statuses"
-                    StoryK => "Story statuses"
-                    EpicK  => "Epic statuses"
-                    _      => "Statuses"
+          title = entityTypeName kind ++ " statuses"
       pure $ cmdInfo (title ++ ":\n" ++ formatStatusList statuses)
 
 handleStatusList entityType = runAppM (statusListAux entityType)

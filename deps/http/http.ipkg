@@ -43,6 +43,7 @@ modules = Data.Compress.CRC,
           Network.HTTP.Pool.IOStuff,
           Network.HTTP.Protocol,
           Network.HTTP,
+          Network.HTTP.Sync,
           Utils.Streaming,
           Utils.String,
           Utils.Queue

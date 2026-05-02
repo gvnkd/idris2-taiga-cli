@@ -18,7 +18,7 @@ import Taiga.Api
 ||| URL-encode a string: spaces become %20, other special chars encoded.
 public export
 urlEncode : String -> String
-urlEncode s = concat $ map encodeChar (unpack s)
+urlEncode s = concatMap encodeChar (unpack s)
 
   where isSafe : Char -> Bool
         isSafe c = any (== c) (unpack "-._~")
@@ -70,7 +70,7 @@ showId n = show n.id
 public export
 buildUrl : List String -> List (String, String) -> String -> String
 buildUrl segments params base =
-  let path   := concat $ map (\s => "/" ++ s) segments
+  let path   := concatMap (\s => "/" ++ s) segments
       query  := buildQueryString params
    in base ++ path ++ query
 

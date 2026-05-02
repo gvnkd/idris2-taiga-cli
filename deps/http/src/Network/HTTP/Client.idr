@@ -2,6 +2,7 @@ module Network.HTTP.Client
 
 import Network.HTTP.Pool.ConnectionPool
 import Network.HTTP.Scheduler
+import Network.HTTP.Sync
 import Network.HTTP.Protocol
 import Network.HTTP.Message
 import Network.HTTP.Error
@@ -172,3 +173,24 @@ request : {e,m,a : _} -> MonadError (HttpError e) m => HasIO m => Bytestream a =
 request client method url headers payload =
   let (len, stream) = to_stream {m=EitherT e IO} payload
   in request' client method url headers len stream
+
+||| Send a HTTP request synchronously in the calling thread.
+||| No connection pooling, no worker threads. Suitable for one-shot CLI use.
+||| Arguments:
+|||
+||| @ cert_checker the function used to verify the website's TLS certificate
+||| @ method the HTTP method, e.g. GET / POST
+||| @ url the URL of the website to be connected to
+||| @ headers the HTTP headers, represented as a list of (key, value)
+||| @ payload the content payload of the request. Use () for empty content.
+export
+requestSync : {e,m,a : _} -> MonadError (HttpError e) m => HasIO m => Bytestream a =>
+          (String -> CertificateCheck IO) -> Method -> URL -> List (String, String) ->
+          a ->
+          m (HttpResponse, List Bits8)
+requestSync cert_checker method url headers payload = do
+  let (len, stream) = to_stream {m=IO} payload
+  bytes <- liftIO $ toList_ stream
+  Right result <- liftIO $ Sync.requestSync cert_checker method url headers len bytes
+  | Left err => throwError err
+  pure result

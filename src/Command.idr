@@ -519,6 +519,7 @@ mkCommentCmd a              = CmdComment a.entity (MkNat64Id a.id) a.text
 
 private mkListCommentsCmd   : EntityIdArgs -> Command
 mkListCommentsCmd a         = CmdListComments a.entity (MkNat64Id a.id)
+
 private mkCreateMilestoneCmd : CreateMilestoneArgs -> Command
 
 mkCreateMilestoneCmd a =
@@ -595,7 +596,7 @@ dispatchWithEnvHelper action encFn = map (wrapResult encFn) action
 ||| Run a paginated list action and extract just the items for JSON output.
 private
 runList : {0 a : Type} -> HasIO io => io (Either String (List a, PaginationMeta)) -> io (Either String (List a))
-runList action = map (map (\(xs, _) => xs)) action
+runList = map (map fst)
 
 private dispatchWithEnv' :
       HasIO io

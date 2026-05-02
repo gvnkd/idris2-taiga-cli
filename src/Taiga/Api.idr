@@ -10,18 +10,8 @@ import Data.String
 import Data.List
 import Data.Maybe
 import Taiga.HttpClient
-import Network.HTTP.Client
-import Network.TLS.Verify
 
 %language ElabReflection
-
-||| Create a lightweight HTTP client without loading system certificates.
-||| Uses `certificate_ignore_check` since we connect to localhost HTTP
-||| where TLS is not used; this avoids the expensive cert loading that
-||| `new_client_default` performs eagerly.
-private
-mkClient : IO (HttpClient ())
-mkClient = new_client certificate_ignore_check 25 5 True True
 
 ||| HTTP status code.
 public export
@@ -54,7 +44,7 @@ record HttpResponse where
 parseHeaderLine : String -> Maybe (String, String)
 parseHeaderLine line =
   case forget (split (== ':') line) of
-    (key :: valueParts) =>
+    key :: valueParts =>
       let val := trim (concat (intersperse ":" valueParts))
        in Just (trim (toLower key), val)
     _ => Nothing
@@ -104,10 +94,7 @@ httpGet :
   -> (auth : Maybe String)
   -> io HttpResponse
 httpGet url auth = do
-  client <- liftIO mkClient
-  result <- liftIO $ httpGet client url (buildAuthHeader auth)
-  liftIO $ close client
-
+  result <- liftIO $ httpGet url (buildAuthHeader auth)
   case result of
     Left err  => pure (MkHttpResponse (MkStatusCode 0) ("HTTP error: " ++ err) [])
     Right resp => pure (fromLibResponse resp)
@@ -121,10 +108,7 @@ httpPost :
    -> (body : String)
    -> io HttpResponse
 httpPost url auth body = do
-  client <- liftIO mkClient
-  result <- liftIO $ httpPost client url (buildAuthHeader auth) body
-  liftIO $ close client
-
+  result <- liftIO $ httpPost url (buildAuthHeader auth) body
   case result of
     Left err  => pure (MkHttpResponse (MkStatusCode 0) ("HTTP error: " ++ err) [])
     Right resp => pure (fromLibResponse resp)
@@ -138,10 +122,7 @@ httpPut :
    -> (body : String)
    -> io HttpResponse
 httpPut url auth body = do
-  client <- liftIO mkClient
-  result <- liftIO $ httpPut client url (buildAuthHeader auth) body
-  liftIO $ close client
-
+  result <- liftIO $ httpPut url (buildAuthHeader auth) body
   case result of
     Left err  => pure (MkHttpResponse (MkStatusCode 0) ("HTTP error: " ++ err) [])
     Right resp => pure (fromLibResponse resp)
@@ -155,10 +136,7 @@ httpPatch :
    -> (body : String)
    -> io HttpResponse
 httpPatch url auth body = do
-  client <- liftIO mkClient
-  result <- liftIO $ httpPatch client url (buildAuthHeader auth) body
-  liftIO $ close client
-
+  result <- liftIO $ httpPatch url (buildAuthHeader auth) body
   case result of
     Left err  => pure (MkHttpResponse (MkStatusCode 0) ("HTTP error: " ++ err) [])
     Right resp => pure (fromLibResponse resp)
@@ -171,10 +149,7 @@ httpDelete :
    -> (auth : Maybe String)
    -> io HttpResponse
 httpDelete url auth = do
-  client <- liftIO mkClient
-  result <- liftIO $ httpDelete client url (buildAuthHeader auth)
-  liftIO $ close client
-
+  result <- liftIO $ httpDelete url (buildAuthHeader auth)
   case result of
     Left err  => pure (MkHttpResponse (MkStatusCode 0) ("HTTP error: " ++ err) [])
     Right resp => pure (fromLibResponse resp)
