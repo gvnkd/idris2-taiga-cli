@@ -55,7 +55,7 @@ parameters {auto env : ApiEnv}
     -> (page : Maybe Bits32)
     -> (pageSize : Maybe Bits32)
     -> {auto _ : HasIO io}
-    -> io (Either String (List WikiPageSummary))
+    -> io (Either String (List WikiPageSummary, PaginationMeta))
   listWiki mproject page pageSize = do
     let opts   := concat $ catMaybes
                      [ map (\p => [("page", show p)]) page
@@ -63,7 +63,7 @@ parameters {auto env : ApiEnv}
                      , map (\p => [("project", p)]) mproject ]
         url    := buildUrl ["wiki"] opts env.base
     resp <- authGet env url
-    expectJson resp 200 "list wiki"
+    expectJsonWithMeta resp 200 "list wiki"
 
   ||| Get a wiki page by its ID.
   public export

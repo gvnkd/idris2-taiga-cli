@@ -59,10 +59,10 @@ parameters {auto env : ApiEnv}
   fetchStoryList :
        (url : String)
     -> {auto _ : HasIO io}
-    -> io (Either String (List UserStorySummary))
+    -> io (Either String (List UserStorySummary, PaginationMeta))
   fetchStoryList url = do
    resp <- authGet env url
-   expectJson resp 200 "list stories"
+   expectJsonWithMeta resp 200 "list stories"
 
   ||| List user stories in a project.
   public export
@@ -71,7 +71,7 @@ parameters {auto env : ApiEnv}
     -> (page : Maybe Bits32)
     -> (pageSize : Maybe Bits32)
     -> {auto _ : HasIO io}
-    -> io (Either String (List UserStorySummary))
+    -> io (Either String (List UserStorySummary, PaginationMeta))
   listStories mproject page pageSize =
    let opts   := concat $ catMaybes
                     [ map (\p => [("page", show p)]) page

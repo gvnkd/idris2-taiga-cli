@@ -59,7 +59,7 @@ parameters {auto env : ApiEnv}
     -> (page : Maybe Bits32)
     -> (pageSize : Maybe Bits32)
     -> {auto _ : HasIO io}
-    -> io (Either String (List MilestoneSummary))
+    -> io (Either String (List MilestoneSummary, PaginationMeta))
   listMilestones mproject page pageSize = do
     let opts   := concat $ catMaybes
                      [ map (\p => [("page", show p)]) page
@@ -67,7 +67,7 @@ parameters {auto env : ApiEnv}
                      , map (\p => [("project", p)]) mproject ]
         url    := buildUrl ["milestones"] opts env.base
     resp <- authGet env url
-    expectJson resp 200 "list milestones"
+    expectJsonWithMeta resp 200 "list milestones"
 
   ||| Create a new milestone.
   public export

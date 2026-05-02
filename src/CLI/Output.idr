@@ -10,6 +10,7 @@ import JSON.Derive
 import JSON.ToJSON
 import JSON.FromJSON
 import JSON.Encoder
+import Taiga.Api
 import Model.Common
 import Model.Project
 import Model.Task
@@ -91,6 +92,18 @@ storyStatuses = maybe [] (.us_statuses)
 ||| Extract epic statuses from cached project.
 epicStatuses : Maybe Project -> List StatusInfo
 epicStatuses = maybe [] (.epic_statuses)
+
+||| Format pagination metadata for text output.
+public export
+formatPagination : PaginationMeta -> String
+formatPagination meta =
+  case meta.totalCount of
+    Nothing => ""
+    Just count =>
+      let pageInfo := case meta.currentPage of
+                        Nothing => ""
+                        Just p  => " (page " ++ show p ++ ")"
+       in "\n" ++ show count ++ " total items" ++ pageInfo
 
 ||| Look up a status name from a list of StatusInfo.
 public export

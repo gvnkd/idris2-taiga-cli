@@ -161,6 +161,21 @@ expectJson :
 expectJson resp okStatus errMsg =
   expectWith resp okStatus errMsg (decodeEither . .body)
 
+||| Parse an HTTP response as JSON and also extract pagination metadata.
+public export
+expectJsonWithMeta :
+     FromJSON a
+  => HasIO io
+  => (resp : HttpResponse)
+  -> (okStatus : Bits16)
+  -> (errMsg : String)
+  -> io (Either String (a, PaginationMeta))
+expectJsonWithMeta resp okStatus errMsg =
+  expectWith resp okStatus errMsg $ \r =>
+    case decodeEither r.body of
+      Left err => Left err
+      Right val => Right (val, extractPagination r)
+
 ||| Check an HTTP response for a specific status code without parsing JSON.
 public export
 expectOk :

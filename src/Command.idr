@@ -592,6 +592,11 @@ private dispatchWithEnvHelper :
   -> io Response
 dispatchWithEnvHelper action encFn = map (wrapResult encFn) action
 
+||| Run a paginated list action and extract just the items for JSON output.
+private
+runList : {0 a : Type} -> HasIO io => io (Either String (List a, PaginationMeta)) -> io (Either String (List a))
+runList action = map (map (\(xs, _) => xs)) action
+
 private dispatchWithEnv' :
       HasIO io
    => (command : Command)
@@ -605,23 +610,23 @@ dispatchWithEnv' command env =
         CmdGetProject (Just id) _                          => dispatchWithEnvHelper (getProjectById @{env} id) encode
         CmdGetProject _ (Just slug)                        => dispatchWithEnvHelper (getProjectBySlug @{env} slug) encode
         CmdGetProject Nothing Nothing                      => pure $ Err $ MkErrorResponse False "bad_request" "Must provide id or slug"
-        CmdListEpics args                               => dispatchWithEnvHelper (listEpics @{env} args.project args.page args.pageSize) encode
+        CmdListEpics args                               => dispatchWithEnvHelper (runList $ listEpics @{env} args.project args.page args.pageSize) encode
         CmdGetEpic (Just id)                              => dispatchWithEnvHelper (getEpic @{env} id) encode
         CmdGetEpic Nothing                                => pure $ Err $ MkErrorResponse False "bad_request" "No epic ID provided"
-        CmdListStories args                             => dispatchWithEnvHelper (listStories @{env} args.project args.page args.pageSize) encode
+        CmdListStories args                             => dispatchWithEnvHelper (runList $ listStories @{env} args.project args.page args.pageSize) encode
         CmdGetStory (Just id)                             => dispatchWithEnvHelper (getStory @{env} id) encode
         CmdGetStory Nothing                               => pure $ Err $ MkErrorResponse False "bad_request" "No story ID provided"
         CmdListTasks args                              =>
-          dispatchWithEnvHelper (listTasks @{env} args.project Nothing args.status args.page args.pageSize) encode
+          dispatchWithEnvHelper (runList $ listTasks @{env} args.project Nothing args.status args.page args.pageSize) encode
         CmdGetTask (Just id)                              => dispatchWithEnvHelper (getTask @{env} id) encode
         CmdGetTask Nothing                                => pure $ Err $ MkErrorResponse False "bad_request" "No task ID provided"
-        CmdListIssues args                             => dispatchWithEnvHelper (listIssues @{env} args.project args.page args.pageSize) encode
+        CmdListIssues args                             => dispatchWithEnvHelper (runList $ listIssues @{env} args.project args.page args.pageSize) encode
         CmdGetIssue (Just id)                             => dispatchWithEnvHelper (getIssue @{env} id) encode
         CmdGetIssue Nothing                               => pure $ Err $ MkErrorResponse False "bad_request" "No issue ID provided"
-        CmdListWiki args                               => dispatchWithEnvHelper (listWiki @{env} args.project args.page args.pageSize) encode
+        CmdListWiki args                               => dispatchWithEnvHelper (runList $ listWiki @{env} args.project args.page args.pageSize) encode
         CmdGetWiki (Just id)                              => dispatchWithEnvHelper (getWiki @{env} id) encode
         CmdGetWiki Nothing                                => pure $ Err $ MkErrorResponse False "bad_request" "No wiki ID provided"
-        CmdListMilestones args                         => dispatchWithEnvHelper (listMilestones @{env} args.project args.page args.pageSize) encode
+        CmdListMilestones args                         => dispatchWithEnvHelper (runList $ listMilestones @{env} args.project args.page args.pageSize) encode
         CmdListUsers project                              => dispatchWithEnvHelper (listUsers @{env} project) encode
         CmdListMemberships project                        => dispatchWithEnvHelper (listMemberships @{env} project) encode
         CmdListRoles project                              => dispatchWithEnvHelper (listRoles @{env} project) encode

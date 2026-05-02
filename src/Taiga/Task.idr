@@ -110,7 +110,7 @@ parameters {auto env : ApiEnv}
     -> (page : Maybe Bits32)
     -> (pageSize : Maybe Bits32)
     -> {auto _ : HasIO io}
-    -> io (Either String (List TaskSummary))
+    -> io (Either String (List TaskSummary, PaginationMeta))
   listTasks project story mstatus page pageSize = do
     let opts := concat $ catMaybes
                    [ map (\p => [("project", p)]) project
@@ -120,7 +120,7 @@ parameters {auto env : ApiEnv}
                    , map (\s => [("page_size", show s)]) pageSize ]
         url  := buildUrl ["tasks"] opts env.base
     resp <- authGet env url
-    expectJson resp 200 "list tasks"
+    expectJsonWithMeta resp 200 "list tasks"
 
   ||| Get a task by its ID.
   public export

@@ -59,7 +59,7 @@ parameters {auto env : ApiEnv}
     -> (page : Maybe Bits32)
     -> (pageSize : Maybe Bits32)
     -> {auto _ : HasIO io}
-    -> io (Either String (List EpicSummary))
+    -> io (Either String (List EpicSummary, PaginationMeta))
   listEpics mproject page pageSize = do
     let opts   := concat $ catMaybes
                      [ map (\p => [("page", show p)]) page
@@ -67,7 +67,7 @@ parameters {auto env : ApiEnv}
                      , map (\p => [("project", p)]) mproject ]
         url    := buildUrl ["epics"] opts env.base
     resp <- authGet env url
-    expectJson resp 200 "list epics"
+    expectJsonWithMeta resp 200 "list epics"
 
   ||| Get an epic by its ID.
   public export

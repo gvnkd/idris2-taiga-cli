@@ -34,6 +34,7 @@ import Taiga.Wiki
 import Taiga.History
 import Taiga.Search
 import Taiga.Status
+import Taiga.Api
 import Data.List
 import Data.Maybe
 import Data.String
@@ -304,12 +305,12 @@ handleEntityList :
      ToJSON a
   => String
   -> (Maybe Project -> List a -> String)
-  -> (ApiEnv -> String -> IO (Either String (List a)))
+  -> (ApiEnv -> String -> IO (Either String (List a, PaginationMeta)))
   -> IO (Either String CmdResult)
 handleEntityList name fmt listFn = runAppM $ do
   (env, pid, mProj) <- getProjectEnvFull
-  val <- liftIOEither $ listFn env (show pid.id)
-  pure $ cmdOk (fmt mProj val) val
+  (items, meta) <- liftIOEither $ listFn env (show pid.id)
+  pure $ cmdOk (fmt mProj items ++ formatPagination meta) items
 
 ||| Generic handler for getting an entity by identifier.
 ||| The formatter receives the cached project (with status lists).
@@ -548,8 +549,8 @@ handleTaskList : Maybe String -> IO (Either String CmdResult)
 taskListAux : Maybe String -> AppM CmdResult
 taskListAux mStatus = do
   (env, pid, mProj) <- getProjectEnvFull
-  val <- liftIOEither $ listTasks @{env} (Just (show pid.id)) Nothing mStatus Nothing (Just 1000)
-  pure $ cmdOk (formatTaskSummaries mProj val) val
+  (items, meta) <- liftIOEither $ listTasks @{env} (Just (show pid.id)) Nothing mStatus Nothing (Just 1000)
+  pure $ cmdOk (formatTaskSummaries mProj items ++ formatPagination meta) items
 
 handleTaskList maybeStatus = runAppM (taskListAux maybeStatus)
 
