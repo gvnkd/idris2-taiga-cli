@@ -8,6 +8,7 @@ A command-line tool written in [Idris 2](https://github.com/idris-lang/Idris2) t
 - **Subcommand mode** (new): stateful verb-noun commands (`taiga-cli task list`, `taiga-cli project set taiga`)
 - **Legacy CLI mode**: human-friendly flags (`--list-epics`, `--login`, etc.) with plain JSON output
 - Full CRUD for epics, user stories, tasks, issues, wiki pages, and milestones via subcommand CLI
+- **Rich text output** — list views show status names, assignments, and closed state at a glance
 - **Text-based status resolution** — use human-readable status names (`New`, `Closed`, `In progress`) instead of numeric IDs
 - **Status discovery** — list available statuses per entity type with `task statuses`, `issue statuses`, etc.
 - Ref-first identifiers — all entity lookups accept user-facing ref IDs (not just internal DB IDs)
@@ -53,6 +54,66 @@ The compiled binary is placed at `build/exec/taiga-cli`.
 nix develop --command run
 ```
 
+## Output Format
+
+Every command produces **human-readable text by default**. Pass `--json` before the verb to get pure JSON output suitable for piping to `jq`.
+
+```shell
+# Text mode (default): formatted tables with status names
+tcli task list
+
+# JSON mode: pure payload, no envelope
+tcli --json task list | jq '.[] | {ref, subject, status}'
+```
+
+### Text Mode
+
+List views use columnar formatting with resolved status names:
+
+```
+Ref   Status         Subject
+#2    Closed         make a github repo for the project [CLOSED]
+#326  -              Test task from subcommand CLI
+#327  -              Audit subcommand CLI
+```
+
+Single-entity views show all fields:
+
+```
+Task #2: make a github repo for the project
+----------------------------------------
+ID:      1
+Status:  Closed
+Story:   -
+Closed:  Yes
+```
+
+### JSON Mode
+
+JSON mode emits the **raw payload only** — no status/message envelope. This makes it directly pipeable to `jq`:
+
+```shell
+$ tcli --json project get | jq '.name'
+"Taiga"
+
+$ tcli --json task list | jq 'map(.subject)'
+[
+  "make a github repo for the project",
+  "test debug",
+  ...
+]
+```
+
+Errors in JSON mode print to **stderr** and exit with a non-zero code, leaving stdout clean for piping.
+
+```shell
+$ tcli --json task get 99999 2>/dev/null | jq '.'
+# (empty — error went to stderr, jq receives nothing)
+
+$ tcli --json task get 99999
+tcl> error: get task failed with status 404
+```
+
 ## Usage
 
 ### Subcommand Mode (Stateful)
@@ -81,8 +142,8 @@ taiga-cli project set my-project
 # Show current state
 taiga-cli show
 
-# Output JSON instead of text
-taiga-cli task list --json
+# Output JSON instead of text (flag goes BEFORE the verb)
+taiga-cli --json task list
 ```
 
 ### Legacy CLI Mode
@@ -129,10 +190,12 @@ echo '{"cmd":"create-task","args":"{\"project\":\"backend\",\"subject\":\"Fix au
 | Data Type | Storage Location | Safe to commit |
 |-----------|-------------------|----------------|
 | **Auth tokens, refresh tokens** | `~/.local/share/taiga-cli/tokens/` | No |
-| **Workspace state** (active project, base URL) | `./.taiga/state.json` | Yes |
+| **Workspace state** (active project, base URL, status cache) | `./.taiga/state.json` | Yes |
 | **Config** (output format prefs) | `./.taiga/config.json` | Yes |
 
 The workspace state (`AppSt`) has no auth fields — it's structurally impossible to persist a token to `./.taiga/`. Auth is resolved at runtime by looking up the instance hash of the base URL in the global tokens directory.
+
+The project cache in `./.taiga/state.json` stores status metadata (task, issue, story, epic statuses) so text mode can resolve status IDs to names without an extra API call.
 
 ## JSON Protocol
 
@@ -173,7 +236,7 @@ Error:
 ### Subcommand Mode
 
 ```
-taiga-cli <verb> [<action>] [args...] [--json]
+taiga-cli [--json] <verb> [<action>] [args...]
 
 Core:
   init [URL]                    Create state directory and default config
@@ -188,9 +251,9 @@ Project context:
 
 Entity operations (on active project, id = ref-id or db-id):
 
-  task list [--status S]                List tasks
+  task list [--status S]                List tasks (text table with status names)
   task create <subject>                 Create task
-  task get <id>                         Get task
+  task get <id>                         Get task (full detail view)
   task update <id> [--subject S] [--description D] [--status ST|--statusId N]
                                         Update task (status by name or numeric ID)
   task delete <id>                      Delete task (prompts for confirmation)
@@ -198,8 +261,8 @@ Entity operations (on active project, id = ref-id or db-id):
   task comment <id> <text>              Comment on a task
   task statuses                         List available task statuses
 
-  epic list                             List epics
-  epic get <id>                         Get epic
+  epic list                             List epics (text table with status names)
+  epic get <id>                         Get epic (full detail view)
   epic create <subject> [--description D] [--status ST]
                                         Create epic
   epic update <id> [--subject S] [--description D] [--status ST|--statusId N]
@@ -207,8 +270,8 @@ Entity operations (on active project, id = ref-id or db-id):
   epic delete <id>                      Delete epic
   epic statuses                         List available epic statuses
 
-  story list                            List stories
-  story get <id>                        Get story
+  story list                            List stories (text table with status names)
+  story get <id>                        Get story (full detail view)
   story create <subject> [--description D] [--milestone M]
                                         Create story
   story update <id> [--subject S] [--description D] [--milestone M] [--status ST|--statusId N]
@@ -216,8 +279,8 @@ Entity operations (on active project, id = ref-id or db-id):
   story delete <id>                     Delete story
   story statuses                        List available story statuses
 
-  issue list                            List issues
-  issue get <id>                        Get issue
+  issue list                            List issues (text table with status names)
+  issue get <id>                        Get issue (full detail view)
   issue create <subject> [--description D] [--priority P] [--severity S] [--type T]
                                         Create issue
   issue update <id> [--subject S] [--description D] [--type T] [--status ST|--statusId N]
@@ -226,7 +289,7 @@ Entity operations (on active project, id = ref-id or db-id):
   issue statuses                        List available issue statuses
 
   sprint list                           List sprints/milestones
-  sprint show                           Alias for sprint list (no active sprint state)
+  sprint show                           Alias for sprint list
   sprint set <id>                       Set active sprint
   sprint create <name> [--start DATE] [--end DATE]
                                         Create sprint
@@ -322,22 +385,27 @@ Taiga uses numeric status IDs internally, but `taiga-cli` lets you use **human-r
 ```shell
 # Close a task by name
 $ tcli task update 330 --status "Closed"
-[OK]   Task updated
+Task #330: Fix auth bug
+----------------------------------------
+ID:      330
+Status:  Closed
+Story:   #42
+Closed:  Yes
 
 # Reopen an issue
 $ tcli issue update 124 --status "New"
-[OK]   Issue updated
-
-# Use numeric ID when needed (scripts, automation)
-$ tcli task update 330 --statusId 44
-[OK]   Task updated
+Issue #124: Auth bug on login
+----------------------------------------
+ID:      124
+Status:  New
+Priority: 2
 ```
 
 Discover available statuses for the active project:
 
 ```shell
 $ tcli task statuses
-[INFO] Task statuses:
+Task statuses:
   41  New  (new)
   42  In progress  (in-progress)
   43  Ready for test  (ready-for-test)
@@ -345,7 +413,7 @@ $ tcli task statuses
   45  Needs Info  (needs-info)
 
 $ tcli issue statuses
-[INFO] Issue statuses:
+Issue statuses:
   57  New  (new)
   58  In progress  (in-progress)
   59  Ready for test  (ready-for-test)
@@ -356,6 +424,8 @@ $ tcli issue statuses
 ```
 
 Status names are resolved **dynamically** from the project endpoint, so custom statuses created in the Taiga web UI work automatically. Matching is case-insensitive and accepts both display names and slugs.
+
+In text mode, status IDs in list and detail views are automatically translated to status names using the cached project metadata.
 
 ## Active Project Validation
 
@@ -372,6 +442,8 @@ This prevents accidentally creating orphaned entities with `project: null`.
 
 | Issue | Fix |
 |-------|-----|
+| **Output format** | Text mode now shows formatted data (tables, field lists) instead of a bare status line. JSON mode emits pure payload with no envelope, directly pipeable to `jq`. Errors in JSON mode go to stderr. |
+| **Status name resolution** | Text mode resolves status IDs to human-readable names using cached project metadata. Task/epic/issue/story lists show "Closed" instead of raw ID 39. |
 | **#356** | Entity-type-aware ref resolution — `resolveToId` now validates the resolved entity type matches the expected type. If a task ref collides with an issue ref, it falls back to treating the input as a raw database ID. |
 | **#357** | curl body injection — JSON request bodies are now passed via temporary file (`--data @tmpfile`) instead of inline shell arguments, preventing breakage on backticks, quotes, and dollar signs in descriptions. |
 | **#359** | `issue update` now accepts `--status` and `--statusId` flags for changing issue status from the CLI. |
@@ -385,7 +457,8 @@ src/
   CLI/
     Args.idr             CLI argument data types (legacy flags)
     Help.idr             Usage/help text generation
-    Output.idr           Dual-format output (text / JSON)
+    Output.idr           Dual-format output (text / JSON) with status resolution
+    JsonView.idr         JSON-to-text field selection and filtering (future)
     Parse.idr            CLI argument parser (legacy flags + subcommands)
     Subcommand.idr       Subcommand routing and action handlers
   Model/
@@ -406,7 +479,7 @@ src/
     Response.idr         Response envelope serializer
   State/
     File.idr             JSON persistence layer (workspace + global auth)
-    State.idr            Workspace state model (no secrets)
+    State.idr            Workspace state model (no secrets, with status cache)
     Config.idr           Static configuration (output format, etc.)
     AuthStore.idr        Token lifecycle management (global storage)
   Taiga/
@@ -451,8 +524,9 @@ HTTP requests are performed by shelling out to `curl` via `System.run`, avoiding
 4. **OCC-aware writes** — every mutation requires `version`; tool returns updated entity
 5. **Fail loudly** — structured errors with `err` code + human `msg`
 6. **Deterministic output** — same input always produces same output shape
-7.   **Security boundary** — workspace state (`./.taiga/`) never contains credentials
-8. **Dual output** — every command produces human-readable text by default, JSON with `--json`
+7. **Security boundary** — workspace state (`./.taiga/`) never contains credentials
+8. **Dual output** — text mode shows formatted data (tables, fields); JSON mode emits pure payload directly pipeable to `jq`
+9. **Status-aware display** — text mode resolves status IDs to names using cached project metadata
 
 ## Architecture
 
