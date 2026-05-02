@@ -19,6 +19,7 @@ import Model.UserStory
 import Model.Milestone
 import Model.WikiPage
 import Model.Comment
+import Model.Status
 import Data.List
 import Data.Maybe
 import Data.String
@@ -72,6 +73,46 @@ renderCmdResult JsonFmt cr = cr.payload
 renderCmdResult TextFmt cr = cr.text
 
 -- ---------------------------------------------------------------------------
+-- Status helpers
+-- ---------------------------------------------------------------------------
+
+||| Extract task statuses from cached project.
+taskStatuses : Maybe Project -> List StatusInfo
+taskStatuses = maybe [] (.task_statuses)
+
+||| Extract issue statuses from cached project.
+issueStatuses : Maybe Project -> List StatusInfo
+issueStatuses = maybe [] (.issue_statuses)
+
+||| Extract story statuses from cached project.
+storyStatuses : Maybe Project -> List StatusInfo
+storyStatuses = maybe [] (.us_statuses)
+
+||| Extract epic statuses from cached project.
+epicStatuses : Maybe Project -> List StatusInfo
+epicStatuses = maybe [] (.epic_statuses)
+
+||| Look up a status name from a list of StatusInfo.
+public export
+lookupStatusName : List StatusInfo -> Maybe Bits64 -> String
+lookupStatusName _   Nothing  = "-"
+lookupStatusName ss (Just id) =
+  case find (\s => s.id == id) ss of
+    Nothing => show id
+    Just s  => s.name
+
+-- ---------------------------------------------------------------------------
+-- String padding helper
+-- ---------------------------------------------------------------------------
+
+||| Right-pad a string to a given width.
+private
+padR : Nat -> String -> String
+padR n s =
+  let len := length s
+   in if len >= n then s else s ++ pack (replicate (minus n len) ' ')
+
+-- ---------------------------------------------------------------------------
 -- Text formatters for model types
 -- ---------------------------------------------------------------------------
 
@@ -95,95 +136,138 @@ formatProject p =
 
 ||| Format a list of task summaries.
 public export
-formatTaskSummaries : List TaskSummary -> String
-formatTaskSummaries ts =
-  unlines (map (\t => "#" ++ show t.ref ++ " " ++ t.subject) ts)
+formatTaskSummaries : Maybe Project -> List TaskSummary -> String
+formatTaskSummaries mProj ts =
+  let ss     := taskStatuses mProj
+      fmt    : TaskSummary -> String
+      fmt t  =
+        let status := lookupStatusName ss t.status
+            closed := if t.is_closed then " [CLOSED]" else ""
+         in "#" ++ padR 4 (show t.ref) ++ " " ++ padR 14 status ++ " " ++ t.subject ++ closed
+      header := "Ref   Status         Subject"
+      lines  := map fmt ts
+   in unlines (header :: lines)
 
 ||| Format a single task.
 public export
-formatTask : Task -> String
-formatTask t =
-  unlines
-    [ "ID:        " ++ show t.id.id
-    , "Ref:       #" ++ show t.ref
-    , "Subject:   " ++ t.subject
-    , "Status:    " ++ maybe "-" show t.status
-    , "Closed:    " ++ show t.is_closed
-    ]
+formatTask : Maybe Project -> Task -> String
+formatTask mProj t =
+  let ss := taskStatuses mProj
+   in unlines
+        [ "Task #" ++ show t.ref ++ ": " ++ t.subject
+        , replicate 40 '-'
+        , "ID:      " ++ show t.id.id
+        , "Status:  " ++ lookupStatusName ss t.status
+        , "Story:   " ++ maybe "-" (\us => "#" ++ show us.id) t.user_story
+        , "Closed:  " ++ if t.is_closed then "Yes" else "No"
+        ]
 
 ||| Format a list of epic summaries.
 public export
-formatEpicSummaries : List EpicSummary -> String
-formatEpicSummaries es =
-  unlines (map (\e => "#" ++ show e.ref ++ " " ++ e.subject) es)
+formatEpicSummaries : Maybe Project -> List EpicSummary -> String
+formatEpicSummaries mProj es =
+  let ss     := epicStatuses mProj
+      fmt    : EpicSummary -> String
+      fmt e  =
+        let status := lookupStatusName ss e.status
+         in "#" ++ padR 4 (show e.ref) ++ " " ++ padR 14 status ++ " " ++ e.subject
+      header := "Ref   Status         Subject"
+      lines  := map fmt es
+   in unlines (header :: lines)
 
 ||| Format a single epic.
 public export
-formatEpic : Epic -> String
-formatEpic e =
-  unlines
-    [ "ID:        " ++ show e.id.id
-    , "Ref:       #" ++ show e.ref
-    , "Subject:   " ++ e.subject
-    , "Status:    " ++ maybe "-" show e.status
-    ]
+formatEpic : Maybe Project -> Epic -> String
+formatEpic mProj e =
+  let ss := epicStatuses mProj
+   in unlines
+        [ "Epic #" ++ show e.ref ++ ": " ++ e.subject
+        , replicate 40 '-'
+        , "ID:      " ++ show e.id.id
+        , "Status:  " ++ lookupStatusName ss e.status
+        ]
 
 ||| Format a list of issue summaries.
 public export
-formatIssueSummaries : List IssueSummary -> String
-formatIssueSummaries is =
-  unlines (map (\i => "#" ++ show i.ref ++ " " ++ i.subject) is)
+formatIssueSummaries : Maybe Project -> List IssueSummary -> String
+formatIssueSummaries mProj is =
+  let ss     := issueStatuses mProj
+      fmt    : IssueSummary -> String
+      fmt i  =
+        let status := lookupStatusName ss i.status
+            prio   := maybe "" (\p => " [P" ++ show p ++ "]") i.priority
+         in "#" ++ padR 4 (show i.ref) ++ " " ++ padR 14 status ++ " " ++ i.subject ++ prio
+      header := "Ref   Status         Subject"
+      lines  := map fmt is
+   in unlines (header :: lines)
 
 ||| Format a single issue.
 public export
-formatIssue : Issue -> String
-formatIssue i =
-  unlines
-    [ "ID:        " ++ show i.id.id
-    , "Ref:       #" ++ show i.ref
-    , "Subject:   " ++ i.subject
-    , "Status:    " ++ maybe "-" show i.status
-    ]
+formatIssue : Maybe Project -> Issue -> String
+formatIssue mProj i =
+  let ss := issueStatuses mProj
+   in unlines
+        [ "Issue #" ++ show i.ref ++ ": " ++ i.subject
+        , replicate 40 '-'
+        , "ID:      " ++ show i.id.id
+        , "Status:  " ++ lookupStatusName ss i.status
+        , "Priority: " ++ maybe "-" show i.priority
+        ]
 
 ||| Format a list of story summaries.
 public export
-formatStorySummaries : List UserStorySummary -> String
-formatStorySummaries ss =
-  unlines (map (\s => "#" ++ show s.ref ++ " " ++ s.subject) ss)
+formatStorySummaries : Maybe Project -> List UserStorySummary -> String
+formatStorySummaries mProj sts =
+  let ss     := storyStatuses mProj
+      fmt    : UserStorySummary -> String
+      fmt s  =
+        let status := lookupStatusName ss s.status
+            ms     := maybe "" (\m => " [M" ++ show m.id ++ "]") s.milestone
+         in "#" ++ padR 4 (show s.ref) ++ " " ++ padR 14 status ++ " " ++ s.subject ++ ms
+      header := "Ref   Status         Subject"
+      lines  := map fmt sts
+   in unlines (header :: lines)
 
 ||| Format a single story.
 public export
-formatStory : UserStory -> String
-formatStory s =
-  unlines
-    [ "ID:        " ++ show s.id.id
-    , "Ref:       #" ++ show s.ref
-    , "Subject:   " ++ s.subject
-    , "Status:    " ++ maybe "-" show s.status
-    ]
+formatStory : Maybe Project -> UserStory -> String
+formatStory mProj s =
+  let ss := storyStatuses mProj
+   in unlines
+        [ "Story #" ++ show s.ref ++ ": " ++ s.subject
+        , replicate 40 '-'
+        , "ID:      " ++ show s.id.id
+        , "Status:  " ++ lookupStatusName ss s.status
+        , "Sprint:  " ++ maybe "-" (\m => "#" ++ show m.id) s.milestone
+        ]
 
 ||| Format a list of milestones.
 public export
-formatMilestoneSummaries : List MilestoneSummary -> String
-formatMilestoneSummaries ms =
-  unlines (map (\m => m.name ++ " (" ++ m.slug.slug ++ ")") ms)
+formatMilestoneSummaries : Maybe Project -> List MilestoneSummary -> String
+formatMilestoneSummaries _ ms =
+  let fmt    : MilestoneSummary -> String
+      fmt m  = padR 30 m.name ++ " " ++ padR 14 "-" ++ " " ++ "-"
+      header := "Name                           Start          Finish"
+      lines  := map fmt ms
+   in unlines (header :: lines)
 
 ||| Format a single milestone.
 public export
 formatMilestone : Milestone -> String
 formatMilestone m =
   unlines
-    [ "ID:              " ++ show m.id.id
-    , "Name:            " ++ m.name
-    , "Slug:            " ++ m.slug.slug
-    , "Est. start:      " ++ maybe "-" show m.estimated_start
-    , "Est. finish:     " ++ maybe "-" show m.estimated_finish
+    [ "Sprint: " ++ m.name
+    , replicate 40 '-'
+    , "ID:      " ++ show m.id.id
+    , "Slug:    " ++ m.slug.slug
+    , "Start:   " ++ maybe "-" show m.estimated_start
+    , "Finish:  " ++ maybe "-" show m.estimated_finish
     ]
 
 ||| Format a list of wiki pages.
 public export
-formatWikiPageSummaries : List WikiPageSummary -> String
-formatWikiPageSummaries ws =
+formatWikiPageSummaries : Maybe Project -> List WikiPageSummary -> String
+formatWikiPageSummaries _ ws =
   unlines (map (\w => w.slug.slug) ws)
 
 ||| Format a single wiki page.
@@ -191,8 +275,9 @@ public export
 formatWikiPage : WikiPage -> String
 formatWikiPage w =
   unlines
-    [ "ID:      " ++ show w.id.id
-    , "Slug:    " ++ w.slug.slug
+    [ "Wiki: " ++ w.slug.slug
+    , replicate 40 '-'
+    , "ID:      " ++ show w.id.id
     , "Version: " ++ show w.version
     ]
 
