@@ -23,27 +23,17 @@
         mkdocs = idris2-withpkgs.packages.${system}.idris2-mkdoc-md;
         docBrowser = idris2-withpkgs.packages.${system}.doc-browser;
 
-        # Vendored http library with local patches
-        httpVendored = pkgs.idris2Packages.buildIdris {
-          src = ./deps/http;
-          ipkgName = "http";
-          version = "0.0.1";
-          idrisLibraries = with idris2-withpkgs.packages.${system}; [
-            base64
-            elab-util
-            sop
-            tls
-          ];
-        };
-        httpVendoredLib = httpVendored.library {};
-
-        # Registry packages available as idris2-withpkgs.packages.${system}.<name>
-        selectedLibs = with idris2-withpkgs.packages.${system}; [ json httpVendoredLib ];
+        # Registry packages — Network.HTTP.* modules are in-tree (extracted from deps/http)
+        # so we only need standard libs for JSON, elab-util (derive), sop (generics), contrib (strings), tls
+        selectedLibs = with idris2-withpkgs.packages.${system}; [ json ];
 
         # Wrapped idris2 with all registry deps on IDRIS2_PACKAGE_PATH
         idris2Wrapped = idris2-withpkgs.lib.${system}.withPackages (p: [
           p.json
-          httpVendoredLib
+          p.elab-util
+          p.sop
+          p.contrib
+          p.tls
         ]);
 
         pkg = pkgs.idris2Packages.buildIdris {
