@@ -966,3 +966,273 @@ class TestOutputFormat:
         assert "error:" in proc.stderr
         # stdout should be empty (nothing to pipe to jq)
         assert proc.stdout.strip() == ""
+
+
+class TestFileDescription:
+    """Test @file syntax for --description flag across entity types."""
+
+    BASE = "http://127.0.0.1:8000/api/v1"
+
+    @staticmethod
+    def _token_file():
+        home = os.path.expanduser("~")
+        return os.path.join(home, ".local", "share", "taiga-cli", "tokens",
+                            "http___127.0.0.1_8000_api_v1.json")
+
+    @pytest.fixture
+    def workspace(self, tmp_path):
+        tf = self._token_file()
+        if os.path.exists(tf):
+            os.remove(tf)
+
+        proc = subprocess.run(
+            [BIN, "init", self.BASE],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(tmp_path),
+        )
+        assert proc.returncode == 0, f"init failed: {proc.stdout}{proc.stderr}"
+
+        yield tmp_path
+
+        if os.path.exists(tf):
+            os.remove(tf)
+
+    def _login(self, workspace):
+        proc = subprocess.run(
+            [BIN, "login", "--user", "rune"],
+            input="rune-secret-42\n",
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0
+
+    def _set_project(self, workspace):
+        proc = subprocess.run(
+            [BIN, "project", "set", PROJECT_ID],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0
+
+    # --- Task @file description ---
+
+    def test_task_update_description_from_file(self, workspace):
+        """task update --description @file reads content from file."""
+        self._login(workspace)
+        self._set_project(workspace)
+
+        ts = _ts()
+        desc_content = f"File-based description for task {ts}\nwith multiple lines."
+        desc_file = workspace / "task-desc.md"
+        desc_file.write_text(desc_content)
+
+        proc = subprocess.run(
+            [BIN, "--json", "task", "create", f"@file test task {ts}"],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0, f"task create failed: {proc.stdout}{proc.stderr}"
+        data = json.loads(proc.stdout)
+        tid, ref = data["id"], data["ref"]
+
+        try:
+            # Update task description from file
+            proc2 = subprocess.run(
+                [BIN, "--json", "task", "update", "#" + str(ref),
+                 "--description", f"@{desc_file}"],
+                capture_output=True, text=True, timeout=30,
+                cwd=str(workspace),
+            )
+            assert proc2.returncode == 0, \
+                f"task update @file failed: {proc2.stdout}{proc2.stderr}"
+            updated = json.loads(proc2.stdout)
+            assert desc_content in updated["description"]
+
+            # Verify via task get --json that description matches file content
+            proc3 = subprocess.run(
+                [BIN, "--json", "task", "get", "#" + str(ref)],
+                capture_output=True, text=True, timeout=30,
+                cwd=str(workspace),
+            )
+            assert proc3.returncode == 0
+            got = json.loads(proc3.stdout)
+            assert desc_content in got["description"]
+        finally:
+            subprocess.run(
+                [BIN, "task", "delete", "#" + str(ref)],
+                input="yes\n", capture_output=True, text=True, timeout=30,
+                cwd=str(workspace),
+            )
+
+    def test_task_update_missing_file_error(self, workspace):
+        """task update --description @nonexistent should fail with error."""
+        self._login(workspace)
+        self._set_project(workspace)
+
+        ts = _ts()
+        proc = subprocess.run(
+            [BIN, "--json", "task", "create", f"@file test task {ts}"],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0, f"task create failed: {proc.stdout}{proc.stderr}"
+        data = json.loads(proc.stdout)
+        ref = data["ref"]
+
+        try:
+            proc2 = subprocess.run(
+                [BIN, "task", "update", "#" + str(ref),
+                 "--description", "@/nonexistent/path/missing.md"],
+                capture_output=True, text=True, timeout=30,
+                cwd=str(workspace),
+            )
+            assert proc2.returncode != 0, \
+                "Expected nonzero exit code for missing file"
+            assert "Cannot read description file" in proc2.stdout or \
+                   "error:" in proc2.stdout
+        finally:
+            subprocess.run(
+                [BIN, "task", "delete", "#" + str(ref)],
+                input="yes\n", capture_output=True, text=True, timeout=30,
+                cwd=str(workspace),
+            )
+
+    def test_task_update_literal_description_no_regression(self, workspace):
+        """Literal description (no @ prefix) should continue working."""
+        self._login(workspace)
+        self._set_project(workspace)
+
+        ts = _ts()
+        proc = subprocess.run(
+            [BIN, "--json", "task", "create", f"literal test task {ts}"],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0, f"task create failed: {proc.stdout}{proc.stderr}"
+        data = json.loads(proc.stdout)
+        tid, ref = data["id"], data["ref"]
+
+        try:
+            literal_desc = "Plain text description without @file prefix"
+            proc2 = subprocess.run(
+                [BIN, "--json", "task", "update", "#" + str(ref),
+                 "--description", literal_desc],
+                capture_output=True, text=True, timeout=30,
+                cwd=str(workspace),
+            )
+            assert proc2.returncode == 0, \
+                f"literal update failed: {proc2.stdout}{proc2.stderr}"
+            updated = json.loads(proc2.stdout)
+            assert literal_desc in updated["description"]
+        finally:
+            subprocess.run(
+                [BIN, "task", "delete", "#" + str(ref)],
+                input="yes\n", capture_output=True, text=True, timeout=30,
+                cwd=str(workspace),
+            )
+
+    def test_issue_create_description_from_file(self, workspace):
+        """issue create --description @file reads content from file."""
+        self._login(workspace)
+        self._set_project(workspace)
+
+        ts = _ts()
+        desc_content = f"Issue description from file for {ts}"
+        desc_file = workspace / "issue-desc.md"
+        desc_file.write_text(desc_content)
+
+        proc = subprocess.run(
+            [BIN, "--json", "issue", "create", f"@file issue test {ts}",
+             "--description", f"@{desc_file}"],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0, \
+            f"issue create @file failed: {proc.stdout}{proc.stderr}"
+        data = json.loads(proc.stdout)
+        assert desc_content in data["description"]
+
+    def test_epic_create_description_from_file(self, workspace):
+        """epic create --description @file reads content from file."""
+        self._login(workspace)
+        self._set_project(workspace)
+
+        ts = _ts()
+        desc_content = f"Epic description from file for {ts}"
+        desc_file = workspace / "epic-desc.md"
+        desc_file.write_text(desc_content)
+
+        proc = subprocess.run(
+            [BIN, "--json", "epic", "create", f"@file epic test {ts}",
+             "--description", f"@{desc_file}"],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0, \
+            f"epic create @file failed: {proc.stdout}{proc.stderr}"
+        data = json.loads(proc.stdout)
+        assert desc_content in data["description"]
+
+    def test_story_create_description_from_file(self, workspace):
+        """story create --description @file reads content from file."""
+        self._login(workspace)
+        self._set_project(workspace)
+
+        ts = _ts()
+        desc_content = f"Story description from file for {ts}"
+        desc_file = workspace / "story-desc.md"
+        desc_file.write_text(desc_content)
+
+        proc = subprocess.run(
+            [BIN, "--json", "story", "create", f"@file story test {ts}",
+             "--description", f"@{desc_file}"],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0, \
+            f"story create @file failed: {proc.stdout}{proc.stderr}"
+        data = json.loads(proc.stdout)
+        assert desc_content in data["description"]
+
+    def test_multi_line_file_preserves_formatting(self, workspace):
+        """@file content preserves newlines and markdown formatting."""
+        self._login(workspace)
+        self._set_project(workspace)
+
+        ts = _ts()
+        md_content = (
+            "# Heading\n\n- Item 1\n- Item 2\n"
+            f"> Blockquote preserved for epic {ts}\n```\ncode block\n```"
+        )
+        desc_file = workspace / "markdown.md"
+        desc_file.write_text(md_content)
+
+        proc = subprocess.run(
+            [BIN, "--json", "epic", "create", f"@file md test {ts}",
+             "--description", f"@{desc_file}"],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc.returncode == 0
+        data = json.loads(proc.stdout)
+        eid, ref = data["id"], data["ref"]
+
+        # Get epic and verify markdown content preserved
+        proc2 = subprocess.run(
+            [BIN, "--json", "epic", "get", "#" + str(ref)],
+            capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+        assert proc2.returncode == 0
+        got = json.loads(proc2.stdout)
+        assert "# Heading" in got["description"]
+        assert "- Item 1" in got["description"]
+        assert "code block" in got["description"]
+
+        # Clean up epic
+        subprocess.run(
+            [BIN, "epic", "delete", "#" + str(ref)],
+            input="yes\n", capture_output=True, text=True, timeout=30,
+            cwd=str(workspace),
+        )
+
