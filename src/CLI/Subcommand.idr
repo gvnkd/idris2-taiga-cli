@@ -3,6 +3,7 @@
 ||| Parses subcommand structure and dispatches to action handlers.
 module CLI.Subcommand
 
+import System.File.ReadWrite as SRW
 import Control.AppM
 import Model.Auth
 import Model.Common
@@ -652,6 +653,20 @@ taskAssignStoryAux taskIdent storyIdent = do
 
 handleTaskAssignStory taskIdent storyIdent = runAppM (taskAssignStoryAux taskIdent storyIdent)
 
+||| Resolve description: if starts with '@', read from file; otherwise literal text.
+private
+resolveDescription : Maybe String -> AppM (Maybe String)
+resolveDescription Nothing = pure Nothing
+resolveDescription (Just s) = do
+  case unpack s of
+    ('@' :: rest) => do
+      let path := pack rest
+      result <- liftIO $ readFile path
+      case result of
+        Left err => appFail $ "Cannot read description file \{path}: \{show err}"
+        Right txt => pure (Just txt)
+    _ => pure (Just s)
+
 ||| Resolve a status parameter for an entity update.
 ||| Prefers explicit statusId, falls back to text resolution.
 private
@@ -681,8 +696,9 @@ taskUpdateAux ident mSubject mDesc mStatusText mStatusId = do
   env  <- resolveApiEnv
   mProj <- getCachedProject
   current <- liftIOEither $ getTask @{env} tid
+  resolved_desc <- resolveDescription mDesc
   let subj = fromMaybe current.subject mSubject
-      desc = fromMaybe current.description mDesc
+      desc = fromMaybe current.description resolved_desc
   stat <- resolveUpdateStatus env "task" mStatusText mStatusId
   val <- liftIOEither $ updateTask @{env} tid (Just subj) (Just desc) (map show stat) current.version
   pure $ cmdOk ("Task updated\n" ++ formatTask mProj val) val
@@ -709,11 +725,12 @@ epicUpdateAux ident mSubject mDesc mStatusText mStatusId = do
   env  <- resolveApiEnv
   mProj <- getCachedProject
   current <- liftIOEither $ getEpic @{env} eid
+  resolved_desc <- resolveDescription mDesc
   case current.version of
     Nothing => appFail "Cannot update epic: no version available"
     Just ver => do
       let subj = fromMaybe current.subject mSubject
-          desc = fromMaybe current.description mDesc
+          desc = fromMaybe current.description resolved_desc
       stat <- resolveUpdateStatus env "epic" mStatusText mStatusId
       val <- liftIOEither $ updateEpic @{env} eid (Just subj) (Just desc) (map show stat) ver
       pure $ cmdOk ("Epic updated\n" ++ formatEpic mProj val) val
@@ -736,8 +753,9 @@ handleEpicCreate : String -> Maybe String -> Maybe String -> IO (Either String C
 
 epicCreateAux : String -> Maybe String -> Maybe String -> AppM CmdResult
 epicCreateAux subject mDesc mStatus = do
+  resolved_desc <- resolveDescription mDesc
   (env, pid, mProj) <- getProjectEnvFull
-  val <- liftIOEither $ createEpic @{env} (show pid.id) subject mDesc mStatus
+  val <- liftIOEither $ createEpic @{env} (show pid.id) subject resolved_desc mStatus
   pure $ cmdOk ("Epic created\n" ++ formatEpic mProj val) val
 
 handleEpicCreate subject mDesc mStatus = runAppM (epicCreateAux subject mDesc mStatus)
@@ -773,8 +791,9 @@ handleIssueCreate : String -> Maybe String -> Maybe String -> Maybe String -> Ma
 
 issueCreateAux : String -> Maybe String -> Maybe String -> Maybe String -> Maybe String -> AppM CmdResult
 issueCreateAux subject mDesc mPriority mSeverity mType = do
+  resolved_desc <- resolveDescription mDesc
   (env, pid, mProj) <- getProjectEnvFull
-  val <- liftIOEither $ createIssue @{env} (show pid.id) subject mDesc mPriority mSeverity mType
+  val <- liftIOEither $ createIssue @{env} (show pid.id) subject resolved_desc mPriority mSeverity mType
   pure $ cmdOk ("Issue created\n" ++ formatIssue mProj val) val
 
 handleIssueCreate subject mDesc mPriority mSeverity mType = runAppM (issueCreateAux subject mDesc mPriority mSeverity mType)
@@ -789,8 +808,9 @@ issueUpdateAux ident mSubject mDesc mType mStatusText mStatusId = do
   env  <- resolveApiEnv
   mProj <- getCachedProject
   current <- liftIOEither $ getIssue @{env} iid
+  resolved_desc <- resolveDescription mDesc
   let subj = fromMaybe current.subject mSubject
-      desc = fromMaybe current.description mDesc
+      desc = fromMaybe current.description resolved_desc
   stat <- resolveUpdateStatus env "issue" mStatusText mStatusId
   val <- liftIOEither $ updateIssue @{env} iid (Just subj) (Just desc) mType (map show stat) current.version
   pure $ cmdOk ("Issue updated\n" ++ formatIssue mProj val) val
@@ -840,9 +860,10 @@ handleStoryCreate : String -> Maybe String -> Maybe String -> IO (Either String 
 
 storyCreateAux : String -> Maybe String -> Maybe String -> AppM CmdResult
 storyCreateAux subject mDesc mMilestone = do
+  resolved_desc <- resolveDescription mDesc
   (env, pid, mProj) <- getProjectEnvFull
   let mMs = map MkNat64Id $ mMilestone >>= readNat
-  val <- liftIOEither $ createStory @{env} (show pid.id) subject mDesc mMs
+  val <- liftIOEither $ createStory @{env} (show pid.id) subject resolved_desc mMs
   pure $ cmdOk ("Story created\n" ++ formatStory mProj val) val
 
 handleStoryCreate subject mDesc mMilestone = runAppM (storyCreateAux subject mDesc mMilestone)
@@ -857,8 +878,9 @@ storyUpdateAux ident mSubject mDesc mMilestone mStatusText mStatusId = do
   env  <- resolveApiEnv
   mProj <- getCachedProject
   current <- liftIOEither $ getStory @{env} sid
+  resolved_desc <- resolveDescription mDesc
   let subj = fromMaybe current.subject mSubject
-      desc = fromMaybe current.description mDesc
+      desc = fromMaybe current.description resolved_desc
       mMs  = fromMaybe Nothing (map Just mMilestone)
   stat <- resolveUpdateStatus env "story" mStatusText mStatusId
   val <- liftIOEither $ updateStory @{env} sid (Just subj) (Just desc) mMs (map show stat) current.version
