@@ -6,4 +6,7 @@ main = Main
 executable = taiga-cli
 
 depends = json
-        , http
+        , elab-util
+        , sop
+        , contrib
+        , tls

@@ -4,14 +4,14 @@
 ||| and worker threads entirely.
 module Taiga.HttpClient
 
-import Network.HTTP.Client as HC
-import Network.HTTP.Message as HM
+import Network.HTTP.Sync as HS
 import Network.HTTP.Method as HM
+import Network.HTTP.Message as MSG
 import Network.HTTP.URL as HU
 import Network.HTTP.Error as HE
-import Network.HTTP.Status as HS
-import Network.TLS as TLS
-import Network.TLS.Verify as TLS
+import Network.HTTP.Status
+import Utils.String as US
+import Network.TLS.Verify
 import Data.String
 import Data.List
 import Data.Maybe
@@ -60,9 +60,8 @@ httpRequestSync method urlStr headers mBody =
           headers' := case mBody of
                         Nothing => headers
                         Just _  => ("Content-Type", "application/json") :: headers
-      let action : EitherT (HE.HttpError ()) IO (HM.HttpResponse, List Bits8) =
-            HC.requestSync TLS.certificate_ignore_check method url headers' payload
-      result <- runEitherT action
+          bodyBytes := US.utf8_unpack payload
+      result <- HS.requestSync {e = ()} certificate_ignore_check method url headers' (length bodyBytes) bodyBytes
       case result of
         Left err => pure (Left ("HTTP request failed: " ++ formatHttpError err))
         Right (libResp, bytes) =>
