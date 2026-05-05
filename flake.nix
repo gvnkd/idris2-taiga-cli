@@ -28,11 +28,11 @@
         selectedLibs = with idris2-withpkgs.packages.${system}; [ json ];
 
         # Wrapped idris2 with all registry deps on IDRIS2_PACKAGE_PATH
+         # Note: contrib is built-in to Idris2, not a registry package
         idris2Wrapped = idris2-withpkgs.lib.${system}.withPackages (p: [
           p.json
           p.elab-util
           p.sop
-          p.contrib
           p.tls
         ]);
 
