@@ -34,6 +34,7 @@
           p.elab-util
           p.sop
           p.tls
+          p.optparse-applicative
         ]);
 
         pkg = pkgs.idris2Packages.buildIdris {
@@ -88,6 +89,7 @@
             mkdocs
             pkgs.rlwrap
             python
+            pkgs.eza  # Test package for direnv auto-refresh
           ] ++ (with pkgs; [
             (writeShellScriptBin "build" ''
               idris2 --build taiga-cli.ipkg "$@"

@@ -134,6 +134,14 @@ authPatch :
   -> io HttpResponse
 authPatch env url body = httpPatch url (Just env.token) body
 
+||| Format an error message based on HTTP status code.
+private
+fmtError : (errMsg : String) -> (code : Bits16) -> String
+fmtError msg 401 = "Authentication failed."
+fmtError msg 403 = "Permission denied."
+fmtError msg 404 = msg ++ " not found"
+fmtError msg code = msg ++ ": status " ++ show code
+
 ||| Generic HTTP response handler: check status, then apply a function.
 public export
 expectWith :
@@ -143,11 +151,11 @@ expectWith :
   -> (errMsg : String)
   -> (HttpResponse -> Either String a)
   -> io (Either String a)
+
 expectWith resp okStatus errMsg f =
   pure $ if resp.status.code == okStatus
            then f resp
-           else Left $ errMsg ++ " failed with status "
-                         ++ show resp.status.code
+          else Left $ fmtError errMsg resp.status.code
 
 ||| Parse an HTTP response as JSON on a specific status code.
 public export

@@ -61,11 +61,11 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String (List EpicSummary, PaginationMeta))
   listEpics mproject page pageSize = do
-    let opts   := concat $ catMaybes
-                     [ map (\p => [("page", show p)]) page
-                     , map (\s => [("page_size", show s)]) pageSize
-                     , map (\p => [("project__id", p)]) mproject ]
-        url    := buildUrl ["epics"] opts env.base
+    let opts := concat $ catMaybes
+                   [ map (\p => [("page", show p)]) page
+                   , map (\s => [("page_size", show s)]) pageSize
+                   , map (\p => [("project__id", p)]) mproject ]
+        url  := buildUrl ["epics"] opts env.base
     resp <- authGet env url
     expectJsonWithMeta resp 200 "list epics"
 
@@ -76,9 +76,10 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String Epic)
   getEpic id = do
-    let url := buildUrl ["epics", showId id] [] env.base
+    let errMsg := "epic #" ++ showId id
+        url    := buildUrl ["epics", showId id] [] env.base
     resp <- authGet env url
-    expectJson resp 200 "get epic"
+    expectJson resp 200 errMsg
 
   ||| Create a new epic.
   public export
@@ -106,10 +107,11 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String Epic)
   updateEpic id subj desc stat ver = do
-    let body := encode $ MkUpdateEpicBody subj desc (map parseBits64 stat) ver
-        url  := buildUrl ["epics", showId id] [] env.base
+    let errMsg := "epic #" ++ showId id
+        body   := encode $ MkUpdateEpicBody subj desc (map parseBits64 stat) ver
+        url    := buildUrl ["epics", showId id] [] env.base
     resp <- authPatch env url body
-    expectJson resp 200 "update epic"
+    expectJson resp 200 errMsg
 
   ||| Delete an epic.
   public export
@@ -118,6 +120,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String ())
   deleteEpic id = do
-    let url := buildUrl ["epics", showId id] [] env.base
+    let errMsg := "epic #" ++ showId id
+        url    := buildUrl ["epics", showId id] [] env.base
     resp <- authDelete env url
-    expectOk resp 204 "delete epic"
+    expectOk resp 204 errMsg

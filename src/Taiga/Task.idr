@@ -129,9 +129,10 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String Task)
   getTask id = do
-    let url := buildUrl ["tasks", showId id] [] env.base
+    let errMsg := "task #" ++ showId id
+        url    := buildUrl ["tasks", showId id] [] env.base
     resp <- authGet env url
-    expectJson resp 200 "get task"
+    expectJson resp 200 errMsg
 
   ||| Create a new task.
   public export
@@ -161,10 +162,11 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String Task)
   updateTask id subj desc stat ver = do
-    let body := encode $ MkUpdateTaskBody subj desc (map parseBits64 stat) ver
-        url  := buildUrl ["tasks", showId id] [] env.base
+    let errMsg := "task #" ++ showId id
+        body   := encode $ MkUpdateTaskBody subj desc (map parseBits64 stat) ver
+        url    := buildUrl ["tasks", showId id] [] env.base
     resp <- authPatch env url body
-    expectJson resp 200 "update task"
+    expectJson resp 200 errMsg
 
   ||| Delete a task.
   public export
@@ -173,9 +175,10 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String ())
   deleteTask id = do
-    let url := buildUrl ["tasks", showId id] [] env.base
+    let errMsg := "task #" ++ showId id
+        url    := buildUrl ["tasks", showId id] [] env.base
     resp <- authDelete env url
-    expectOk resp 204 "delete task"
+    expectOk resp 204 errMsg
 
   ||| Change the status of a task via PATCH.
   |||
@@ -189,10 +192,11 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String Task)
   changeTaskStatus id newSt ver = do
-    let body := encode $ MkChangeTaskStatusBody newSt ver
-        url  := buildUrl ["tasks", showId id] [] env.base
+    let errMsg := "task #" ++ showId id
+        body   := encode $ MkChangeTaskStatusBody newSt ver
+        url    := buildUrl ["tasks", showId id] [] env.base
     resp <- authPatch env url body
-    expectJson resp 200 "change task status"
+    expectJson resp 200 errMsg
 
   ||| Add a comment to a task.
   public export
@@ -203,10 +207,11 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String String)
   taskComment id txt ver = do
-    let url  := buildUrl ["tasks", showId id] [] env.base
-        body := encode $ MkTaskCommentBody txt ver
+    let errMsg := "task #" ++ showId id
+        url    := buildUrl ["tasks", showId id] [] env.base
+        body   := encode $ MkTaskCommentBody txt ver
     resp <- authPatch env url body
-    expectRaw resp 200 "add task comment"
+    expectRaw resp 200 errMsg
 
   ||| Assign a task to a user story (or unassign with Nothing).
   public export
@@ -217,7 +222,8 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String Task)
   assignTaskToStory id story ver = do
-    let body := encode $ MkUpdateTaskStoryBody story ver
-        url  := buildUrl ["tasks", showId id] [] env.base
+    let errMsg := "task #" ++ showId id
+        body   := encode $ MkUpdateTaskStoryBody story ver
+        url    := buildUrl ["tasks", showId id] [] env.base
     resp <- authPatch env url body
-    expectJson resp 200 "assign task to story"
+    expectJson resp 200 errMsg

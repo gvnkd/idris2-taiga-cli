@@ -61,8 +61,8 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String (List UserStorySummary, PaginationMeta))
   fetchStoryList url = do
-   resp <- authGet env url
-   expectJsonWithMeta resp 200 "list stories"
+    resp <- authGet env url
+    expectJsonWithMeta resp 200 "list stories"
 
   ||| List user stories in a project.
   public export
@@ -73,11 +73,11 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String (List UserStorySummary, PaginationMeta))
   listStories mproject page pageSize =
-   let opts   := concat $ catMaybes
-                    [ map (\p => [("page", show p)]) page
-                    , map (\s => [("page_size", show s)]) pageSize
-                    , map (\p => [("project__id", p)]) mproject ]
-    in fetchStoryList (buildUrl ["userstories"] opts env.base)
+    let opts := concat $ catMaybes
+                   [ map (\p => [("page", show p)]) page
+                   , map (\s => [("page_size", show s)]) pageSize
+                   , map (\p => [("project__id", p)]) mproject ]
+     in fetchStoryList (buildUrl ["userstories"] opts env.base)
 
   ||| Get a user story by its ID.
   public export
@@ -86,9 +86,10 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String UserStory)
   getStory id = do
-   let url := buildUrl ["userstories", showId id] [] env.base
-   resp <- authGet env url
-   expectJson resp 200 "get story"
+    let errMsg := "story #" ++ showId id
+        url    := buildUrl ["userstories", showId id] [] env.base
+    resp <- authGet env url
+    expectJson resp 200 errMsg
 
   ||| Create a new user story.
   public export
@@ -100,10 +101,10 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String UserStory)
   createStory project subject desc mstone = do
-   let body := encode $ MkCreateStoryBody (parseBits64 project) subject desc mstone
-       url  := buildUrl ["userstories"] [] env.base
-   resp <- authPost env url body
-   expectJson resp 201 "create story"
+    let body := encode $ MkCreateStoryBody (parseBits64 project) subject desc mstone
+        url  := buildUrl ["userstories"] [] env.base
+    resp <- authPost env url body
+    expectJson resp 201 "create story"
 
   ||| Update an existing user story (OCC-aware).
   public export
@@ -117,10 +118,11 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String UserStory)
   updateStory id subj desc mstone stat ver = do
-    let body := encode $ MkUpdateStoryBody subj desc (map parseBits64 mstone) (map parseBits64 stat) ver
-        url  := buildUrl ["userstories", showId id] [] env.base
+    let errMsg := "story #" ++ showId id
+        body   := encode $ MkUpdateStoryBody subj desc (map parseBits64 mstone) (map parseBits64 stat) ver
+        url    := buildUrl ["userstories", showId id] [] env.base
     resp <- authPatch env url body
-    expectJson resp 200 "update story"
+    expectJson resp 200 errMsg
 
   ||| Delete a user story.
   public export
@@ -129,6 +131,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String ())
   deleteStory id = do
-   let url := buildUrl ["userstories", showId id] [] env.base
-   resp <- authDelete env url
-   expectOk resp 204 "delete story"
+    let errMsg := "story #" ++ showId id
+        url    := buildUrl ["userstories", showId id] [] env.base
+    resp <- authDelete env url
+    expectOk resp 204 errMsg

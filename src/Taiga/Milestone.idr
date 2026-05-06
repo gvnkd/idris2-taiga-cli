@@ -61,11 +61,11 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String (List MilestoneSummary, PaginationMeta))
   listMilestones mproject page pageSize = do
-    let opts   := concat $ catMaybes
-                     [ map (\p => [("page", show p)]) page
-                     , map (\s => [("page_size", show s)]) pageSize
-                     , map (\p => [("project__id", p)]) mproject ]
-        url    := buildUrl ["milestones"] opts env.base
+    let opts := concat $ catMaybes
+                   [ map (\p => [("page", show p)]) page
+                   , map (\s => [("page_size", show s)]) pageSize
+                   , map (\p => [("project__id", p)]) mproject ]
+        url  := buildUrl ["milestones"] opts env.base
     resp <- authGet env url
     expectJsonWithMeta resp 200 "list milestones"
 
@@ -95,10 +95,11 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String Milestone)
   updateMilestone id name estStart estFinish ver = do
-    let body := encode $ MkUpdateMilestoneBody name estStart estFinish ver
-        url  := buildUrl ["milestones", showId id] [] env.base
+    let errMsg := "milestone #" ++ showId id
+        body   := encode $ MkUpdateMilestoneBody name estStart estFinish ver
+        url    := buildUrl ["milestones", showId id] [] env.base
     resp <- authPatch env url body
-    expectJson resp 200 "update milestone"
+    expectJson resp 200 errMsg
 
   ||| Get a milestone by its ID.
   public export
@@ -107,9 +108,10 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String Milestone)
   getMilestone id = do
-    let url := buildUrl ["milestones", showId id] [] env.base
+    let errMsg := "milestone #" ++ showId id
+        url    := buildUrl ["milestones", showId id] [] env.base
     resp <- authGet env url
-    expectJson resp 200 "get milestone"
+    expectJson resp 200 errMsg
 
   ||| Delete a milestone.
   public export
@@ -118,6 +120,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String ())
   deleteMilestone id = do
-    let url := buildUrl ["milestones", showId id] [] env.base
+    let errMsg := "milestone #" ++ showId id
+        url    := buildUrl ["milestones", showId id] [] env.base
     resp <- authDelete env url
-    expectOk resp 204 "delete milestone"
+    expectOk resp 204 errMsg

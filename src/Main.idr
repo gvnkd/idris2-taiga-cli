@@ -147,17 +147,26 @@ looksLikeFlags : List String -> Bool
 looksLikeFlags []     = False
 looksLikeFlags (x :: _) = Data.String.isPrefixOf "--" x
 
+-- Version flag handling (check before other routing)
+isVersionFlag : List String -> Bool  
+isVersionFlag args = any (\x => x == "--version" || x == "-v") args
+
+versionPrint : IO ()
+versionPrint = putStrLn "taiga-cli version 0.1.0"
+
 ||| Top-level entry point.
 |||
 ||| If `getArgs` returns non-empty, route to the appropriate mode.
 main : IO ()
 main = do
-  args <- getArgs
-  let args'    := drop 1 args
+  args <- getArgs  
+  let args' := drop 1 args
       (argsNoJson, _) := stripJsonFlag args'
-  case args' of
-    []    => putStrLn usage
-    _     =>
+
+  -- Handle version flags immediately before other routing
+  if isVersionFlag args' then versionPrint else case args' of
+    []                         => putStrLn usage  
+    _                           =>
       if looksLikeFlags argsNoJson
         then runCLI args'
         else runSubcommand args'

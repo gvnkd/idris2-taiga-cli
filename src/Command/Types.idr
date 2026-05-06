@@ -309,6 +309,9 @@ record UpdateMilestoneArgs where
 ||| Sum type of all supported commands.
 public export
 data Command : Type where
+  -- Health check (no auth needed)
+  CmdPing       : Command
+
   -- Authentication
   CmdLogin    : Credentials -> Command
   CmdRefresh  : String       -> Command

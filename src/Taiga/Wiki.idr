@@ -57,11 +57,11 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String (List WikiPageSummary, PaginationMeta))
   listWiki mproject page pageSize = do
-    let opts   := concat $ catMaybes
-                     [ map (\p => [("page", show p)]) page
-                     , map (\s => [("page_size", show s)]) pageSize
-                     , map (\p => [("project__id", p)]) mproject ]
-        url    := buildUrl ["wiki"] opts env.base
+    let opts := concat $ catMaybes
+                   [ map (\p => [("page", show p)]) page
+                   , map (\s => [("page_size", show s)]) pageSize
+                   , map (\p => [("project__id", p)]) mproject ]
+        url  := buildUrl ["wiki"] opts env.base
     resp <- authGet env url
     expectJsonWithMeta resp 200 "list wiki"
 
@@ -72,9 +72,10 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String WikiPage)
   getWiki id = do
-    let url := buildUrl ["wiki", showId id] [] env.base
+    let errMsg := "wiki page #" ++ showId id
+        url    := buildUrl ["wiki", showId id] [] env.base
     resp <- authGet env url
-    expectJson resp 200 "get wiki"
+    expectJson resp 200 errMsg
 
   ||| Create a new wiki page.
   public export
@@ -100,10 +101,11 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String WikiPage)
   updateWiki id content slug ver = do
-    let body := encode $ MkUpdateWikiBody content slug ver
-        url  := buildUrl ["wiki", showId id] [] env.base
+    let errMsg := "wiki page #" ++ showId id
+        body   := encode $ MkUpdateWikiBody content slug ver
+        url    := buildUrl ["wiki", showId id] [] env.base
     resp <- authPatch env url body
-    expectJson resp 200 "update wiki"
+    expectJson resp 200 errMsg
 
   ||| Delete a wiki page.
   public export
@@ -112,6 +114,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String ())
   deleteWiki id = do
-    let url := buildUrl ["wiki", showId id] [] env.base
+    let errMsg := "wiki page #" ++ showId id
+        url    := buildUrl ["wiki", showId id] [] env.base
     resp <- authDelete env url
-    expectOk resp 204 "delete wiki"
+    expectOk resp 204 errMsg

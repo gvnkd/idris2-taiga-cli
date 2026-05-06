@@ -156,6 +156,7 @@ mkDeleteMilestoneCmd a      = CmdDeleteMilestone (MkNat64Id a.id)
 ||| Parse a command name and JSON arguments into a Command.
 public export
 parseCommand : (cmd : String) -> (args : String) -> Either String Command
+parseCommand "ping"               _            = pure CmdPing
 parseCommand "me"               _            = pure CmdMe
 parseCommand "login"            args        = parseCmdArgs CmdLogin args
 parseCommand "refresh"          args        = parseCmdArgs mkRefreshCmd args

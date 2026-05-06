@@ -34,6 +34,24 @@ private wrapResult : (a -> String) -> Either String a -> Response
 wrapResult encodeFn (Left err)  = Err $ MkErrorResponse False "api_error" err
 wrapResult encodeFn (Right val) = Ok $ MkSuccess True (encodeFn val)
 
+||| Helper: dispatch ping (no auth needed, just base URL).
+private dispatchPing' :
+     HasIO io
+  => Maybe String -> io Response
+dispatchPing' Nothing =
+  pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"
+dispatchPing' (Just baseUrl) = do
+  let pingUrl := baseUrl ++ "/api/v1/me"
+  resp <- Taiga.Api.httpGet pingUrl Nothing
+  let status_code := resp.status.code
+  if status_code >= 200 && status_code < 400 then
+     pure $ Ok $ MkSuccess True "ok"
+   else if status_code == 0 then
+     pure $ Err $ MkErrorResponse False "network_error" "Failed to connect to server"
+    else
+     pure $ Err $ MkErrorResponse False "server_error"
+       $ "Server responded with status " ++ show status_code
+
 ||| Helper: dispatch login (no auth needed, just base URL).
 private dispatchLogin' :
      HasIO io
@@ -138,6 +156,7 @@ dispatchCommand :
   -> (base  : Maybe String)
   -> io Response
 dispatchCommand (CmdLogin creds) _ base         = dispatchLogin' creds base
+dispatchCommand CmdPing _ base                  = dispatchPing' base
 dispatchCommand (CmdRefresh rtok) _ base         = dispatchRefresh' rtok base
 dispatchCommand command Nothing _                 = pure $ Err $ MkErrorResponse False "unauthorized" "No token provided"
 dispatchCommand _ _ Nothing                       = pure $ Err $ MkErrorResponse False "no_base" "No base URL provided"

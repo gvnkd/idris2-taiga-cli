@@ -82,9 +82,10 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String Issue)
   getIssue id = do
-    let url := buildUrl ["issues", showId id] [] env.base
+    let errMsg := "issue #" ++ showId id
+        url    := buildUrl ["issues", showId id] [] env.base
     resp <- authGet env url
-    expectJson resp 200 "get issue"
+    expectJson resp 200 errMsg
 
   ||| Create a new issue.
   public export
@@ -115,10 +116,11 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String Issue)
   updateIssue id subj desc itype stat ver = do
-    let body := encode $ MkUpdateIssueBody subj desc itype (map parseBits64 stat) ver
-        url  := buildUrl ["issues", showId id] [] env.base
+    let errMsg := "issue #" ++ showId id
+        body   := encode $ MkUpdateIssueBody subj desc itype (map parseBits64 stat) ver
+        url    := buildUrl ["issues", showId id] [] env.base
     resp <- authPatch env url body
-    expectJson resp 200 "update issue"
+    expectJson resp 200 errMsg
 
   ||| Delete an issue.
   public export
@@ -127,6 +129,7 @@ parameters {auto env : ApiEnv}
     -> {auto _ : HasIO io}
     -> io (Either String ())
   deleteIssue id = do
-    let url := buildUrl ["issues", showId id] [] env.base
+    let errMsg := "issue #" ++ showId id
+        url    := buildUrl ["issues", showId id] [] env.base
     resp <- authDelete env url
-    expectOk resp 204 "delete issue"
+    expectOk resp 204 errMsg
