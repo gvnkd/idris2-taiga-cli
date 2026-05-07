@@ -227,25 +227,18 @@ resolveAsRef s = do
 ||| such ref exists, an error is returned with no fallback.
 public export
 resolveToId : String -> AppM Nat64Id
-resolveToId s =
-  if hasHashPrefix s
-    then resolveAsRef s
-    else parseRawId s
+resolveToId s = resolveAsRef (stripHash s)
 
 ||| Resolve an identifier constrained to a specific entity type.
 ||| Bare numbers are treated as raw database IDs. '#' prefixed strings
 ||| are resolved as refs of the expected kind only.
 public export
 resolveToIdForType : EntityKind -> String -> AppM Nat64Id
-resolveToIdForType expectedKind s =
-  let bare      := stripHash s
-      expectedKey := resolverKey expectedKind
-   in if hasHashPrefix s
-        then do (entityType, nid) <- resolveRef bare
-                if entityType == expectedKey
-                  then pure nid
-                  else appFail $ "Identifier " ++ s ++ " resolved to wrong entity type"
-        else parseRawId s
+resolveToIdForType expectedKind s = do
+  (entityType, nid) <- resolveRef (stripHash s)
+  if entityType == resolverKey expectedKind
+    then pure nid
+    else appFail $ "Identifier " ++ s ++ " resolved to wrong entity type"
 
 ||| Entity-specific resolvers.
 public export
@@ -1055,7 +1048,7 @@ handleResolve ref = runAppM (resolveAndLookup ref)
     resolveAndLookup ref = do
       (_, nid) <- resolveRef ref
       env  <- resolveApiEnv
-      let getters =
+      let getters : List (String, AppM String) =
             [ ("task",   liftIOEither $ map (map encode) $ getTask @{env} nid)
             , ("issue",  liftIOEither $ map (map encode) $ getIssue @{env} nid)
             , ("story",  liftIOEither $ map (map encode) $ getStory @{env} nid)
