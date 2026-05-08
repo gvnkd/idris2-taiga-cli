@@ -1,10 +1,11 @@
 module Network.HTTP.Method
-
 import Generics.Derive
 import Derive.Prelude
 
 %hide Generics.Derive.Eq
+
 %hide Generics.Derive.Ord
+
 %hide Generics.Derive.Show
 
 %language ElabReflection
@@ -25,8 +26,10 @@ data Method : Type where
 
 export
 http_method_to_string : Method -> String
-http_method_to_string (Custom x) = toUpper x
-http_method_to_string x = show x
+http_method_to_string (Custom x) =
+  toUpper x
+http_method_to_string x =
+  show x
 
 export
 string_to_http_method : String -> Method
@@ -43,5 +46,6 @@ string_to_http_method x =
     x => Custom x
 
 export
-FromString Method where
-  fromString = string_to_http_method
+implementation FromString Method where
+  fromString =
+    string_to_http_method

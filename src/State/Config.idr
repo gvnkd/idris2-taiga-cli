@@ -4,7 +4,6 @@ import State.File
 
 %language ElabReflection
 
-||| Output format preference.
 public export
 data OutputFormat : Type where
   TextFmt : OutputFormat
@@ -12,7 +11,6 @@ data OutputFormat : Type where
 
 %runElab derive "OutputFormat" [Show, Eq, ToJSON, FromJSON]
 
-||| Global config stored in ~/.local/share/taiga-cli/config.json
 public export
 record GlobalConfig where
   constructor MkGlobalConfig
@@ -20,7 +18,6 @@ record GlobalConfig where
 
 %runElab derive "GlobalConfig" [Show, ToJSON, FromJSON]
 
-||| Per-project config stored in ./.taiga/config.json
 public export
 record WorkspaceConfig where
   constructor MkWorkspaceConfig
@@ -28,45 +25,43 @@ record WorkspaceConfig where
 
 %runElab derive "WorkspaceConfig" [Show, ToJSON, FromJSON]
 
-||| Default configs.
-public export defaultGlobalConfig : GlobalConfig
+public export
+defaultGlobalConfig : GlobalConfig
 defaultGlobalConfig =
   MkGlobalConfig {default_output_format = TextFmt}
 
-public export defaultWorkspaceConfig : WorkspaceConfig
+public export
+defaultWorkspaceConfig : WorkspaceConfig
 defaultWorkspaceConfig =
   MkWorkspaceConfig {output_format = Nothing}
 
-||| Load/save for global config.
-public export loadGlobalConfig : IO (Maybe GlobalConfig)
+public export
+loadGlobalConfig : IO (Maybe GlobalConfig)
 loadGlobalConfig =
   load GlobalConfigStore "config"
 
-public export saveGlobalConfig : GlobalConfig -> IO ()
+public export
+saveGlobalConfig : GlobalConfig -> IO ()
 saveGlobalConfig cfg =
   save GlobalConfigStore "config" cfg
 
-||| Load/save for workspace config.
-public export loadWorkspaceCfg : IO (Maybe WorkspaceConfig)
+public export
+loadWorkspaceCfg : IO (Maybe WorkspaceConfig)
 loadWorkspaceCfg =
   load WorkspaceStore "config"
 
-public export saveWorkspaceCfg : WorkspaceConfig -> IO ()
+public export
+saveWorkspaceCfg : WorkspaceConfig -> IO ()
 saveWorkspaceCfg cfg =
   save WorkspaceStore "config" cfg
 
-||| Resolve effective output format: workspace override > global
-||| default > TextFmt.
-public export resolveOutputFormat : IO OutputFormat
+public export
+resolveOutputFormat : IO OutputFormat
 resolveOutputFormat = do
-  wcfg <-
-    loadWorkspaceCfg
-  gcfg <-
-    loadGlobalConfig
-  pure $
-    case wcfg of
-      Just (MkWorkspaceConfig (Just fmt)) => fmt
-      _ =>
-        case gcfg of
-          Just (MkGlobalConfig fmt) => fmt
-          Nothing                     => TextFmt
+  wcfg <- loadWorkspaceCfg
+  gcfg <- loadGlobalConfig
+  pure $ (case wcfg of
+            Just (MkWorkspaceConfig (Just fmt)) => fmt
+            _ => case gcfg of
+                   Just (MkGlobalConfig fmt) => fmt
+                   Nothing => TextFmt)

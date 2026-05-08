@@ -1,6 +1,4 @@
-||| Epic endpoints and related user stories.
 module Taiga.Epic
-
 import JSON.FromJSON
 import JSON.ToJSON
 import JSON.Encoder
@@ -12,115 +10,66 @@ import Data.List
 
 %language ElabReflection
 
-||| Request body for creating an epic.
 public export
 record CreateEpicBody where
   constructor MkCreateEpicBody
-  project     : Bits64
-  subject     : String
+  project : Bits64
+  subject : String
   description : Maybe String
-  status      : Maybe Bits64
+  status : Maybe Bits64
 
 public export
-ToJSON CreateEpicBody where
+implementation ToJSON CreateEpicBody where
   toJSON b =
-    object $ catMaybes
-      [ Just $ jpair "project" b.project
-      , Just $ jpair "subject" b.subject
-      , omitNothing "description" b.description
-      , omitNothing "status" b.status
-      ]
+    object $ catMaybes [Just $ jpair "project" b.project, Just $ jpair "subject" b.subject, omitNothing "description" b.description, omitNothing "status" b.status]
 
-||| Request body for updating an epic.
 public export
 record UpdateEpicBody where
   constructor MkUpdateEpicBody
-  subject     : Maybe String
+  subject : Maybe String
   description : Maybe String
-  status      : Maybe Bits64
-  version     : Version
+  status : Maybe Bits64
+  version : Version
 
 public export
-ToJSON UpdateEpicBody where
+implementation ToJSON UpdateEpicBody where
   toJSON b =
-    object $ catMaybes
-      [ omitNothing "subject" b.subject
-      , omitNothing "description" b.description
-      , omitNothing "status" b.status
-      , Just $ jpair "version" b.version
-      ]
+    object $ catMaybes [omitNothing "subject" b.subject, omitNothing "description" b.description, omitNothing "status" b.status, Just $ jpair "version" b.version]
 
 parameters {auto env : ApiEnv}
-
-  ||| List epics in a project.
   public export
-  listEpics :
-       (project : Maybe String)
-    -> (page : Maybe Bits32)
-    -> (pageSize : Maybe Bits32)
-    -> {auto _ : HasIO io}
-    -> io (Either String (List EpicSummary, PaginationMeta))
+  listEpics : (project : Maybe String) -> (page : Maybe Bits32) -> (pageSize : Maybe Bits32) -> {auto _ : HasIO io} -> io (Either String (List EpicSummary, PaginationMeta))
   listEpics mproject page pageSize = do
-    let opts := concat $ catMaybes
-                   [ map (\p => [("page", show p)]) page
-                   , map (\s => [("page_size", show s)]) pageSize
-                   , map (\p => [("project__id", p)]) mproject ]
-        url  := buildUrl ["epics"] opts env.base
+    let opts : _ = concat $ catMaybes [map (\p => [("page", show p)]) page, map (\s => [("page_size", show s)]) pageSize, map (\p => [("project__id", p)]) mproject]
+    let url : _ = buildUrl ["epics"] opts env.base
     resp <- authGet env url
     expectJsonWithMeta resp 200 "list epics"
-
-  ||| Get an epic by its ID.
   public export
-  getEpic :
-       (id : Nat64Id)
-    -> {auto _ : HasIO io}
-    -> io (Either String Epic)
+  getEpic : (id : Nat64Id) -> {auto _ : HasIO io} -> io (Either String Epic)
   getEpic id = do
-    let errMsg := "epic #" ++ showId id
-        url    := buildUrl ["epics", showId id] [] env.base
+    let errMsg : _ = "epic #" ++ showId id
+    let url : _ = buildUrl ["epics", showId id] [] env.base
     resp <- authGet env url
     expectJson resp 200 errMsg
-
-  ||| Create a new epic.
   public export
-  createEpic :
-       (project : String)
-    -> (subject : String)
-    -> (description : Maybe String)
-    -> (status : Maybe String)
-    -> {auto _ : HasIO io}
-    -> io (Either String Epic)
+  createEpic : (project : String) -> (subject : String) -> (description : Maybe String) -> (status : Maybe String) -> {auto _ : HasIO io} -> io (Either String Epic)
   createEpic project subject desc stat = do
-    let body := encode $ MkCreateEpicBody (parseBits64 project) subject desc (map parseBits64 stat)
-        url  := buildUrl ["epics"] [] env.base
+    let body : _ = encode $ MkCreateEpicBody (parseBits64 project) subject desc (map parseBits64 stat)
+    let url : _ = buildUrl ["epics"] [] env.base
     resp <- authPost env url body
     expectJson resp 201 "create epic"
-
-  ||| Update an existing epic (OCC-aware).
   public export
-  updateEpic :
-       (id : Nat64Id)
-    -> (subject : Maybe String)
-    -> (description : Maybe String)
-    -> (status : Maybe String)
-    -> (version : Version)
-    -> {auto _ : HasIO io}
-    -> io (Either String Epic)
+  updateEpic : (id : Nat64Id) -> (subject : Maybe String) -> (description : Maybe String) -> (status : Maybe String) -> (version : Version) -> {auto _ : HasIO io} -> io (Either String Epic)
   updateEpic id subj desc stat ver = do
-    let errMsg := "epic #" ++ showId id
-        body   := encode $ MkUpdateEpicBody subj desc (map parseBits64 stat) ver
-        url    := buildUrl ["epics", showId id] [] env.base
+    let errMsg : _ = "epic #" ++ showId id
+    let body : _ = encode $ MkUpdateEpicBody subj desc (map parseBits64 stat) ver
+    let url : _ = buildUrl ["epics", showId id] [] env.base
     resp <- authPatch env url body
     expectJson resp 200 errMsg
-
-  ||| Delete an epic.
   public export
-  deleteEpic :
-       (id : Nat64Id)
-    -> {auto _ : HasIO io}
-    -> io (Either String ())
+  deleteEpic : (id : Nat64Id) -> {auto _ : HasIO io} -> io (Either String ())
   deleteEpic id = do
-    let errMsg := "epic #" ++ showId id
-        url    := buildUrl ["epics", showId id] [] env.base
+    let errMsg : _ = "epic #" ++ showId id
+    let url : _ = buildUrl ["epics", showId id] [] env.base
     resp <- authDelete env url
     expectOk resp 204 errMsg

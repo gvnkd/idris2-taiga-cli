@@ -1,6 +1,4 @@
-||| Taiga task record with FromJSON / ToJSON instances.
 module Model.Task
-
 import JSON.Derive
 import JSON.ToJSON
 import JSON.FromJSON
@@ -8,7 +6,6 @@ import Model.Common
 
 %language ElabReflection
 
-||| A task (unit of implementation work).
 public export
 record Task where
   constructor MkTask
@@ -21,9 +18,8 @@ record Task where
   is_closed : Bool
   version : Version
 
-%runElab derive "Task" [Show,Eq,ToJSON,FromJSON]
+%runElab derive "Task" [Show, Eq, ToJSON, FromJSON]
 
-||| Compact serialisation for list responses.
 public export
 record TaskSummary where
   constructor MkTaskSummary
@@ -34,4 +30,4 @@ record TaskSummary where
   user_story : Maybe Nat64Id
   is_closed : Bool
 
-%runElab derive "TaskSummary" [Show,Eq,ToJSON,FromJSON]
+%runElab derive "TaskSummary" [Show, Eq, ToJSON, FromJSON]

@@ -1,6 +1,4 @@
-||| Issue endpoints.
 module Taiga.Issue
-
 import JSON.FromJSON
 import JSON.ToJSON
 import JSON.Encoder
@@ -12,124 +10,69 @@ import Data.List
 
 %language ElabReflection
 
-||| Request body for creating an issue.
 public export
 record CreateIssueBody where
   constructor MkCreateIssueBody
-  project     : Bits64
-  subject     : String
+  project : Bits64
+  subject : String
   description : Maybe String
-  priority    : Maybe String
-  severity    : Maybe String
-  issueType   : Maybe String
+  priority : Maybe String
+  severity : Maybe String
+  issueType : Maybe String
 
 public export
-ToJSON CreateIssueBody where
+implementation ToJSON CreateIssueBody where
   toJSON b =
-    object $ catMaybes
-      [ Just $ jpair "project" b.project
-      , Just $ jpair "subject" b.subject
-      , omitNothing "description" b.description
-      , omitNothing "priority" b.priority
-      , omitNothing "severity" b.severity
-      , omitNothing "issue_type" b.issueType
-      ]
+    object $ catMaybes [Just $ jpair "project" b.project, Just $ jpair "subject" b.subject, omitNothing "description" b.description, omitNothing "priority" b.priority, omitNothing "severity" b.severity, omitNothing "issue_type" b.issueType]
 
-||| Request body for updating an issue.
 public export
 record UpdateIssueBody where
   constructor MkUpdateIssueBody
-  subject     : Maybe String
+  subject : Maybe String
   description : Maybe String
-  issueType   : Maybe String
-  status      : Maybe Bits64
-  version     : Version
+  issueType : Maybe String
+  status : Maybe Bits64
+  version : Version
 
 public export
-ToJSON UpdateIssueBody where
+implementation ToJSON UpdateIssueBody where
   toJSON b =
-    object $ catMaybes
-      [ omitNothing "subject" b.subject
-      , omitNothing "description" b.description
-      , omitNothing "issue_type" b.issueType
-      , omitNothing "status" b.status
-      , Just $ jpair "version" b.version
-      ]
+    object $ catMaybes [omitNothing "subject" b.subject, omitNothing "description" b.description, omitNothing "issue_type" b.issueType, omitNothing "status" b.status, Just $ jpair "version" b.version]
 
 parameters {auto env : ApiEnv}
-
-  ||| List issues in a project.
   public export
-  listIssues :
-       (project : Maybe String)
-    -> (page : Maybe Bits32)
-    -> (pageSize : Maybe Bits32)
-    -> {auto _ : HasIO io}
-    -> io (Either String (List IssueSummary, PaginationMeta))
+  listIssues : (project : Maybe String) -> (page : Maybe Bits32) -> (pageSize : Maybe Bits32) -> {auto _ : HasIO io} -> io (Either String (List IssueSummary, PaginationMeta))
   listIssues mproject page pageSize = do
-    let opts   := concat $ catMaybes
-                     [ map (\p => [("page", show p)]) page
-                     , map (\s => [("page_size", show s)]) pageSize
-                     , map (\p => [("project__id", p)]) mproject ]
-        url    := buildUrl ["issues"] opts env.base
+    let opts : _ = concat $ catMaybes [map (\p => [("page", show p)]) page, map (\s => [("page_size", show s)]) pageSize, map (\p => [("project__id", p)]) mproject]
+    let url : _ = buildUrl ["issues"] opts env.base
     resp <- authGet env url
     expectJsonWithMeta resp 200 "list issues"
-
-  ||| Get an issue by its ID.
   public export
-  getIssue :
-       (id : Nat64Id)
-    -> {auto _ : HasIO io}
-    -> io (Either String Issue)
+  getIssue : (id : Nat64Id) -> {auto _ : HasIO io} -> io (Either String Issue)
   getIssue id = do
-    let errMsg := "issue #" ++ showId id
-        url    := buildUrl ["issues", showId id] [] env.base
+    let errMsg : _ = "issue #" ++ showId id
+    let url : _ = buildUrl ["issues", showId id] [] env.base
     resp <- authGet env url
     expectJson resp 200 errMsg
-
-  ||| Create a new issue.
   public export
-  createIssue :
-       (project : String)
-    -> (subject : String)
-    -> (description : Maybe String)
-    -> (priority : Maybe String)
-    -> (severity : Maybe String)
-    -> (issueType : Maybe String)
-    -> {auto _ : HasIO io}
-    -> io (Either String Issue)
+  createIssue : (project : String) -> (subject : String) -> (description : Maybe String) -> (priority : Maybe String) -> (severity : Maybe String) -> (issueType : Maybe String) -> {auto _ : HasIO io} -> io (Either String Issue)
   createIssue project subject desc prio sev itype = do
-    let body := encode $ MkCreateIssueBody (parseBits64 project) subject desc prio sev itype
-        url  := buildUrl ["issues"] [] env.base
+    let body : _ = encode $ MkCreateIssueBody (parseBits64 project) subject desc prio sev itype
+    let url : _ = buildUrl ["issues"] [] env.base
     resp <- authPost env url body
     expectJson resp 201 "create issue"
-
-  ||| Update an existing issue (OCC-aware).
   public export
-  updateIssue :
-       (id : Nat64Id)
-    -> (subject : Maybe String)
-    -> (description : Maybe String)
-    -> (issueType : Maybe String)
-    -> (status : Maybe String)
-    -> (version : Version)
-    -> {auto _ : HasIO io}
-    -> io (Either String Issue)
+  updateIssue : (id : Nat64Id) -> (subject : Maybe String) -> (description : Maybe String) -> (issueType : Maybe String) -> (status : Maybe String) -> (version : Version) -> {auto _ : HasIO io} -> io (Either String Issue)
   updateIssue id subj desc itype stat ver = do
-    let errMsg := "issue #" ++ showId id
-        body   := encode $ MkUpdateIssueBody subj desc itype (map parseBits64 stat) ver
-        url    := buildUrl ["issues", showId id] [] env.base
+    let errMsg : _ = "issue #" ++ showId id
+    let body : _ = encode $ MkUpdateIssueBody subj desc itype (map parseBits64 stat) ver
+    let url : _ = buildUrl ["issues", showId id] [] env.base
     resp <- authPatch env url body
     expectJson resp 200 errMsg
-
-  ||| Delete an issue.
   public export
-  deleteIssue :
-       (id : Nat64Id)
-    -> {auto _ : HasIO io}
-    -> io (Either String ())
+  deleteIssue : (id : Nat64Id) -> {auto _ : HasIO io} -> io (Either String ())
   deleteIssue id = do
-    let errMsg := "issue #" ++ showId id
-        url    := buildUrl ["issues", showId id] [] env.base
+    let errMsg : _ = "issue #" ++ showId id
+    let url : _ = buildUrl ["issues", showId id] [] env.base
     resp <- authDelete env url
     expectOk resp 204 errMsg

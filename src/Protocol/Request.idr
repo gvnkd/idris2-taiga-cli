@@ -1,23 +1,16 @@
-||| Request envelope parser.
-|||
-||| Each invocation reads one JSON object from stdin:
-|||   {"cmd":"…","args":{…},"auth":{…},"base":"…"}
 module Protocol.Request
-
 import JSON.Derive
 import Model.Auth
 
 %language ElabReflection
 
-||| Authentication information carried with a request.
 public export
 data AuthInfo : Type where
-  TokenAuth    : String -> AuthInfo
+  TokenAuth : String -> AuthInfo
   CredentialAuth : Credentials -> AuthInfo
 
-%runElab derive "AuthInfo" [Show,ToJSON,FromJSON]
+%runElab derive "AuthInfo" [Show, ToJSON, FromJSON]
 
-||| Top-level request envelope received from the agent.
 public export
 record Request where
   constructor MkRequest
@@ -26,9 +19,9 @@ record Request where
   auth : Maybe AuthInfo
   base : Maybe String
 
-%runElab derive "Request" [Show,ToJSON,FromJSON]
+%runElab derive "Request" [Show, ToJSON, FromJSON]
 
-||| Parse a raw JSON string into a Request.
 public export
 parseRequest : String -> Either String Request
-parseRequest = decodeEither
+parseRequest =
+  decodeEither

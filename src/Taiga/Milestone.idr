@@ -1,6 +1,4 @@
-||| Milestone / sprint endpoints.
 module Taiga.Milestone
-
 import JSON.FromJSON
 import JSON.ToJSON
 import JSON.Encoder
@@ -12,115 +10,66 @@ import Data.List
 
 %language ElabReflection
 
-||| Request body for creating a milestone.
 public export
 record CreateMilestoneBody where
   constructor MkCreateMilestoneBody
-  project         : Bits64
-  name            : String
-  estimatedStart  : Maybe String
+  project : Bits64
+  name : String
+  estimatedStart : Maybe String
   estimatedFinish : Maybe String
 
 public export
-ToJSON CreateMilestoneBody where
+implementation ToJSON CreateMilestoneBody where
   toJSON b =
-    object $ catMaybes
-      [ Just $ jpair "project" b.project
-      , Just $ jpair "name" b.name
-      , omitNothing "estimated_start" b.estimatedStart
-      , omitNothing "estimated_finish" b.estimatedFinish
-      ]
+    object $ catMaybes [Just $ jpair "project" b.project, Just $ jpair "name" b.name, omitNothing "estimated_start" b.estimatedStart, omitNothing "estimated_finish" b.estimatedFinish]
 
-||| Request body for updating a milestone.
 public export
 record UpdateMilestoneBody where
   constructor MkUpdateMilestoneBody
-  name            : Maybe String
-  estimatedStart  : Maybe String
+  name : Maybe String
+  estimatedStart : Maybe String
   estimatedFinish : Maybe String
-  version         : Version
+  version : Version
 
 public export
-ToJSON UpdateMilestoneBody where
+implementation ToJSON UpdateMilestoneBody where
   toJSON b =
-    object $ catMaybes
-      [ omitNothing "name" b.name
-      , omitNothing "estimated_start" b.estimatedStart
-      , omitNothing "estimated_finish" b.estimatedFinish
-      , Just $ jpair "version" b.version
-      ]
+    object $ catMaybes [omitNothing "name" b.name, omitNothing "estimated_start" b.estimatedStart, omitNothing "estimated_finish" b.estimatedFinish, Just $ jpair "version" b.version]
 
 parameters {auto env : ApiEnv}
-
-  ||| List milestones in a project.
   public export
-  listMilestones :
-       (project : Maybe String)
-    -> (page : Maybe Bits32)
-    -> (pageSize : Maybe Bits32)
-    -> {auto _ : HasIO io}
-    -> io (Either String (List MilestoneSummary, PaginationMeta))
+  listMilestones : (project : Maybe String) -> (page : Maybe Bits32) -> (pageSize : Maybe Bits32) -> {auto _ : HasIO io} -> io (Either String (List MilestoneSummary, PaginationMeta))
   listMilestones mproject page pageSize = do
-    let opts := concat $ catMaybes
-                   [ map (\p => [("page", show p)]) page
-                   , map (\s => [("page_size", show s)]) pageSize
-                   , map (\p => [("project__id", p)]) mproject ]
-        url  := buildUrl ["milestones"] opts env.base
+    let opts : _ = concat $ catMaybes [map (\p => [("page", show p)]) page, map (\s => [("page_size", show s)]) pageSize, map (\p => [("project__id", p)]) mproject]
+    let url : _ = buildUrl ["milestones"] opts env.base
     resp <- authGet env url
     expectJsonWithMeta resp 200 "list milestones"
-
-  ||| Create a new milestone.
   public export
-  createMilestone :
-       (project : String)
-    -> (name : String)
-    -> (estimatedStart : Maybe String)
-    -> (estimatedFinish : Maybe String)
-    -> {auto _ : HasIO io}
-    -> io (Either String Milestone)
+  createMilestone : (project : String) -> (name : String) -> (estimatedStart : Maybe String) -> (estimatedFinish : Maybe String) -> {auto _ : HasIO io} -> io (Either String Milestone)
   createMilestone project name estStart estFinish = do
-    let body := encode $ MkCreateMilestoneBody (parseBits64 project) name estStart estFinish
-        url  := buildUrl ["milestones"] [] env.base
+    let body : _ = encode $ MkCreateMilestoneBody (parseBits64 project) name estStart estFinish
+    let url : _ = buildUrl ["milestones"] [] env.base
     resp <- authPost env url body
     expectJson resp 201 "create milestone"
-
-  ||| Update an existing milestone (OCC-aware).
   public export
-  updateMilestone :
-       (id : Nat64Id)
-    -> (name : Maybe String)
-    -> (estimatedStart : Maybe String)
-    -> (estimatedFinish : Maybe String)
-    -> (version : Version)
-    -> {auto _ : HasIO io}
-    -> io (Either String Milestone)
+  updateMilestone : (id : Nat64Id) -> (name : Maybe String) -> (estimatedStart : Maybe String) -> (estimatedFinish : Maybe String) -> (version : Version) -> {auto _ : HasIO io} -> io (Either String Milestone)
   updateMilestone id name estStart estFinish ver = do
-    let errMsg := "milestone #" ++ showId id
-        body   := encode $ MkUpdateMilestoneBody name estStart estFinish ver
-        url    := buildUrl ["milestones", showId id] [] env.base
+    let errMsg : _ = "milestone #" ++ showId id
+    let body : _ = encode $ MkUpdateMilestoneBody name estStart estFinish ver
+    let url : _ = buildUrl ["milestones", showId id] [] env.base
     resp <- authPatch env url body
     expectJson resp 200 errMsg
-
-  ||| Get a milestone by its ID.
   public export
-  getMilestone :
-       (id : Nat64Id)
-    -> {auto _ : HasIO io}
-    -> io (Either String Milestone)
+  getMilestone : (id : Nat64Id) -> {auto _ : HasIO io} -> io (Either String Milestone)
   getMilestone id = do
-    let errMsg := "milestone #" ++ showId id
-        url    := buildUrl ["milestones", showId id] [] env.base
+    let errMsg : _ = "milestone #" ++ showId id
+    let url : _ = buildUrl ["milestones", showId id] [] env.base
     resp <- authGet env url
     expectJson resp 200 errMsg
-
-  ||| Delete a milestone.
   public export
-  deleteMilestone :
-       (id : Nat64Id)
-    -> {auto _ : HasIO io}
-    -> io (Either String ())
+  deleteMilestone : (id : Nat64Id) -> {auto _ : HasIO io} -> io (Either String ())
   deleteMilestone id = do
-    let errMsg := "milestone #" ++ showId id
-        url    := buildUrl ["milestones", showId id] [] env.base
+    let errMsg : _ = "milestone #" ++ showId id
+    let url : _ = buildUrl ["milestones", showId id] [] env.base
     resp <- authDelete env url
     expectOk resp 204 errMsg

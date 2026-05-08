@@ -1,12 +1,9 @@
-||| Taiga user story record with FromJSON / ToJSON instances.
 module Model.UserStory
-
 import JSON.Derive
 import Model.Common
 
 %language ElabReflection
 
-||| A user story (unit of product backlog work).
 public export
 record UserStory where
   constructor MkUserStory
@@ -18,9 +15,8 @@ record UserStory where
   milestone : Maybe Nat64Id
   version : Version
 
-%runElab derive "UserStory" [Show,Eq,ToJSON,FromJSON]
+%runElab derive "UserStory" [Show, Eq, ToJSON, FromJSON]
 
-||| Short representation of a user story returned by list endpoints.
 public export
 record UserStorySummary where
   constructor MkUserStorySummary
@@ -30,4 +26,4 @@ record UserStorySummary where
   status : Maybe Bits64
   milestone : Maybe Nat64Id
 
-%runElab derive "UserStorySummary" [Show,Eq,ToJSON,FromJSON]
+%runElab derive "UserStorySummary" [Show, Eq, ToJSON, FromJSON]

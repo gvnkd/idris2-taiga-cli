@@ -1,5 +1,4 @@
 module Network.HTTP.URL
-
 import Data.String.Parser
 import Derive.Prelude
 import Network.HTTP.Protocol
@@ -31,7 +30,9 @@ record URL where
   extensions : String
 
 %runElab derive "URLCredential" [Eq, Show]
+
 %runElab derive "Hostname" [Eq, Show]
+
 %runElab derive "URL" [Show]
 
 parse_port_number : Parser Bits16
@@ -47,16 +48,18 @@ parse_host = do
   pure (MkHostname domain port)
 
 parse_credential : Parser URLCredential
-parse_credential = parse_username_password <|> parse_username where
-  parse_username : Parser URLCredential
-  parse_username = do
-    username <- takeWhile (const True)
-    pure (MkURLCredential username Nothing)
-  parse_username_password : Parser URLCredential
-  parse_username_password = do
-    username <- takeUntil ":"
-    password <- takeWhile (const True)
-    pure (MkURLCredential username $ Just password)
+parse_credential =
+  parse_username_password <|> parse_username
+  where
+    parse_username : Parser URLCredential
+    parse_username = do
+      username <- takeWhile (const True)
+      pure (MkURLCredential username Nothing)
+    parse_username_password : Parser URLCredential
+    parse_username_password = do
+      username <- takeUntil ":"
+      password <- takeWhile (const True)
+      pure (MkURLCredential username $ Just password)
 
 export
 parse_url : Parser URL
@@ -64,23 +67,22 @@ parse_url = do
   protocol <- takeUntil "://"
   credential <- optional (takeUntil "@")
   domain <- takeUntil "/" <|> takeWhile (const True)
-  
   credential <- case parse parse_credential <$> credential of
-    Just (Right (credential, _)) => pure $ Just credential
-    Just (Left err) => fail err
-    Nothing => pure Nothing
-
+                  Just (Right (credential, _)) => pure $ Just credential
+                  Just (Left err) => fail err
+                  Nothing => pure Nothing
   case parse parse_host domain of
     Right (domain_and_port, _) => do
-      path <- takeWhile (\c => (c /= '#') && (c /= '?'))
-      extensions <- takeWhile (const True)
-      let path = fromString ("/" <+> path)
-      pure $ MkURL protocol credential domain_and_port path extensions
+                                    path <- takeWhile (\c => (c /= '#') && (c /= '?'))
+                                    extensions <- takeWhile (const True)
+                                    let path : _ = fromString ("/" <+> path)
+                                    pure $ MkURL protocol credential domain_and_port path extensions
     Left err => fail err
 
 export
 url_from_string : String -> Either String URL
-url_from_string = map fst . parse parse_url . ltrim
+url_from_string =
+  map fst . parse parse_url . ltrim
 
 public export
 data URLProof : AsList m -> Type where
@@ -88,7 +90,7 @@ data URLProof : AsList m -> Type where
   IsHTTPSURL : URLProof ('h' :: 't' :: 't' :: 'p' :: 's' :: ':' :: '/' :: '/' :: xs)
 
 export
-url' : (str : String) -> {auto 0 ok : URLProof (asList str)} -> URL
+url' : (str : String) -> {auto ok : URLProof (asList str)} -> URL
 url' string =
   case url_from_string string of
     Right x => x
@@ -99,20 +101,25 @@ add : URL -> String -> URL
 add url' string =
   case url_from_string string of
     Right url'' => url''
-    Left _ =>
-      case break (\c => c == '#' || c == '?') string of
-        (path, "") => { path := (url'.path <+> fromString path), extensions := "" } url'
-        (path, extension) => { path := (url'.path <+> fromString path), extensions := extension } url'
+    Left _ => case break (\c => c == '#' || c == '?') string of
+                (path, "") => record {path = (url'.path <+> fromString path),
+                                      extensions = ""} url'
+                (path, extension) => record {path = (url'.path <+> fromString path),
+                                             extensions = extension} url'
 
 export
 parse_hostname : String -> Either String Hostname
-parse_hostname = map fst . parse parse_host . trim
+parse_hostname =
+  map fst . parse parse_host . trim
 
 export
 hostname_string : Hostname -> String
 hostname_string host =
-  host.domain <+> case host.port of Just x => ":\{show x}"; Nothing => ""
+  host.domain <+> (case host.port of
+                     Just x => ":\{show x}"
+                     Nothing => "")
 
 export
 url_port_number : URL -> Maybe Bits16
-url_port_number url = url.host.port <|> (protocol_port_number <$> protocol_from_str url.protocol)
+url_port_number url =
+  url.host.port <|> (protocol_port_number <$> protocol_from_str url.protocol)

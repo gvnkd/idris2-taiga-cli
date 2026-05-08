@@ -1,6 +1,4 @@
-||| Taiga project record with FromJSON / ToJSON instances.
 module Model.Project
-
 import JSON.Derive
 import JSON.ToJSON
 import JSON.FromJSON
@@ -11,7 +9,6 @@ import Data.List
 
 %language ElabReflection
 
-||| A Taiga project.
 public export
 record Project where
   constructor MkProject
@@ -26,9 +23,8 @@ record Project where
   us_statuses : List StatusInfo
   epic_statuses : List StatusInfo
 
-%runElab derive "Project" [Show,Eq,ToJSON,FromJSON]
+%runElab derive "Project" [Show, Eq, ToJSON, FromJSON]
 
-||| Compact serialisation for list responses.
 public export
 record ProjectSummary where
   constructor MkProjectSummary
@@ -40,4 +36,4 @@ record ProjectSummary where
   i_am_admin : Bool
   i_am_owner : Bool
 
-%runElab derive "ProjectSummary" [Show,Eq,ToJSON,FromJSON]
+%runElab derive "ProjectSummary" [Show, Eq, ToJSON, FromJSON]

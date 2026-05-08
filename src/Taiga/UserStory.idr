@@ -1,6 +1,4 @@
-||| User story endpoints.
 module Taiga.UserStory
-
 import JSON.FromJSON
 import JSON.ToJSON
 import JSON.Encoder
@@ -12,126 +10,69 @@ import Data.List
 
 %language ElabReflection
 
-||| Request body for creating a user story.
 public export
 record CreateStoryBody where
   constructor MkCreateStoryBody
-  project     : Bits64
-  subject     : String
+  project : Bits64
+  subject : String
   description : Maybe String
-  milestone   : Maybe Nat64Id
+  milestone : Maybe Nat64Id
 
 public export
-ToJSON CreateStoryBody where
+implementation ToJSON CreateStoryBody where
   toJSON b =
-    object $ catMaybes
-      [ Just $ jpair "project" b.project
-      , Just $ jpair "subject" b.subject
-      , omitNothing "description" b.description
-      , omitNothing "milestone" b.milestone
-      ]
+    object $ catMaybes [Just $ jpair "project" b.project, Just $ jpair "subject" b.subject, omitNothing "description" b.description, omitNothing "milestone" b.milestone]
 
-||| Request body for updating a user story.
 public export
 record UpdateStoryBody where
   constructor MkUpdateStoryBody
-  subject     : Maybe String
+  subject : Maybe String
   description : Maybe String
-  milestone   : Maybe Bits64
-  status      : Maybe Bits64
-  version     : Version
+  milestone : Maybe Bits64
+  status : Maybe Bits64
+  version : Version
 
 public export
-ToJSON UpdateStoryBody where
+implementation ToJSON UpdateStoryBody where
   toJSON b =
-    object $ catMaybes
-      [ omitNothing "subject" b.subject
-      , omitNothing "description" b.description
-      , omitNothing "milestone" b.milestone
-      , omitNothing "status" b.status
-      , Just $ jpair "version" b.version
-      ]
+    object $ catMaybes [omitNothing "subject" b.subject, omitNothing "description" b.description, omitNothing "milestone" b.milestone, omitNothing "status" b.status, Just $ jpair "version" b.version]
 
 parameters {auto env : ApiEnv}
-
-  ||| Fetch and parse a user story list from a URL.
   public export
-  fetchStoryList :
-       (url : String)
-    -> {auto _ : HasIO io}
-    -> io (Either String (List UserStorySummary, PaginationMeta))
+  fetchStoryList : (url : String) -> {auto _ : HasIO io} -> io (Either String (List UserStorySummary, PaginationMeta))
   fetchStoryList url = do
     resp <- authGet env url
     expectJsonWithMeta resp 200 "list stories"
-
-  ||| List user stories in a project.
   public export
-  listStories :
-       (project : Maybe String)
-    -> (page : Maybe Bits32)
-    -> (pageSize : Maybe Bits32)
-    -> {auto _ : HasIO io}
-    -> io (Either String (List UserStorySummary, PaginationMeta))
+  listStories : (project : Maybe String) -> (page : Maybe Bits32) -> (pageSize : Maybe Bits32) -> {auto _ : HasIO io} -> io (Either String (List UserStorySummary, PaginationMeta))
   listStories mproject page pageSize =
-    let opts := concat $ catMaybes
-                   [ map (\p => [("page", show p)]) page
-                   , map (\s => [("page_size", show s)]) pageSize
-                   , map (\p => [("project__id", p)]) mproject ]
-     in fetchStoryList (buildUrl ["userstories"] opts env.base)
-
-  ||| Get a user story by its ID.
+    let opts = concat $ catMaybes [map (\p => [("page", show p)]) page, map (\s => [("page_size", show s)]) pageSize, map (\p => [("project__id", p)]) mproject] in fetchStoryList (buildUrl ["userstories"] opts env.base)
   public export
-  getStory :
-       (id : Nat64Id)
-    -> {auto _ : HasIO io}
-    -> io (Either String UserStory)
+  getStory : (id : Nat64Id) -> {auto _ : HasIO io} -> io (Either String UserStory)
   getStory id = do
-    let errMsg := "story #" ++ showId id
-        url    := buildUrl ["userstories", showId id] [] env.base
+    let errMsg : _ = "story #" ++ showId id
+    let url : _ = buildUrl ["userstories", showId id] [] env.base
     resp <- authGet env url
     expectJson resp 200 errMsg
-
-  ||| Create a new user story.
   public export
-  createStory :
-       (project : String)
-    -> (subject : String)
-    -> (description : Maybe String)
-    -> (milestone : Maybe Nat64Id)
-    -> {auto _ : HasIO io}
-    -> io (Either String UserStory)
+  createStory : (project : String) -> (subject : String) -> (description : Maybe String) -> (milestone : Maybe Nat64Id) -> {auto _ : HasIO io} -> io (Either String UserStory)
   createStory project subject desc mstone = do
-    let body := encode $ MkCreateStoryBody (parseBits64 project) subject desc mstone
-        url  := buildUrl ["userstories"] [] env.base
+    let body : _ = encode $ MkCreateStoryBody (parseBits64 project) subject desc mstone
+    let url : _ = buildUrl ["userstories"] [] env.base
     resp <- authPost env url body
     expectJson resp 201 "create story"
-
-  ||| Update an existing user story (OCC-aware).
   public export
-  updateStory :
-       (id : Nat64Id)
-    -> (subject : Maybe String)
-    -> (description : Maybe String)
-    -> (milestone : Maybe String)
-    -> (status : Maybe String)
-    -> (version : Version)
-    -> {auto _ : HasIO io}
-    -> io (Either String UserStory)
+  updateStory : (id : Nat64Id) -> (subject : Maybe String) -> (description : Maybe String) -> (milestone : Maybe String) -> (status : Maybe String) -> (version : Version) -> {auto _ : HasIO io} -> io (Either String UserStory)
   updateStory id subj desc mstone stat ver = do
-    let errMsg := "story #" ++ showId id
-        body   := encode $ MkUpdateStoryBody subj desc (map parseBits64 mstone) (map parseBits64 stat) ver
-        url    := buildUrl ["userstories", showId id] [] env.base
+    let errMsg : _ = "story #" ++ showId id
+    let body : _ = encode $ MkUpdateStoryBody subj desc (map parseBits64 mstone) (map parseBits64 stat) ver
+    let url : _ = buildUrl ["userstories", showId id] [] env.base
     resp <- authPatch env url body
     expectJson resp 200 errMsg
-
-  ||| Delete a user story.
   public export
-  deleteStory :
-       (id : Nat64Id)
-    -> {auto _ : HasIO io}
-    -> io (Either String ())
+  deleteStory : (id : Nat64Id) -> {auto _ : HasIO io} -> io (Either String ())
   deleteStory id = do
-    let errMsg := "story #" ++ showId id
-        url    := buildUrl ["userstories", showId id] [] env.base
+    let errMsg : _ = "story #" ++ showId id
+    let url : _ = buildUrl ["userstories", showId id] [] env.base
     resp <- authDelete env url
     expectOk resp 204 errMsg

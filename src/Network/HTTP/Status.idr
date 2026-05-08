@@ -1,10 +1,8 @@
--- Based on https://www.iana.org/assignments/http-status-codes/http-status-codes.txt
-
 module Network.HTTP.Status
-
 import Data.Nat
 import Derive.Prelude
 
+-- Based on https://www.iana.org/assignments/http-status-codes/http-status-codes.txt
 %language ElabReflection
 
 public export
@@ -17,10 +15,9 @@ export
 is_status_code_number : (n : Nat) -> Dec (StatusCodeNumber n)
 is_status_code_number n =
   case isLTE n 599 of
-    Yes ok1 =>
-      case isGTE n 100 of
-        Yes ok2 => Yes (Abv100Und600 ok1 ok2)
-        No nope => No (nope . gte100)
+    Yes ok1 => case isGTE n 100 of
+                 Yes ok2 => Yes (Abv100Und600 ok1 ok2)
+                 No nope => No (nope . gte100)
     No nope => No (nope . lte599)
 
 public export
@@ -97,134 +94,255 @@ data StatusCode : Nat -> Type where
   UnknownStatusCode : (n : Nat) -> StatusCodeNumber n -> StatusCode n
 
 export
-Show (StatusCode n) where
-  show Continue = "Continue"
-  show SwitchingProtocols = "SwitchingProtocols"
-  show Processing = "Processing"
-  show EarlyHints = "EarlyHints"
-  show OK = "OK"
-  show Created = "Created"
-  show Accepted = "Accepted"
-  show NonAuthoritativeInformation = "NonAuthoritativeInformation"
-  show NoContent = "NoContent"
-  show ResetContent = "ResetContent"
-  show PartialContent = "PartialContent"
-  show MultiStatus = "MultiStatus"
-  show AlreadyReported = "AlreadyReported"
-  show IMUsed = "IMUsed"
-  show MultipleChoices = "MultipleChoices"
-  show MovedPermanently = "MovedPermanently"
-  show Found = "Found"
-  show SeeOther = "SeeOther"
-  show NotModified = "NotModified"
-  show UseProxy = "UseProxy"
-  show TemporaryRedirect = "TemporaryRedirect"
-  show PermanentRedirect = "PermanentRedirect"
-  show Unauthorized = "Unauthorized"
-  show PaymentRequired = "PaymentRequired"
-  show Forbidden = "Forbidden"
-  show NotFound = "NotFound"
-  show MethodNotAllowed = "MethodNotAllowed"
-  show NotAcceptable = "NotAcceptable"
-  show ProxyAuthenticationRequired = "ProxyAuthenticationRequired"
-  show RequestTimeout = "RequestTimeout"
-  show Conflict = "Conflict"
-  show Gone = "Gone"
-  show LengthRequired = "LengthRequired"
-  show PreconditionFailed = "PreconditionFailed"
-  show ContentTooLarge = "ContentTooLarge"
-  show URITooLong = "URITooLong"
-  show UnsupportedMediaType = "UnsupportedMediaType"
-  show RangeNotSatisfiable = "RangeNotSatisfiable"
-  show ExpectationFailed = "ExpectationFailed"
-  show MisdirectedRequest = "MisdirectedRequest"
-  show UnprocessableContent = "UnprocessableContent"
-  show Locked = "Locked"
-  show FailedDependency = "FailedDependency"
-  show TooEarly = "TooEarly"
-  show UpgradeRequired = "UpgradeRequired"
-  show PreconditionRequired = "PreconditionRequired"
-  show TooManyRequests = "TooManyRequests"
-  show RequestHeaderFieldsTooLarge = "RequestHeaderFieldsTooLarge"
-  show UnavailableForLegalReasons = "UnavailableForLegalReasons"
-  show InternalServerError = "InternalServerError"
-  show NotImplemented = "NotImplemented"
-  show BadGateway = "BadGateway"
-  show ServiceUnavailable = "ServiceUnavailable"
-  show GatewayTimeout = "GatewayTimeout"
-  show HTTPVersionNotSupported = "HTTPVersionNotSupported"
-  show VariantAlsoNegotiates = "VariantAlsoNegotiates"
-  show InsufficientStorage = "InsufficientStorage"
-  show LoopDetected = "LoopDetected"
-  show NetworkAuthenticationRequired = "NetworkAuthenticationRequired"
-  show (UnknownStatusCode n _) = "Unknown (" <+> show n <+> ")"
+implementation Show (StatusCode n) where
+  show Continue =
+    "Continue"
+  show SwitchingProtocols =
+    "SwitchingProtocols"
+  show Processing =
+    "Processing"
+  show EarlyHints =
+    "EarlyHints"
+  show OK =
+    "OK"
+  show Created =
+    "Created"
+  show Accepted =
+    "Accepted"
+  show NonAuthoritativeInformation =
+    "NonAuthoritativeInformation"
+  show NoContent =
+    "NoContent"
+  show ResetContent =
+    "ResetContent"
+  show PartialContent =
+    "PartialContent"
+  show MultiStatus =
+    "MultiStatus"
+  show AlreadyReported =
+    "AlreadyReported"
+  show IMUsed =
+    "IMUsed"
+  show MultipleChoices =
+    "MultipleChoices"
+  show MovedPermanently =
+    "MovedPermanently"
+  show Found =
+    "Found"
+  show SeeOther =
+    "SeeOther"
+  show NotModified =
+    "NotModified"
+  show UseProxy =
+    "UseProxy"
+  show TemporaryRedirect =
+    "TemporaryRedirect"
+  show PermanentRedirect =
+    "PermanentRedirect"
+  show Unauthorized =
+    "Unauthorized"
+  show PaymentRequired =
+    "PaymentRequired"
+  show Forbidden =
+    "Forbidden"
+  show NotFound =
+    "NotFound"
+  show MethodNotAllowed =
+    "MethodNotAllowed"
+  show NotAcceptable =
+    "NotAcceptable"
+  show ProxyAuthenticationRequired =
+    "ProxyAuthenticationRequired"
+  show RequestTimeout =
+    "RequestTimeout"
+  show Conflict =
+    "Conflict"
+  show Gone =
+    "Gone"
+  show LengthRequired =
+    "LengthRequired"
+  show PreconditionFailed =
+    "PreconditionFailed"
+  show ContentTooLarge =
+    "ContentTooLarge"
+  show URITooLong =
+    "URITooLong"
+  show UnsupportedMediaType =
+    "UnsupportedMediaType"
+  show RangeNotSatisfiable =
+    "RangeNotSatisfiable"
+  show ExpectationFailed =
+    "ExpectationFailed"
+  show MisdirectedRequest =
+    "MisdirectedRequest"
+  show UnprocessableContent =
+    "UnprocessableContent"
+  show Locked =
+    "Locked"
+  show FailedDependency =
+    "FailedDependency"
+  show TooEarly =
+    "TooEarly"
+  show UpgradeRequired =
+    "UpgradeRequired"
+  show PreconditionRequired =
+    "PreconditionRequired"
+  show TooManyRequests =
+    "TooManyRequests"
+  show RequestHeaderFieldsTooLarge =
+    "RequestHeaderFieldsTooLarge"
+  show UnavailableForLegalReasons =
+    "UnavailableForLegalReasons"
+  show InternalServerError =
+    "InternalServerError"
+  show NotImplemented =
+    "NotImplemented"
+  show BadGateway =
+    "BadGateway"
+  show ServiceUnavailable =
+    "ServiceUnavailable"
+  show GatewayTimeout =
+    "GatewayTimeout"
+  show HTTPVersionNotSupported =
+    "HTTPVersionNotSupported"
+  show VariantAlsoNegotiates =
+    "VariantAlsoNegotiates"
+  show InsufficientStorage =
+    "InsufficientStorage"
+  show LoopDetected =
+    "LoopDetected"
+  show NetworkAuthenticationRequired =
+    "NetworkAuthenticationRequired"
+  show (UnknownStatusCode n _) =
+    "Unknown (" <+> show n <+> ")"
 
 export
 status_code_to_nat : {n : Nat} -> StatusCode n -> Nat
-status_code_to_nat _ = n
+status_code_to_nat _ =
+  n
 
 export
 nat_to_status_code : (n : Nat) -> (prf : StatusCodeNumber n) -> StatusCode n
-nat_to_status_code 100 _ = Continue
-nat_to_status_code 101 _ = SwitchingProtocols
-nat_to_status_code 102 _ = Processing
-nat_to_status_code 103 _ = EarlyHints
-nat_to_status_code 200 _ = OK
-nat_to_status_code 201 _ = Created
-nat_to_status_code 202 _ = Accepted
-nat_to_status_code 203 _ = NonAuthoritativeInformation
-nat_to_status_code 204 _ = NoContent
-nat_to_status_code 205 _ = ResetContent
-nat_to_status_code 206 _ = PartialContent
-nat_to_status_code 207 _ = MultiStatus
-nat_to_status_code 208 _ = AlreadyReported
-nat_to_status_code 226 _ = IMUsed
-nat_to_status_code 300 _ = MultipleChoices
-nat_to_status_code 301 _ = MovedPermanently
-nat_to_status_code 302 _ = Found
-nat_to_status_code 303 _ = SeeOther
-nat_to_status_code 304 _ = NotModified
-nat_to_status_code 305 _ = UseProxy
-nat_to_status_code 307 _ = TemporaryRedirect
-nat_to_status_code 308 _ = PermanentRedirect
-nat_to_status_code 401 _ = Unauthorized
-nat_to_status_code 402 _ = PaymentRequired
-nat_to_status_code 403 _ = Forbidden
-nat_to_status_code 404 _ = NotFound
-nat_to_status_code 405 _ = MethodNotAllowed
-nat_to_status_code 406 _ = NotAcceptable
-nat_to_status_code 407 _ = ProxyAuthenticationRequired
-nat_to_status_code 408 _ = RequestTimeout
-nat_to_status_code 409 _ = Conflict
-nat_to_status_code 410 _ = Gone
-nat_to_status_code 411 _ = LengthRequired
-nat_to_status_code 412 _ = PreconditionFailed
-nat_to_status_code 413 _ = ContentTooLarge
-nat_to_status_code 414 _ = URITooLong
-nat_to_status_code 415 _ = UnsupportedMediaType
-nat_to_status_code 416 _ = RangeNotSatisfiable
-nat_to_status_code 417 _ = ExpectationFailed
-nat_to_status_code 421 _ = MisdirectedRequest
-nat_to_status_code 422 _ = UnprocessableContent
-nat_to_status_code 423 _ = Locked
-nat_to_status_code 424 _ = FailedDependency
-nat_to_status_code 425 _ = TooEarly
-nat_to_status_code 426 _ = UpgradeRequired
-nat_to_status_code 428 _ = PreconditionRequired
-nat_to_status_code 429 _ = TooManyRequests
-nat_to_status_code 431 _ = RequestHeaderFieldsTooLarge
-nat_to_status_code 451 _ = UnavailableForLegalReasons
-nat_to_status_code 500 _ = InternalServerError
-nat_to_status_code 501 _ = NotImplemented
-nat_to_status_code 502 _ = BadGateway
-nat_to_status_code 503 _ = ServiceUnavailable
-nat_to_status_code 504 _ = GatewayTimeout
-nat_to_status_code 505 _ = HTTPVersionNotSupported
-nat_to_status_code 506 _ = VariantAlsoNegotiates
-nat_to_status_code 507 _ = InsufficientStorage
-nat_to_status_code 508 _ = LoopDetected
-nat_to_status_code 511 _ = NetworkAuthenticationRequired
-nat_to_status_code n prf = UnknownStatusCode n prf
+nat_to_status_code 100 _ =
+  Continue
+nat_to_status_code 101 _ =
+  SwitchingProtocols
+nat_to_status_code 102 _ =
+  Processing
+nat_to_status_code 103 _ =
+  EarlyHints
+nat_to_status_code 200 _ =
+  OK
+nat_to_status_code 201 _ =
+  Created
+nat_to_status_code 202 _ =
+  Accepted
+nat_to_status_code 203 _ =
+  NonAuthoritativeInformation
+nat_to_status_code 204 _ =
+  NoContent
+nat_to_status_code 205 _ =
+  ResetContent
+nat_to_status_code 206 _ =
+  PartialContent
+nat_to_status_code 207 _ =
+  MultiStatus
+nat_to_status_code 208 _ =
+  AlreadyReported
+nat_to_status_code 226 _ =
+  IMUsed
+nat_to_status_code 300 _ =
+  MultipleChoices
+nat_to_status_code 301 _ =
+  MovedPermanently
+nat_to_status_code 302 _ =
+  Found
+nat_to_status_code 303 _ =
+  SeeOther
+nat_to_status_code 304 _ =
+  NotModified
+nat_to_status_code 305 _ =
+  UseProxy
+nat_to_status_code 307 _ =
+  TemporaryRedirect
+nat_to_status_code 308 _ =
+  PermanentRedirect
+nat_to_status_code 401 _ =
+  Unauthorized
+nat_to_status_code 402 _ =
+  PaymentRequired
+nat_to_status_code 403 _ =
+  Forbidden
+nat_to_status_code 404 _ =
+  NotFound
+nat_to_status_code 405 _ =
+  MethodNotAllowed
+nat_to_status_code 406 _ =
+  NotAcceptable
+nat_to_status_code 407 _ =
+  ProxyAuthenticationRequired
+nat_to_status_code 408 _ =
+  RequestTimeout
+nat_to_status_code 409 _ =
+  Conflict
+nat_to_status_code 410 _ =
+  Gone
+nat_to_status_code 411 _ =
+  LengthRequired
+nat_to_status_code 412 _ =
+  PreconditionFailed
+nat_to_status_code 413 _ =
+  ContentTooLarge
+nat_to_status_code 414 _ =
+  URITooLong
+nat_to_status_code 415 _ =
+  UnsupportedMediaType
+nat_to_status_code 416 _ =
+  RangeNotSatisfiable
+nat_to_status_code 417 _ =
+  ExpectationFailed
+nat_to_status_code 421 _ =
+  MisdirectedRequest
+nat_to_status_code 422 _ =
+  UnprocessableContent
+nat_to_status_code 423 _ =
+  Locked
+nat_to_status_code 424 _ =
+  FailedDependency
+nat_to_status_code 425 _ =
+  TooEarly
+nat_to_status_code 426 _ =
+  UpgradeRequired
+nat_to_status_code 428 _ =
+  PreconditionRequired
+nat_to_status_code 429 _ =
+  TooManyRequests
+nat_to_status_code 431 _ =
+  RequestHeaderFieldsTooLarge
+nat_to_status_code 451 _ =
+  UnavailableForLegalReasons
+nat_to_status_code 500 _ =
+  InternalServerError
+nat_to_status_code 501 _ =
+  NotImplemented
+nat_to_status_code 502 _ =
+  BadGateway
+nat_to_status_code 503 _ =
+  ServiceUnavailable
+nat_to_status_code 504 _ =
+  GatewayTimeout
+nat_to_status_code 505 _ =
+  HTTPVersionNotSupported
+nat_to_status_code 506 _ =
+  VariantAlsoNegotiates
+nat_to_status_code 507 _ =
+  InsufficientStorage
+nat_to_status_code 508 _ =
+  LoopDetected
+nat_to_status_code 511 _ =
+  NetworkAuthenticationRequired
+nat_to_status_code n prf =
+  UnknownStatusCode n prf
 
 export
 status_code_class : {n : Nat} -> StatusCode n -> StatusCodeClass

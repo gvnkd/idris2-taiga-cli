@@ -1,12 +1,9 @@
-||| Taiga comment / history entry record with FromJSON / ToJSON instances.
 module Model.Comment
-
 import JSON.Derive
 import Model.Common
 
 %language ElabReflection
 
-||| Author info embedded in history entries.
 public export
 record HistoryAuthor where
   constructor MkHistoryAuthor
@@ -14,9 +11,8 @@ record HistoryAuthor where
   username : String
   name : String
 
-%runElab derive "HistoryAuthor" [Show,Eq,ToJSON,FromJSON]
+%runElab derive "HistoryAuthor" [Show, Eq, ToJSON, FromJSON]
 
-||| A single history entry from the Taiga history API.
 public export
 record HistoryEntry where
   constructor MkHistoryEntry
@@ -25,9 +21,8 @@ record HistoryEntry where
   created_at : String
   comment : Maybe String
 
-%runElab derive "HistoryEntry" [Show,Eq,ToJSON,FromJSON]
+%runElab derive "HistoryEntry" [Show, Eq, ToJSON, FromJSON]
 
-||| Compact serialisation for list responses.
 public export
 record CommentSummary where
   constructor MkCommentSummary
@@ -36,4 +31,4 @@ record CommentSummary where
   author : String
   created_at : String
 
-%runElab derive "CommentSummary" [Show,Eq,ToJSON,FromJSON]
+%runElab derive "CommentSummary" [Show, Eq, ToJSON, FromJSON]
